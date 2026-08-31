@@ -7,9 +7,7 @@ npm install
 echo "==> Playwright Chromium"
 npx playwright install chromium
 echo "==> pre-commit hooks"
-if command -v uv >/dev/null 2>&1; then uv run pre-commit install 2>/dev/null || pre-commit install 2>/dev/null || true
-elif command -v pre-commit >/dev/null 2>&1; then pre-commit install || true
-else echo "   (pre-commit not found; install it to enable hooks)"; fi
+if command -v pre-commit >/dev/null 2>&1; then pre-commit install || true; else echo "   (pre-commit not found; install it to enable hooks)"; fi
 echo "==> .env key check"
 if [ -f .env ]; then
   for k in OPENAI_API_KEY CUSTOMILY_SHOP_URL PRINTSHOP_URL; do
