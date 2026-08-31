@@ -38,7 +38,7 @@ import {
 } from "../domain/store";
 import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
 import { matches } from "../domain/filter";
-import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
+import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { validateMappings } from "../domain/personalization";
 import { afterRsvpWrite } from "./hooks";
 
@@ -239,6 +239,14 @@ export function deleteGift(eventId: string, giftId: string) {
 }
 
 /** The gift with its derived quantities and manifest, recomputed on every read. */
+/** The admin approves the collected attendee specs for the vendor. Locking the values freezes each
+ * attendee's answers so a later edit cannot diverge from what was sent. */
+export function approveSpecs(eventId: string, giftId: string) {
+  requireGift(eventId, giftId);
+  lockGift(giftId, new Date().toISOString().slice(0, 10));
+  return giftView(eventId, giftId);
+}
+
 export function giftView(eventId: string, giftId: string) {
   const gift = requireGift(eventId, giftId);
   return { ...gift, quantities: quantities(gift), manifest: manifest(gift) };

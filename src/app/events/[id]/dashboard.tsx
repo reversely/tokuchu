@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import type { snapshot } from "../../../server/api";
 import { Overview } from "./overview";
 import { Experience, type SearchReply } from "./experience";
+import { Attendees } from "./attendees";
 import { WebMcpProvider } from "../../webmcp-provider";
 
 export type Snapshot = ReturnType<typeof snapshot>;
-type Tab = "overview" | "experience";
+type Tab = "overview" | "experience" | "attendees";
 
 /** The published event's page (PRD Section 5): the band with the tabs, the status, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. */
 export function Dashboard({ initial }: { initial: Snapshot }) {
@@ -46,6 +47,7 @@ export function Dashboard({ initial }: { initial: Snapshot }) {
         <nav className="tabs" aria-label="Sections">
           <button type="button" className={tab === "overview" ? "on" : ""} aria-current={tab === "overview" ? "page" : undefined} onClick={() => setTab("overview")} data-testid="tab-overview">Overview</button>
           <button type="button" className={tab === "experience" ? "on" : ""} aria-current={tab === "experience" ? "page" : undefined} onClick={() => setTab("experience")} data-testid="tab-experience">Guest Experience</button>
+          <button type="button" className={tab === "attendees" ? "on" : ""} aria-current={tab === "attendees" ? "page" : undefined} onClick={() => setTab("attendees")} data-testid="tab-attendees">Attendees</button>
         </nav>
         <div className="right">
           <WebMcpProvider eventId={event.id} />
@@ -60,6 +62,8 @@ export function Dashboard({ initial }: { initial: Snapshot }) {
       <main className="sheet">
         {tab === "overview" ? (
           <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
+        ) : tab === "attendees" ? (
+          <Attendees snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
         ) : (
           <Experience snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} lastSearch={lastSearch} setLastSearch={setLastSearch} />
         )}

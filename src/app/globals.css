@@ -169,3 +169,12 @@ table.guests .quiet { color: var(--muted); }
 .skel-card .ph { animation: skel 1.2s ease-in-out infinite; }
 @keyframes skel { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .skel-line, .skel-card .ph { animation: none; } }
+
+/* Attendees records grid: a spreadsheet layout, one row per attendee, one column per answer. */
+table.records { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.records th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 10px 14px; background: var(--pale); border: 1px solid var(--line); white-space: nowrap; }
+table.records td { padding: 10px 14px; border: 1px solid var(--line); vertical-align: top; }
+table.records tr:nth-child(even) td { background: #FBFDFF; }
+table.records .missing { color: var(--sky-dark); }
+table.records .quiet { color: var(--muted); }
+.sendrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
