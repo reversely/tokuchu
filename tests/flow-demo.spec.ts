@@ -189,56 +189,42 @@ test("1: create the event", async () => {
   await rest();
 });
 
-test("2: search surfaces the star shirt and its customizations are fetched live from the store", async () => {
+test("2: curation searches once, selects the store's ranked shirt, and its customizations are fetched", async () => {
   test.setTimeout(LIVE_MS + 60_000);
   await page.getByTestId("tab-experience").click();
   await renderTrace();
-  await caption("2. Search the catalog and the store");
-  await trace("call", `search_gifts(sentence: "${EVENT.search}")`);
-  await typeInto(page.getByTestId("sentence"), EVENT.search);
-  await page.getByTestId("sentence").press("Enter");
-  await expect(page.getByTestId("result").first()).toBeVisible({ timeout: LIVE_MS });
-  for (let i = 0; i < 3; i++) {
-    const more = page.getByTestId("show-more");
-    if (!(await more.isVisible().catch(() => false))) break;
-    await more.click();
-    await rest(400);
-  }
-  const storeRow = page.getByTestId("result").filter({ hasText: SHOP_NAME }).first();
-  await expect(storeRow, `a result from ${SHOP_NAME} is visible`).toBeVisible({ timeout: 15_000 });
-  await storeRow.scrollIntoViewIfNeeded();
-  await trace("resp", `${SHOP_NAME}'s star shirt ranks among the catalog results`);
-  await rest(2200);
-
-  // A real WebMCP call to the store: get_personalization_schema on the storefront through the adapter.
-  await caption("2. Fetch the shirt's customizations from the store (live WebMCP)");
-  await trace("call", `get_personalization_schema(product_id: "${PRODUCT_ID}")  @ ${SHOP_DOMAIN}`);
-  const schema = await fetchLiveSchema();
-  await trace("resp", `fields: ${schema.fields.map((f) => `${f.key}:${f.kind}`).join(", ")}${schema.variants ? `; ${schema.variants.length} variants` : ""}`);
-  await surveyForm("The survey attendees receive", schema.fields);
-  await caption("2. The customizations become the survey fields");
-  await rest(4500);
-  await clearOverlay("demo-survey");
-});
-
-test("3: curation maps the fields, the collected responses are injected, and get_manifest prepares the .json", async () => {
-  test.setTimeout(LIVE_MS + 60_000);
-  await page.getByRole("button", { name: "Back", exact: true }).click();
-  await renderTrace();
-  await caption("3. Describe the personalized shirts (the curation prompt)");
+  // One search: the curation agent runs search_gifts itself (shown in its step list), the store's
+  // shirt ranks, and the agent selects it and maps the fields. No separate keyword search.
+  await caption("2. Describe the personalized shirts; the agent searches and selects");
   await trace("call", `curate(message: "${EVENT.curate.slice(0, 80)}${EVENT.curate.length > 80 ? "..." : ""}")`);
   await typeInto(page.getByTestId("curate"), EVENT.curate);
   await page.getByTestId("curate-run").click();
   await expect(page.getByTestId("curate-proposal")).toBeVisible({ timeout: LIVE_MS });
   await expect(page.getByTestId("curate-mapping").first()).toBeVisible();
-  await trace("resp", "proposal: Customized Crewneck, mappings for location, date, and each name");
+  await trace("resp", `proposal: Customized Crewneck (${SHOP_NAME}), mappings for location, date, and each name`);
   await page.getByTestId("curate-proposal").scrollIntoViewIfNeeded();
-  await rest(2600);
+  await rest(3000);
+
+  // The shirt's real customizations, fetched live from the store, are the survey fields.
+  await caption("2. Fetch the selected shirt's customizations from the store (live WebMCP)");
+  await trace("call", `get_personalization_schema(product_id: "${PRODUCT_ID}")  @ ${SHOP_DOMAIN}`);
+  const schema = await fetchLiveSchema();
+  await trace("resp", `fields: ${schema.fields.map((f) => `${f.key}:${f.kind}`).join(", ")}${schema.variants ? `; ${schema.variants.length} variants` : ""}`);
+  await surveyForm("The survey attendees receive", schema.fields);
+  await rest(4200);
+  await clearOverlay("demo-survey");
   await page.getByTestId("curate-approve").click();
   await expect(page.getByTestId("gift")).toHaveCount(1, { timeout: 10_000 });
-  const request = page.request;
-  const snap = (await (await request.get(`/api/events/${eventId}`)).json()) as { gifts: { id: string }[]; definitions: { id: string; key: string }[] };
+  const snap = (await (await page.request.get(`/api/events/${eventId}`)).json()) as { gifts: { id: string }[] };
   giftId = snap.gifts[0].id;
+  await caption("2. The store's shirt is on the gift list, its fields mapped");
+  await rest(1500);
+});
+
+test("3: the collected responses are injected and get_manifest prepares the .json", async () => {
+  test.setTimeout(LIVE_MS + 60_000);
+  const request = page.request;
+  const snap = (await (await request.get(`/api/events/${eventId}`)).json()) as { definitions: { id: string; key: string }[] };
   const printedName = snap.definitions.find((d) => d.key === "printed_name")!;
 
   await caption("3. Collected responses (a demo dataset stands in, injected like a backend edit)");
