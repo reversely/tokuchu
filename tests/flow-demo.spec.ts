@@ -48,7 +48,10 @@ let eventId = "";
 let giftId = "";
 let flowToken = "";
 
+const TUTORIAL = process.env.TUTORIAL === "1";
+
 async function caption(text: string) {
+  if (TUTORIAL) return; // the large tutorial overlay narrates instead.
   await page.evaluate((t) => {
     let el = document.getElementById("demo-caption");
     if (!el) {
@@ -60,7 +63,25 @@ async function caption(text: string) {
     el.textContent = t;
   }, text).catch(() => undefined);
 }
-const rest = (ms = READ_MS) => page.waitForTimeout(ms);
+
+/** A large step banner for the tutorial cut: a step label, a big title, and a sentence. Holds so it reads. */
+async function tut(step: string, title: string, body: string, holdMs = 4500) {
+  if (!TUTORIAL) return;
+  await page.evaluate(({ step, title, body }) => {
+    let el = document.getElementById("demo-tut");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "demo-tut";
+      el.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;padding:26px 40px 30px;background:linear-gradient(180deg,rgba(11,16,32,0),rgba(11,16,32,.92) 40%);color:#fff;pointer-events:none;text-align:center";
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div style="font:600 15px Inter,system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8FD0FF;margin-bottom:8px">${step}</div>` +
+      `<div style="font:600 34px/1.2 Inter,system-ui,sans-serif;margin-bottom:10px">${title}</div>` +
+      `<div style="font:400 20px/1.45 Inter,system-ui,sans-serif;color:#DCE7F2;max-width:70vw;margin:0 auto">${body}</div>`;
+  }, { step, title, body }).catch(() => undefined);
+  await page.waitForTimeout(holdMs);
+}
+const rest = (ms = READ_MS) => page.waitForTimeout(TUTORIAL ? ms + 1200 : ms);
 async function typeInto(locator: Locator, text: string) {
   await locator.click();
   await page.keyboard.type(text, { delay: KEY_DELAY_MS });
@@ -83,13 +104,14 @@ test.afterAll(async () => {
   const video = page.video();
   await ctx.close();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  await video?.saveAs(`tests/videos/flow-demo-${stamp}.webm`);
+  await video?.saveAs(`tests/videos/flow-demo${TUTORIAL ? "-tutorial" : ""}-${stamp}.webm`);
   await video?.delete();
 });
 
 test("1: create the event", async () => {
   test.setTimeout(LIVE_MS);
   await page.goto("/");
+  await tut("Step 1 of 4", "Create the event", "The organizer fills in the event details and publishes it, which creates a link attendees reply through.");
   await caption("1. Create the event");
   await typeInto(page.getByTestId("title"), EVENT.title);
   await page.getByTestId("starts_at").fill(EVENT.starts_at);
@@ -121,6 +143,7 @@ test("1: create the event", async () => {
 test("2: curation searches once, selects the store's shirt, maps the fields, and the item is approved", async () => {
   test.setTimeout(LIVE_MS + 60_000);
   await page.getByTestId("tab-experience").click();
+  await tut("Step 2 of 4", "Find and personalize the product", "Describe the merch in plain words. The agent searches your store and the catalog through WebMCP, selects the ranked shirt, and maps each field to an event or attendee value.");
   await caption("2. Describe the personalized shirts; the agent searches and selects");
   await typeInto(page.getByTestId("curate"), EVENT.curate);
   await page.getByTestId("curate-run").click();
@@ -160,6 +183,7 @@ test("3: the Attendees records show the responses, and the admin approves and se
   await page.getByTestId("tab-attendees").click();
   await expect(page.getByTestId("attendees-grid")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("attendee-row")).toHaveCount(ATTENDEES.length);
+  await tut("Step 3 of 4", "Review the attendee responses", "The information the product needs is requested from attendees, and each response fills a row in the records grid. The admin reviews it before anything reaches the vendor.", 6000);
   await caption("3. The information requested from attendees, and their responses");
   await rest(4500);
 
@@ -170,6 +194,7 @@ test("3: the Attendees records show the responses, and the admin approves and se
   const manifest = JSON.parse(((await manifestRes.json()) as { result: { content: { text: string }[] } }).result.content[0].text);
   writeFileSync("tests/videos/collected-results.json", JSON.stringify(manifest, null, 2));
 
+  await tut("Step 3 of 4", "Approve and send to the vendor", "One click locks every attendee's answers and hands the collected specs to the vendor.", 3500);
   await caption("3. The admin approves the specs and sends them to the vendor");
   await page.getByTestId("approve-send").scrollIntoViewIfNeeded();
   await page.getByTestId("approve-send").click();
@@ -179,6 +204,7 @@ test("3: the Attendees records show the responses, and the admin approves and se
 
 test("4: the vendor receives the items", async () => {
   test.setTimeout(20 * 60_000);
+  await tut("Step 4 of 4", "The vendor receives the order", `The approved specs go to ${SHOP_NAME} over WebMCP, and the store's cart fills with a personalized unit for every attendee.`, 5000);
   await caption(`4. ${SHOP_NAME} receives the items (live WebMCP handoff)`);
   const base = new URL(page.url()).origin;
   const result = await runPersonalization({ base, eventId, token: flowToken, giftId, productUrl: PRODUCT_URL, event: EVENT_CONTEXT, placeOrder: false, videoDir: "tests/videos" });
