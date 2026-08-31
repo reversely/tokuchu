@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Organizer flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Zilla+Slab:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --white:#ffffff;--sky:#4DA3E8;--sky-dark:#2F86CF;--navy:#0B3D6E;--pale:#EAF3FC;--ink:#14213D;--muted:#5B6474;--line:#DCE3EC;--skel:#E7EAEE;
+  --r:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--white);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:16px;line-height:1.45}
+h1,h2,h3{font-family:'Zilla Slab',serif;font-weight:600;letter-spacing:-.01em;margin:0}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,textarea,select{font:inherit;color:inherit}
+a{color:var(--sky-dark)}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--white);z-index:5}
+.brand{font-family:'Zilla Slab',serif;font-weight:600;font-size:24px;color:var(--navy)}
+.mode{font-size:13px;font-weight:600;color:var(--navy);background:var(--pale);padding:6px 12px;border-radius:999px}
+.mode.live{background:#E6F7EC;color:#1D6B3A}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:600;font-size:16px}
+.btn.primary{background:var(--sky);color:var(--white)}
+.btn.primary:hover{background:var(--sky-dark)}
+.btn.ghost{border:1px solid var(--line)}
+.btn.ghost:hover{border-color:var(--sky)}
+.btn.link{color:var(--sky-dark);padding:12px 6px;font-weight:500}
+
+.tabs{display:flex;gap:4px;border:1px solid var(--line);border-radius:999px;padding:4px}
+.tabs button{padding:8px 16px;border-radius:999px;font-weight:600;color:var(--muted)}
+.tabs button.on{background:var(--navy);color:var(--white)}
+.tab{display:none}.tab.on{display:block}
+/* agent */
+.agent{border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:32px;background:var(--pale)}
+.agent .bar{display:flex;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 18px;align-items:center}
+.agent .bar input{flex:1;border:0;outline:0;background:transparent;padding:8px 0}
+.agent .sugg{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.agent .sugg button{background:var(--white);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:14px}
+.agent .thread{margin-top:14px;font-size:15px;line-height:1.5}
+.agent .thread p{margin:0 0 8px}
+/* config */
+.cfg{border:1px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden}
+.cfg summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:1fr auto auto;gap:20px;align-items:center;padding:16px 18px;font-weight:600}
+.cfg summary::-webkit-details-marker{display:none}
+.cfg summary .m{color:var(--muted);font-weight:400;font-size:14px}
+.cfg .in{padding:0 18px 18px;border-top:1px solid var(--line)}
+.cfg .map{display:grid;grid-template-columns:1fr 24px 1fr;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.cfg .map:last-of-type{border-bottom:0}
+.cfg .map .arrow{color:var(--muted);text-align:center}
+.cfg .map select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white);width:100%}
+.cfg .rule{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.cfg h4{margin:16px 0 6px;font-size:14px;color:var(--muted);font-weight:500}
+/* guest experience wizard */
+.gx{min-height:60vh;display:flex;flex-direction:column;justify-content:center;max-width:720px}
+.gx .dots{display:flex;gap:6px;margin-bottom:28px}
+.gx .dots i{width:28px;height:4px;border-radius:2px;background:var(--line)}
+.gx .dots i.on{background:var(--sky)}
+.gx h1{font-size:48px;line-height:1.08;margin-bottom:10px}
+.gx .sub{font-size:19px;color:var(--muted);margin:0 0 32px}
+.gx .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.gx .opt{border:1px solid var(--line);border-radius:14px;overflow:hidden;text-align:left}
+.gx .opt .ph{height:96px;background:var(--skel)}
+.gx .opt span{display:block;padding:12px 14px;font-weight:600}
+.gx .opt:hover,.gx .opt.on{border-color:var(--sky)}
+.gx .opt.on{border-width:2px}
+.gx .pick{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
+.gx .pick .opt .ph{height:130px}
+.gx .pick .opt small{display:block;padding:0 14px 12px;color:var(--muted);font-size:14px;margin-top:-6px}
+.gx .big{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px}
+.gx .big button{padding:16px 22px;border:1px solid var(--line);border-radius:12px;font-size:18px;font-weight:500}
+.gx .big button.on{border:2px solid var(--sky);color:var(--navy);background:var(--pale)}
+.gx .line{display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-top:1px solid var(--line);font-size:18px}
+.gx .line:last-of-type{border-bottom:1px solid var(--line)}
+.gx .line select{font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--white)}
+.gx .acts{display:flex;gap:14px;align-items:center;margin-top:32px}
+.gx .acts .hint{color:var(--muted);font-size:14px}
+.gx .ask{display:flex;gap:8px;border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 18px;align-items:center;max-width:560px}
+.gx .ask input{flex:1;border:0;outline:0;background:transparent;padding:8px 0;font-size:16px}
+.gx .ask .btn{padding:9px 16px}
+/* manage view */
+.mg .item{border:1px solid var(--line);border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:1fr auto auto;gap:20px;align-items:center;margin-bottom:12px}
+.mg .item .m{color:var(--muted);font-size:15px}
+/* layout */
+.wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.9fr);gap:40px;padding:40px 40px 80px;max-width:1360px;margin:0 auto}
+.panel{display:none}.panel.on{display:block}
+h1{font-size:44px;line-height:1.1;margin-bottom:8px}
+.lead{color:var(--muted);font-size:18px;margin:0 0 32px}
+section.block{margin-bottom:48px;scroll-margin-top:96px}
+section.block h2{font-size:22px;margin-bottom:14px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:14px;font-weight:500;color:var(--muted);margin-bottom:6px}
+.field input,.field textarea,.field select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--white)}
+.field input:focus,.field textarea:focus,.field select:focus{outline:2px solid var(--sky);outline-offset:1px;border-color:var(--sky)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 14px;border:1px solid var(--line);border-radius:999px;font-size:14px;font-weight:500}
+.chip:hover{border-color:var(--sky)}
+.chip.on{background:var(--pale);border-color:var(--sky);color:var(--navy)}
+
+/* questions */
+.qlist{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.q{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;padding:14px 18px;border-top:1px solid var(--line)}
+.q:first-child{border-top:0}
+.q .type{color:var(--muted);font-size:14px}
+.q .req{font-size:12px;font-weight:600;color:var(--navy);background:var(--pale);padding:3px 8px;border-radius:999px}
+.q .req.opt{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.addq{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* gifts */
+.cats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.cat{border:1px solid var(--line);border-radius:14px;padding:0;text-align:left;overflow:hidden}
+.cat .ph{height:110px;background:var(--skel)}
+.cat span{display:block;padding:12px 16px;font-weight:500}
+.cat:hover{border-color:var(--sky)}
+.cat.on{border:2px solid var(--sky)}
+.custom{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 18px;margin-bottom:32px}
+.custom input{flex:1;border:0;outline:0;padding:8px 0;background:transparent}
+.custom .btn{padding:10px 18px}
+.results{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.prod{border:1px solid var(--line);border-radius:14px;overflow:hidden;text-align:left;display:flex;flex-direction:column}
+.prod:hover{border-color:var(--sky)}
+.prod.on{border:2px solid var(--sky)}
+.prod .ph{height:150px;background:var(--skel)}
+.prod .body{padding:14px 16px;flex:1}
+.prod .name{font-weight:600;font-size:17px}
+.prod .meta{color:var(--muted);font-size:14px;margin-top:4px}
+.prod .pers{font-size:14px;color:var(--navy);margin-top:8px}
+.prod .act{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 14px}
+.prod .price{font-weight:600}
+.prod .add{padding:8px 14px;border-radius:8px;background:var(--pale);color:var(--navy);font-weight:600;font-size:14px}
+.prod .add.added{background:var(--sky);color:var(--white)}
+.more{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:14px;color:var(--sky-dark);font-weight:500}
+.order{border:1px solid var(--line);border-radius:var(--r);margin-top:32px}
+.order .row{display:grid;grid-template-columns:1fr auto auto auto;gap:24px;padding:14px 18px;border-top:1px solid var(--line);align-items:center}
+.order .row:first-child{border-top:0;font-size:14px;color:var(--muted);font-weight:500}
+.order .tot{font-weight:600}
+.empty{color:var(--muted);padding:18px;text-align:center}
+
+/* preview column */
+.side{position:sticky;top:96px;align-self:start}
+.side .eyebrow{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:12px;display:flex;justify-content:space-between}
+.invite{border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(11,61,110,.08)}
+.invite .hero{height:180px;background:var(--skel);position:relative}
+.invite .hero .badge{position:absolute;left:18px;bottom:18px;background:var(--white);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;color:var(--navy)}
+.invite .in{padding:24px}
+.invite h2{font-size:32px;line-height:1.1}
+.invite .when{color:var(--muted);margin:6px 0 16px;font-size:15px}
+.invite .rsvp{display:flex;gap:8px;margin:16px 0 22px}
+.invite .rsvp span{flex:1;text-align:center;padding:12px;border:1px solid var(--line);border-radius:10px;font-weight:600}
+.invite .rsvp span:first-child{background:var(--sky);color:var(--white);border-color:var(--sky)}
+.invite .pq{border-top:1px solid var(--line);padding:12px 0}
+.invite .pq .l{font-size:14px;font-weight:500;margin-bottom:6px}
+.invite .pq .box{height:38px;border:1px solid var(--line);border-radius:8px}
+.invite .pq .opts{display:flex;gap:6px;flex-wrap:wrap}
+.invite .pq .opts i{font-style:normal;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:999px}
+.invite .extras{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.invite .extras span{font-size:13px;color:var(--navy);background:var(--pale);padding:5px 10px;border-radius:999px}
+
+/* product detail in side column */
+.detail{border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.detail .ph{height:220px;background:var(--skel)}
+.detail .in{padding:24px}
+.detail h2{font-size:30px}
+.detail .sub{color:var(--muted);margin:4px 0 16px}
+.detail .kv{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.detail .kv span:last-child{color:var(--muted);text-align:right}
+.detail .qty{margin:16px 0;padding:14px 16px;background:var(--pale);border-radius:10px;color:var(--navy);font-weight:500}
+.detail .acts{display:flex;gap:10px;margin-top:8px}
+.detail .opt{display:flex;align-items:center;gap:10px;font-size:15px;margin-top:14px}
+
+/* responses */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat{border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.stat .n{font-family:'Zilla Slab',serif;font-size:36px;font-weight:600;line-height:1}
+.stat .l{color:var(--muted);font-size:14px;margin-top:6px}
+.g{display:grid;grid-template-columns:1.2fr 1fr 1fr auto;gap:16px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);font-size:15px}
+.g:first-child{border-top:0;color:var(--muted);font-size:13px;font-weight:500}
+.g .st{font-weight:600;color:var(--navy)}
+.g .st.no{color:var(--muted);font-weight:400}
+/* publish */
+.pub .link{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-weight:500}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+.toggle .sw{width:44px;height:26px;border-radius:999px;background:var(--line);position:relative}
+.toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--white)}
+.toggle .sw.on{background:var(--sky)}
+.toggle .sw.on::after{left:21px}
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:var(--navy);color:var(--white);padding:14px 22px;border-radius:12px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.footer{position:fixed;left:0;right:0;bottom:0;background:var(--white);border-top:1px solid var(--line);padding:16px 40px;display:flex;justify-content:space-between;align-items:center;z-index:5}
+.footer .note{color:var(--muted)}
+:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:720px){.wrap{grid-template-columns:1fr}.side{position:static}.cats,.results{grid-template-columns:repeat(2,1fr)}}
+
+.labelrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+.labelrow h2,.labelrow h1{margin:0}
+.lab{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+/* ---- design language: dark band + light sheet, large radii ---- */
+:root{--night:#0B1020;--night-2:#141A2E;--night-line:rgba(255,255,255,.12);--night-text:#EEF2F8;--night-muted:#9AA5B8;--r-xl:36px;--r-lg:22px;--r-md:16px}
+html,body{background:var(--night)}
+.top{background:var(--night);border-bottom:0;padding:22px 48px;color:var(--night-text)}
+.brand{color:var(--white)}
+.mode{background:var(--night-2);color:var(--night-muted);border:1px solid var(--night-line)}
+.mode.live{background:#123D2A;color:#7EE2A8}
+.top .btn.ghost{border-color:var(--night-line);color:var(--night-text)}
+.top .btn.ghost:hover{border-color:var(--sky)}
+.tabs{border-color:var(--night-line);background:var(--night-2)}
+.tabs button{color:var(--night-muted)}
+.tabs button.on{background:var(--white);color:var(--night)}
+.sheet{background:var(--white);border-radius:var(--r-xl) var(--r-xl) 0 0;margin-top:28px;min-height:calc(100vh - 100px)}
+.wrap{padding:56px 48px 96px}
+h1{font-size:56px;letter-spacing:-.02em}
+.eyebrow-pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:14px;font-weight:500;color:var(--ink);margin-bottom:18px}
+section.block h2{font-size:26px}
+.field input,.field textarea,.field select{border-radius:var(--r-md);padding:14px 16px}
+.qlist,.order,.cfg,.stat,.gx .opt,.mg .item{border-radius:var(--r-lg)}
+.cat,.prod{border-radius:var(--r-lg)}
+.btn{border-radius:999px;padding:13px 24px}
+.chip{border-radius:999px}
+.gx h1{font-size:60px}
+.gx .big button{border-radius:var(--r-md)}
+/* right column: dark frames, like product shots on a dark band */
+.side .eyebrow{color:var(--muted)}
+.invite,.detail{background:var(--night);color:var(--night-text);border:1px solid var(--night-line);border-radius:var(--r-lg);box-shadow:0 24px 60px rgba(11,16,32,.25)}
+.invite h2,.detail h2{color:var(--white)}
+.invite .hero,.detail .ph,.gx .opt .ph,.cat .ph,.prod .ph{background:var(--night-2)}
+.invite .hero{background:linear-gradient(135deg,#1B2A4A,#0F1730)}
+.invite .hero .badge{background:var(--white);color:var(--night)}
+.invite .when,.detail .sub,.detail .kv span:last-child{color:var(--night-muted)}
+.invite .rsvp span{border-color:var(--night-line);color:var(--night-text)}
+.invite .rsvp span:first-child{background:var(--sky);border-color:var(--sky);color:var(--white)}
+.invite .pq,.detail .kv{border-color:var(--night-line)}
+.invite .pq .box{border-color:var(--night-line)}
+.invite .pq .opts i{border-color:var(--night-line)}
+.invite .extras span{background:rgba(77,163,232,.18);color:#BFE0FF}
+.detail .qty{background:rgba(77,163,232,.14);color:#BFE0FF}
+.detail .btn.primary{background:var(--sky)}
+.toast{border-radius:999px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div style="display:flex;align-items:center;gap:28px"><div class="brand">Tokuchu</div><nav class="tabs" id="tabs" style="display:none"><button class="on" data-tab="overview">Overview</button><button data-tab="guest">Guest Experience</button></nav></div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="mode" id="mode">Draft</span>
+    <button class="btn ghost" id="share" style="display:none">Copy invite link</button>
+    <button class="btn primary" id="publish">Publish event</button>
+  </div>
+</header>
+
+<div class="sheet"><main class="wrap">
+<div class="editor">
+
+  <!-- DASHBOARD (visible after publish) -->
+  <div id="dash">
+  <div class="tab on" id="tab-overview">
+  <div id="dashtop" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <div><span class="eyebrow-pill">Live event</span><h1 id="rhead"></h1></div>
+      <button class="btn ghost" id="simulate">Simulate new responses</button>
+    </div>
+    <section class="block" style="margin-top:28px"><div class="labelrow"><h2>Attendance</h2><span class="lab" id="attlab"></span></div><div class="stats" id="stats"></div></section>
+    <section class="block"><div class="labelrow"><h2>Follow-ups</h2><span class="lab">Missing answers</span></div><div class="qlist" id="followups"></div></section>
+    <section class="block"><div class="labelrow"><h2>Guests</h2><span class="lab" id="guestlab"></span></div><div class="qlist" id="guests"></div></section>
+    <section class="block"><div class="labelrow"><h2>Guest Experience</h2><span class="lab">Gifts and order</span></div><div class="qlist" id="gxsum"></div><div class="order" id="order3" style="margin-top:14px"></div></section>
+    <div class="labelrow" style="margin-top:24px"><h1 style="font-size:32px">Event setup</h1><span class="lab">Edits go live immediately</span></div>
+  </div><!-- /dashtop -->
+
+  <!-- SETUP (always present) -->
+  <div id="setup">
+    <div id="setuphead">
+      <span class="eyebrow-pill">New event</span>
+      <h1>Set up your event</h1>
+
+    </div>
+
+    <section class="block" id="details">
+      <div class="labelrow"><h2>Details</h2><span class="lab">Shown on the invite</span></div>
+      <div class="field"><label for="title">Event title</label><input id="title" value="Lexi's 25th birthday" data-bind="title"></div>
+      <div class="grid2">
+        <div class="field"><label for="date">Date and time</label><input id="date" value="Sat, Oct 17, 2026 · 7:00 pm" data-bind="date"></div>
+        <div class="field"><label for="host">Hosted by</label><input id="host" value="Shereen" data-bind="host"></div>
+      </div>
+      <div class="field"><label for="loc">Location</label><input id="loc" value="Paradise Grapevine, 218 Geary Ave, Toronto" data-bind="loc"></div>
+      <div class="grid3">
+        <div class="field"><label for="spots">Spots</label><input id="spots" value="80" data-bind="spots"></div>
+        <div class="field"><label for="cost">Cost per person</label><input id="cost" value="$18"></div>
+        <div class="field"><label for="dl">RSVP deadline</label><input id="dl" value="Oct 10, 2026"></div>
+      </div>
+      <div class="field"><label>Add to invite</label>
+        <div class="chips" id="extras"><button class="chip">Link</button><button class="chip">Playlist</button><button class="chip">Registry</button><button class="chip">Dress code</button><button class="chip">Parking</button><button class="chip">Add another day</button></div>
+      </div>
+      <div class="field"><label for="desc">Description</label><textarea id="desc" rows="3" placeholder="Tell guests what to expect" data-bind="desc"></textarea></div>
+    </section>
+
+    <section class="block" id="questions">
+      <div class="labelrow"><h2>RSVP questions</h2><span class="lab">Guests answer these</span></div>
+      <div class="field"><label>Response options</label><div class="chips"><span class="chip on">Going</span><span class="chip on">Maybe</span><span class="chip on">Can't go</span></div></div>
+      <div class="qlist" id="qlist"></div>
+      <div class="addq">
+        <button class="chip" data-addq="Plus-ones|Number, 0 to 2|opt">+ Plus-ones</button>
+        <button class="chip" data-addq="Accessibility needs|Text|opt">+ Accessibility needs</button>
+        <button class="chip" data-addq="Arrival date|Date|opt">+ Arrival date</button>
+        <button class="chip" data-addq="Custom question|Text|opt">+ Custom question</button>
+      </div>
+    </section>
+
+
+    <section class="block" id="settings">
+      <div class="labelrow"><h2>Settings</h2><span class="lab">Reminders and approvals</span></div>
+      <div class="toggle"><span>Require your approval for each guest</span><button class="sw" aria-label="toggle"></button></div>
+      <div class="toggle"><span>Remind guests 3 days before the deadline</span><button class="sw on" aria-label="toggle"></button></div>
+      <div class="toggle"><span>Ask guests again when a question changes</span><button class="sw on" aria-label="toggle"></button></div>
+      <div class="toggle"><span>Send you the gift order to approve before checkout</span><button class="sw on" aria-label="toggle"></button></div>
+      <div class="field" style="margin-top:20px"><label>Guest list</label><button class="btn ghost">Import guest list</button></div>
+    </section>
+
+    <div id="pubfoot" style="border-top:1px solid var(--line);padding-top:24px;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:var(--muted)">Publishing creates the invite link tokuchu.app/lexi-25 and opens the event dashboard.</span>
+      <button class="btn primary" data-publish>Publish event</button>
+    </div>
+  </div>
+  </div><!-- /tab-overview -->
+  <div class="tab" id="tab-guest">
+    <div id="gx"></div>
+  </div><!-- /tab-guest -->
+  </div><!-- /dash -->
+</div>
+
+<aside class="side">
+  <div class="eyebrow"><span id="sidelabel">Guest preview</span><button class="btn link" id="backprev" style="display:none;padding:0">Back to preview</button></div>
+  <div id="sidebody"></div>
+</aside>
+</main></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const state={
+  step:1,
+  title:"Lexi's 25th birthday",date:"Sat, Oct 17, 2026 · 7:00 pm",host:"Shereen",loc:"Paradise Grapevine, 218 Geary Ave, Toronto",desc:"",
+  extras:[],
+  questions:[
+    {label:"Name for printing",type:"Text",req:true},
+    {label:"Allergies and dietary restrictions",type:"Checkboxes",req:true,opts:["Vegan","Gluten-free","Nut allergy","None"]},
+  ],
+  cat:"Gift sets",selected:null,added:[],
+  published:false,spots:80,
+  resp:{going:52,maybe:9,no:7,none:12,vegan:6,gf:3,missingName:4,missingDiet:2}
+};
+const catalog={
+ "Gift sets":[
+  {id:1,name:"Dessert box",shop:"Favor Co",city:"Toronto",km:6,price:16,ready:"Oct 14",lock:"Oct 12",pers:"Guest name printed on the lid",diet:"Classic, vegan, gluten-free",allergens:"Wheat, dairy, tree nuts",cancel:"Full refund before Oct 12",min:25,optional:"Let guests choose a flavor"},
+  {id:2,name:"Tea sampler tin",shop:"Steep",city:"Toronto",km:4,price:15,ready:"Oct 15",lock:"Oct 13",pers:"Guest name on the tin label",diet:"Caffeine-free available",allergens:"None",cancel:"Full refund before Oct 13",min:20,optional:"Let guests choose a blend"},
+  {id:3,name:"Snack trio",shop:"Pantry Co",city:"Mississauga",km:24,price:13,ready:"Oct 12",lock:"Oct 9",pers:"Guest name on the sleeve",diet:"Nut-free available",allergens:"Wheat, soy",cancel:"50% refund before Oct 9",min:30,optional:null},
+  {id:4,name:"Bath set",shop:"Soak",city:"Hamilton",km:58,price:17,ready:"Oct 10",lock:"Oct 6",pers:"Guest name on the card",diet:"Not applicable",allergens:"Fragrance",cancel:"Full refund before Oct 6",min:20,optional:"Let guests choose a scent"},
+  {id:5,name:"Coffee and mug",shop:"Roast",city:"Toronto",km:9,price:18,ready:"Oct 15",lock:"Oct 12",pers:"One design for all guests",diet:"Decaf available",allergens:"None",cancel:"Full refund before Oct 12",min:24,optional:null},
+ ],
+ "Food & drink":[
+  {id:6,name:"Mini cake",shop:"Crumb",city:"Toronto",km:5,price:12,ready:"Oct 16",lock:"Oct 13",pers:"Guest name piped on top",diet:"Classic, vegan, gluten-free",allergens:"Wheat, egg, dairy",cancel:"Full refund before Oct 13",min:30,optional:"Let guests choose a flavor"},
+  {id:7,name:"Cookie tin",shop:"Batch",city:"Toronto",km:7,price:11,ready:"Oct 15",lock:"Oct 12",pers:"Guest name on the tin",diet:"Vegan available",allergens:"Wheat, dairy",cancel:"Full refund before Oct 12",min:25,optional:null},
+  {id:8,name:"Chocolate bar",shop:"Cacao Lab",city:"Toronto",km:3,price:9,ready:"Oct 14",lock:"Oct 11",pers:"Guest name on the wrapper",diet:"Dairy-free available",allergens:"Soy, may contain nuts",cancel:"Full refund before Oct 11",min:40,optional:null},
+  {id:9,name:"Hot sauce",shop:"Ember",city:"Scarborough",km:18,price:10,ready:"Oct 13",lock:"Oct 10",pers:"Guest name on the label",diet:"Vegan",allergens:"None",cancel:"Full refund before Oct 10",min:24,optional:"Let guests choose heat level"},
+  {id:10,name:"Bottled cocktail",shop:"Stir",city:"Toronto",km:6,price:17,ready:"Oct 16",lock:"Oct 13",pers:"Guest name on the tag",diet:"Zero-proof available",allergens:"None",cancel:"Full refund before Oct 13",min:24,optional:"Let guests choose a drink"},
+ ],
+ "Apparel":[
+  {id:11,name:"Embroidered cap",shop:"Stitch Lab",city:"Toronto",km:8,price:18,ready:"Oct 12",lock:"Oct 8",pers:"Guest initials embroidered",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 8",min:24,optional:"Let guests choose a color"},
+  {id:12,name:"Printed tote",shop:"Stitch Lab",city:"Toronto",km:8,price:14,ready:"Oct 13",lock:"Oct 9",pers:"One design for all guests",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 9",min:30,optional:null},
+  {id:13,name:"Crew socks",shop:"Loop",city:"Toronto",km:12,price:12,ready:"Oct 14",lock:"Oct 10",pers:"Guest name knit in",diet:"Not applicable",allergens:"None",cancel:"50% refund before Oct 10",min:36,optional:"Let guests choose a size"},
+  {id:14,name:"Bandana",shop:"Loop",city:"Toronto",km:12,price:10,ready:"Oct 14",lock:"Oct 10",pers:"One design for all guests",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 10",min:30,optional:null},
+  {id:15,name:"Enamel pin",shop:"Pinhouse",city:"Mississauga",km:22,price:8,ready:"Oct 11",lock:"Oct 7",pers:"Guest name engraved on the back",diet:"Not applicable",allergens:"Nickel",cancel:"Full refund before Oct 7",min:50,optional:null},
+ ],
+ "Stationery":[
+  {id:16,name:"Letterpress card",shop:"Press",city:"Toronto",km:5,price:6,ready:"Oct 15",lock:"Oct 12",pers:"Guest name printed",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 12",min:25,optional:"Let guests write a message"},
+  {id:17,name:"Notebook",shop:"Fold",city:"Toronto",km:9,price:14,ready:"Oct 13",lock:"Oct 9",pers:"Guest name foil-stamped",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 9",min:24,optional:"Let guests choose a cover"},
+  {id:18,name:"Place card set",shop:"Press",city:"Toronto",km:5,price:4,ready:"Oct 15",lock:"Oct 12",pers:"Guest name printed",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 12",min:40,optional:null},
+  {id:19,name:"Sticker sheet",shop:"Peel",city:"Toronto",km:14,price:5,ready:"Oct 12",lock:"Oct 9",pers:"Guest name on one sticker",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 9",min:50,optional:null},
+  {id:20,name:"Pencil set",shop:"Fold",city:"Toronto",km:9,price:9,ready:"Oct 13",lock:"Oct 9",pers:"Guest name engraved",diet:"Not applicable",allergens:"None",cancel:"Full refund before Oct 9",min:30,optional:null},
+ ]
+};
+const $=s=>document.querySelector(s);
+const set=(sel,fn)=>{const e=$(sel);if(e)fn(e)};
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),1800)}
+
+function showTab(n){document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===n));document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.id==="tab-"+n));$("#setup").style.display=n==="overview"?"":"none";state.tab=n;state.selected=null;if(n==="guest"){if(state.added.length&&gx.step!==0&&!gx.pid)gx.step=0;if(!state.added.length&&gx.step===0)gx.step=1;renderGX()}renderSide();window.scrollTo({top:0})}
+function ask(q){
+  const low=q.toLowerCase();let cat="Gift sets",reply="Five gift sets that can print each guest's name.";
+  if(/edible|vegan|food|eat|drink/.test(low)){cat="Food & drink";reply="Five edible gifts. Three come in vegan and gluten-free versions."}
+  else if(/tote|wear|apparel|cap|shirt|sock/.test(low)){cat="Apparel";reply="Five apparel picks. Three add each guest's name."}
+  else if(/card|paper|note|pencil|station/.test(low)){cat="Stationery";reply="Five stationery picks, all with names printed."}
+  if(/lock/.test(low)){reply="Bath set locks first on Oct 6, then Snack trio on Oct 9. The rest stay open until Oct 12 or later."}
+  else if(/missing|name/.test(low)&&gx.step===0){reply=`${state.resp.missingName} guests going have no printed name yet: Priya N. and 3 others. I can remind them.`}
+  if(gx.step===0){const th=$("#thread");th.innerHTML+=`<p><strong>You</strong> · ${esc(q)}</p><p><strong>Tokuchu</strong> · ${reply}</p>`;return}
+  gx.cat=cat;gx.pid=null;gx.step=2;renderGX();toast(reply);
+}
+const gx={step:1,cat:null,pid:null,rule:"Guests going",fix:"Use display name",cancel:"Produce without a name"};
+function prod(id){return Object.values(catalog).flat().find(x=>x.id===id)}
+function renderGX(){
+  const el=$("#gx");const r=state.resp;
+  if(state.added.length&&gx.step===0){
+    el.innerHTML=`<div class="mg"><span class="eyebrow-pill">Guest Experience</span><h1>Gifts for your guests</h1><p class="lead">${r.going} guests going. Each gift below follows their answers until it locks.</p>
+    ${state.added.map(p=>`<div class="item"><span><strong style="font-size:18px">${esc(p.name)}</strong><br><span class="m">${esc(p.shop)} · ${esc(p.pers)}${split(p)?"<br>"+split(p):""}</span></span><span class="m">${qty()} × $${p.price}<br>locks ${esc(p.lock)}</span><span style="display:flex;gap:8px"><button class="req" data-gxedit="${p.id}">Edit</button><button class="req opt" data-add="${p.id}">Remove</button></span></div>`).join("")}
+    <div class="acts"><button class="btn primary" id="approve">Send order to vendors</button><button class="btn ghost" data-gxstart>Add another gift</button></div>
+    <div class="ask" style="margin-top:32px"><input placeholder="Ask anything: what locks first, who's missing a name, cheaper options" aria-label="Ask"><button class="btn primary" data-gxask>Ask</button></div>
+    <div id="thread" style="margin-top:14px;font-size:15px;line-height:1.5"></div></div>`;return;
+  }
+  const dots=`<div class="dots">${[1,2,3,4].map(i=>`<i class="${i<=gx.step?"on":""}"></i>`).join("")}</div>`;
+  if(gx.step===1){
+    el.innerHTML=`<div class="gx">${dots}<h1>What would you like to give your guests?</h1><p class="sub">Pick a category. We only show gifts that can be ready by Oct 17.</p>
+    <div class="opts">${["Gift sets","Food & drink","Apparel","Stationery"].map(c=>`<button class="opt ${gx.cat===c?"on":""}" data-gxcat="${esc(c)}"><div class="ph"></div><span>${esc(c)}</span></button>`).join("")}</div>
+    <div class="ask"><input placeholder="Or describe it in your own words" aria-label="Describe a gift"><button class="btn primary" data-gxask>Go</button></div>
+    <div class="acts"><button class="btn ghost" data-tab="overview">Not now</button></div></div>`;
+  }else if(gx.step===2){
+    const list=catalog[gx.cat]||[];
+    el.innerHTML=`<div class="gx">${dots}<h1>Here are five that fit</h1><p class="sub">Near Toronto, under $18 each, ready in time. Pick one to see the details.</p>
+    <div class="pick">${list.map(p=>`<button class="opt ${gx.pid===p.id?"on":""}" data-gxpid="${p.id}"><div class="ph"></div><span>${esc(p.name)}</span><small>${esc(p.shop)} · $${p.price}</small></button>`).join("")}</div>
+    <div class="acts"><button class="btn ghost" data-gxstep="1">Back</button><button class="btn primary" data-gxstep="3" ${gx.pid?"":"disabled style='opacity:.4'"}>Continue</button><span class="hint">Details show on the right</span></div></div>`;
+  }else if(gx.step===3){
+    el.innerHTML=`<div class="gx">${dots}<h1>Who gets one?</h1><p class="sub">Right now that's ${r.going} going and ${r.maybe} maybe. The count updates as replies come in.</p>
+    <div class="big">${["Guests going","Going and maybe","Everyone invited"].map(o=>`<button class="${gx.rule===o?"on":""}" data-gxrule="${o}">${o}</button>`).join("")}</div>
+    <div class="acts"><button class="btn ghost" data-gxstep="2">Back</button><button class="btn primary" data-gxstep="4">Continue</button></div></div>`;
+  }else if(gx.step===4){
+    const p=prod(gx.pid);const qs=state.questions.map(q=>`<option>${esc(q.label)}</option>`).join("");
+    el.innerHTML=`<div class="gx">${dots}<h1>How it gets personalized</h1><p class="sub">We fill these from each guest's RSVP. Change a source if you like.</p>
+    <div class="line"><span>${esc(p.pers)}</span><select><option>Name for printing</option>${qs}</select></div>
+    ${p.diet!=="Not applicable"?`<div class="line"><span>Version: ${esc(p.diet)}</span><select><option>Allergies and dietary restrictions</option>${qs}</select></div>`:""}
+    <div class="line"><span>${r.missingName} guests have no name yet</span><select data-gxfix><option>Use their display name</option><option>Leave blank</option><option>Remind them</option></select></div>
+    <div class="line"><span>Cancels after ${esc(p.lock)}</span><select data-gxcancel><option>Make it without a name</option><option>Give it to a Maybe</option><option>Cancel that one</option></select></div>
+    ${p.optional?`<label style="display:flex;gap:10px;align-items:center;font-size:17px;margin-top:20px"><input type="checkbox"> ${esc(p.optional)} (adds one question)</label>`:""}
+    <div class="acts"><button class="btn ghost" data-gxstep="3">Back</button><button class="btn primary" data-gxdone>Add to event</button></div></div>`;
+  }
+}
+function renderConfig(){
+  const qs=state.questions.map(q=>`<option>${esc(q.label)}</option>`).join("");
+  $("#gxsum").innerHTML=state.added.length?state.added.map(p=>`<div class="q" style="grid-template-columns:1fr auto auto"><span><strong>${esc(p.name)}</strong> · ${esc(p.shop)}</span><span class="type">${qty()} · locks ${esc(p.lock)}</span><button class="req" data-tab="guest">Open</button></div>`).join(""):`<div class="q" style="grid-template-columns:1fr auto"><span>No gifts selected yet.</span><button class="req" data-tab="guest">Choose gifts</button></div>`;
+}
+function publish(){
+  state.published=true;
+  $("#dashtop").style.display="";$("#setuphead").style.display="none";$("#pubfoot").style.display="none";
+  set("#mode",e=>{e.textContent="Published";e.classList.add("live")});
+  $("#publish").style.display="none";$("#share").style.display="";$("#tabs").style.display="";
+  renderResp();renderOrders();showTab("overview");toast("Published · tokuchu.app/lexi-25");
+}
+
+function renderQuestions(){
+  $("#qlist").innerHTML=state.questions.map((q,i)=>`
+    <div class="q"><span>${esc(q.label)}</span><span class="type">${esc(q.type)}</span>
+    <button class="req ${q.req?"":"opt"}" data-req="${i}">${q.req?"Required":"Optional"}</button></div>`).join("");
+}
+
+function renderResults(){
+  if(!$("#results"))return;
+  const list=catalog[state.cat]||[];
+  $("#rtitle").textContent=state.cat;
+  $("#results").innerHTML=list.map(p=>{
+    const added=state.added.some(a=>a.id===p.id);
+    return `<div class="prod ${state.selected===p.id?"on":""}" data-p="${p.id}" role="button" tabindex="0">
+      <div class="ph"></div>
+      <div class="body"><div class="name">${esc(p.name)}</div>
+      <div class="meta">${esc(p.shop)} · ${esc(p.city)} · ready ${esc(p.ready)}</div>
+      <div class="pers">${esc(p.pers)}${p.diet!=="Not applicable"?" · "+esc(p.diet):""}</div></div>
+      <div class="act"><span class="price">$${p.price} each</span><button class="add ${added?"added":""}" data-add="${p.id}">${added?"Added":"Add to event"}</button></div>
+    </div>`}).join("")+`<div class="more">Show 5 more</div>`;
+}
+
+function qty(){return state.published?state.resp.going:state.spots}
+function split(p){const g=qty(),r=state.resp;return /vegan|gluten/.test(p.diet)&&state.published?`${g-r.vegan-r.gf} classic, ${r.vegan} vegan, ${r.gf} gluten-free`:null}
+function lines(){return state.added.map(p=>({p,qty:qty(),sub:qty()*p.price}))}
+function orderHTML(){
+  const ls=lines();
+  if(!ls.length)return `<div class="empty">No gifts selected. Pick a category above to see options.</div>`;
+  const total=ls.reduce((a,l)=>a+l.sub,0);
+  const head=state.published?`<div class="row"><span>Gift</span><span>Going</span><span>Unit</span><span>Subtotal</span></div>`:`<div class="row"><span>Gift</span><span>Up to</span><span>Unit</span><span>Estimate</span></div>`;
+  return head+ls.map(l=>`<div class="row"><span><strong>${esc(l.p.name)}</strong> · ${esc(l.p.shop)}<br><span style="color:var(--muted);font-size:14px">${split(l.p)?split(l.p)+" · ":""}names lock ${esc(l.p.lock)}</span></span><span>${l.qty}</span><span>$${l.p.price}</span><span class="tot">$${l.sub.toLocaleString()}</span></div>`).join("")+
+    `<div class="row"><span>${state.published?"Total for current responses":"Estimate for "+state.spots+" spots · final total set by RSVPs"}</span><span></span><span></span><span class="tot">$${total.toLocaleString()}</span></div>`;
+}
+function renderOrders(){set("#order3",e=>e.innerHTML=orderHTML());if(state.published){renderConfig();renderGX()}}
+const sampleGuests=[["Ana Ruiz","Going","Vegan","Ana"],["Marcus Lee","Going","None","Marcus"],["Priya N.","Going","Gluten-free",""],["Dev Patel","Maybe","None","Dev"],["Sam Okafor","Can't go","",""],["Jules Moreau","Going","Nut allergy","Jules"],["Hana Kim","Going","","Hana"],["Theo B.","No reply","",""]];
+function renderResp(){
+  const r=state.resp;
+  $("#rhead").textContent=state.title||"Untitled event";set("#attlab",e=>e.textContent=`${r.going} going of ${state.spots} invited`);set("#guestlab",e=>e.textContent=`${sampleGuests.length} shown · ${r.missingName} missing a name`);
+  $("#stats").innerHTML=[[r.going,"Going"],[r.maybe,"Maybe"],[r.no,"Can't go"],[r.none,"No reply"]].map(([n,l])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  $("#followups").innerHTML=[[`${r.missingName} guests going have no name for printing`,"Send reminder"],[`${r.missingDiet} guests going skipped dietary restrictions`,"Send reminder"],[`${r.maybe} guests are Maybe · resolve to Can't go on Oct 10`,"Nudge"],[`${r.none} guests have not replied`,"Remind all"]].map(([t,b])=>`<div class="q" style="grid-template-columns:1fr auto"><span>${t}</span><button class="req">${b}</button></div>`).join("");
+  $("#guests").innerHTML=`<div class="g"><span>Guest</span><span>Status</span><span>Dietary</span><span>Name for printing</span></div>`+sampleGuests.map(g=>`<div class="g"><span>${g[0]}</span><span class="st ${g[1]==="Going"?"":"no"}">${g[1]}</span><span>${g[2]||"<span style='color:var(--muted)'>not given</span>"}</span><span>${g[3]||"<span style='color:var(--sky-dark)'>missing</span>"}</span></div>`).join("");
+}
+
+function renderSide(){
+  const sb=$("#sidebody"),lab=$("#sidelabel"),back=$("#backprev");
+  const p=state.selected&&Object.values(catalog).flat().find(x=>x.id===state.selected);
+  if(p){
+    lab.textContent="Product";back.style.display="inline";
+    const added=state.added.some(a=>a.id===p.id);
+    sb.innerHTML=`<div class="detail"><div class="ph"></div><div class="in">
+      <h2>${esc(p.name)}</h2><div class="sub">${esc(p.shop)} · ${esc(p.city)}, ${p.km} km · $${p.price} each · minimum ${p.min}</div>
+      <div class="kv"><span>Personalization</span><span>${esc(p.pers)}</span></div>
+      <div class="kv"><span>Dietary options</span><span>${esc(p.diet)}</span></div>
+      <div class="kv"><span>Allergens</span><span>${esc(p.allergens)}</span></div>
+      <div class="kv"><span>Ready</span><span>${esc(p.ready)} · pickup or local delivery</span></div>
+      <div class="kv"><span>Names editable until</span><span>${esc(p.lock)}</span></div>
+      <div class="kv"><span>Cancellations</span><span>${esc(p.cancel)}</span></div>
+      <div class="qty">${state.published?`For ${qty()} guests going${split(p)?": "+split(p):""}`:`Up to ${state.spots} guests. Count and dietary variants set by RSVPs before ${esc(p.lock)}.`}</div>
+      ${p.optional?`<label class="opt"><input type="checkbox"> ${esc(p.optional)} (adds one question to the RSVP)</label>`:""}
+      <div class="acts"><button class="btn primary" data-add="${p.id}">${added?"Remove from event":"Add to event"}</button></div>
+    </div></div>`;
+    return;
+  }
+  if(state.published){lab.textContent="Order summary";back.style.display="none";const r=state.resp;
+    sb.innerHTML=`<div class="detail"><div class="in"><h2>${r.going} gifts</h2><div class="sub">Counts follow responses until each vendor's lock date</div>
+      <div class="kv"><span>Classic</span><span>${r.going-r.vegan-r.gf}</span></div><div class="kv"><span>Vegan</span><span>${r.vegan}</span></div><div class="kv"><span>Gluten-free</span><span>${r.gf}</span></div>
+      <div class="kv"><span>Missing printed name</span><span>${r.missingName}</span></div>
+      <div class="kv"><span>Next lock date</span><span>${state.added[0]?esc(state.added[0].lock):"none"}</span></div>
+      <div class="qty">Vendors receive names, variants and quantities only after you approve.</div>
+    </div></div>`;return}
+  lab.textContent="Guest preview";back.style.display="none";
+  const qs=state.questions.map(q=>`<div class="pq"><div class="l">${esc(q.label)}${q.req?"":" <span style='color:var(--muted);font-weight:400'>(optional)</span>"}</div>${q.opts?`<div class="opts">${q.opts.map(o=>`<i>${esc(o)}</i>`).join("")}</div>`:`<div class="box"></div>`}</div>`).join("");
+  const ex=state.extras.length?`<div class="extras">${state.extras.map(e=>`<span>${esc(e)}</span>`).join("")}</div>`:"";
+  sb.innerHTML=`<div class="invite"><div class="hero"><span class="badge">Hosted by ${esc(state.host||"you")}</span></div><div class="in">
+    <h2>${esc(state.title||"Untitled event")}</h2>
+    <div class="when">${esc(state.date)}<br>${esc(state.loc)}</div>
+    ${state.desc?`<p style="margin:0 0 8px">${esc(state.desc)}</p>`:""}
+    ${ex}
+    <div class="rsvp"><span>Going</span><span>Maybe</span><span>Can't go</span></div>
+    ${qs}
+  </div></div>`;
+}
+
+/* events */
+document.addEventListener("input",e=>{
+  const b=e.target.dataset.bind;if(b){state[b]=b==="spots"?(+e.target.value||0):e.target.value;renderOrders();renderSide();if(state.published)renderResp()}
+});
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-gxcat],[data-gxpid],[data-gxstep],[data-gxrule],[data-gxdone],[data-gxstart],[data-gxedit],[data-gxask],[data-tab],[data-ask],#ask,[data-publish],#publish,#share,[data-addq],[data-req],[data-cat],[data-add],[data-p],#extras .chip,.sw,#backprev,.more,#simulate,#approve");
+  if(!t)return;
+  if(t.id==="publish"||t.dataset.publish!==undefined){publish();return}
+  if(t.id==="share"){toast("Copied tokuchu.app/lexi-25");return}
+  if(t.dataset.tab){showTab(t.dataset.tab);return}
+  if(t.dataset.gxcat){gx.cat=t.dataset.gxcat;gx.pid=null;gx.step=2;renderGX();renderSide();return}
+  if(t.dataset.gxpid){gx.pid=+t.dataset.gxpid;state.selected=gx.pid;renderGX();renderSide();return}
+  if(t.dataset.gxstep){if(t.disabled)return;gx.step=+t.dataset.gxstep;state.selected=gx.step===2?gx.pid:null;renderGX();renderSide();return}
+  if(t.dataset.gxrule){gx.rule=t.dataset.gxrule;renderGX();return}
+  if(t.dataset.gxdone!==undefined){const p=prod(gx.pid);if(!state.added.some(a=>a.id===p.id))state.added.push(p);gx.step=0;state.selected=null;renderOrders();renderSide();toast(`${p.name} added`);return}
+  if(t.dataset.gxstart!==undefined){gx.step=1;gx.cat=null;gx.pid=null;renderGX();return}
+  if(t.dataset.gxedit){gx.pid=+t.dataset.gxedit;gx.cat=Object.keys(catalog).find(k=>catalog[k].some(x=>x.id===gx.pid));gx.step=3;renderGX();return}
+  if(t.dataset.gxask!==undefined){const inp=t.parentElement.querySelector("input");const q=inp.value.trim();if(!q){return}ask(q);return}
+  if(t.dataset.ask||t.id==="ask"){const q=t.dataset.ask||document.querySelector(".agent .bar input").value||"gifts for my guests";ask(q);return}
+  if(t.id==="simulate"){state.resp.going+=6;state.resp.none-=6;state.resp.vegan+=1;renderResp();renderOrders();renderSide();toast("6 new responses");return}
+  if(t.id==="approve"){toast("Order sent to vendors · cart updated");return}
+  if(t.id==="backprev"){state.selected=null;renderResults();renderSide();return}
+  if(t.dataset.addq){const[label,type,req]=t.dataset.addq.split("|");state.questions.push({label,type,req:req==="req"});renderQuestions();renderSide();return}
+  if(t.dataset.req!==undefined){const q=state.questions[+t.dataset.req];q.req=!q.req;renderQuestions();renderSide();return}
+  if(t.closest("#extras")){t.classList.toggle("on");const n=t.textContent.trim();state.extras=state.extras.includes(n)?state.extras.filter(x=>x!==n):[...state.extras,n];renderSide();return}
+  if(t.dataset.cat){document.querySelectorAll(".cat").forEach(c=>c.classList.toggle("on",c===t));state.cat=t.textContent.trim();state.selected=null;renderResults();renderSide();return}
+  if(t.dataset.add){const id=+t.dataset.add;const p=Object.values(catalog).flat().find(x=>x.id===id);
+    if(state.added.some(a=>a.id===id)){state.added=state.added.filter(a=>a.id!==id);toast(`${p.name} removed`)}else{state.added.push(p);toast(`${p.name} added`)}
+    renderResults();renderOrders();renderSide();return}
+  if(t.dataset.p){state.selected=+t.dataset.p;renderResults();renderSide();return}
+  if(t.classList.contains("sw")){t.classList.toggle("on");return}
+  if(t.classList.contains("more")){toast("Next five results load here");return}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.p){e.target.click()}});
+
+renderQuestions();renderResults();renderOrders();renderSide();
+</script>
+</body>
+</html>

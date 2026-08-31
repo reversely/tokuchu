@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+# next
+.next/
+out/
+next-env.d.ts
+# env and secrets
+.env
+.env.local
+.env*.local
+# build info
+*.tsbuildinfo
+# test artifacts
+/coverage/
+/test-results/
+/playwright-report/
+/blob-report/
+tests/videos/
+# agent-generated
+AGENTS.md
+# local event data
+docs/demo-event.json
+# os
+.DS_Store
