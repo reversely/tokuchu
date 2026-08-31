@@ -12,7 +12,7 @@ import type { CurationProposal } from "../../../agent/curation-agent";
 type Step = "pick" | "results" | "recipients" | "mapping" | "list";
 /** What the curate endpoint returns (#120); the stream wraps it as { kind: "done", ...reply }. */
 type CurateReply = { response: string; proposal?: CurationProposal; tool_calls: { tool: string; label: string }[] };
-type CurateLine = { kind: "tool"; label: string } | { kind: "error"; error: string } | ({ kind: "done" } & CurateReply);
+type CurateLine = { kind: "tool"; tool: string; label: string } | { kind: "error"; error: string } | ({ kind: "done" } & CurateReply);
 export type SearchReply = { funnel?: { searches: { query: string; categories?: string[]; returned: number; total: number | null }[]; merged: number; probed: number; ranked: number; excluded: Record<string, number> }; searches: { query: string; categories?: string[] }[]; found: number; probed: number; ranked: Scored[]; excluded: { product_id: string; title: string; shop_name: string; rule: string | null; reason: string | null }[]; duration_ms: number };
 type Recipients = "going" | "going_maybe" | "everyone";
 const RECIPIENT_FILTERS: Record<Recipients, { field: string; op: string; value?: unknown }[]> = { going: [{ field: "status", op: "eq", value: "going" }], going_maybe: [{ field: "status", op: "in", value: ["going", "maybe"] }], everyone: [] };
@@ -67,6 +67,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
   const [answer, setAnswer] = useState<string | null>(null);
   const [curateMessage, setCurateMessage] = useState("");
   const [curating, setCurating] = useState<string | null>(null);
+  const [curateSteps, setCurateSteps] = useState<{ tool: string; label: string }[]>([]);
   const [curation, setCuration] = useState<CurateReply | null>(null);
   const [curateError, setCurateError] = useState<string | null>(null);
 
@@ -197,6 +198,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     const message = curateMessage.trim();
     if (!message) return;
     setCurating("Sending the request");
+    setCurateSteps([]);
     setCurateError(null);
     setCuration(null);
     try {
@@ -215,7 +217,10 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
         for (const raw of lines) {
           if (!raw.trim()) continue;
           const line = JSON.parse(raw) as CurateLine;
-          if (line.kind === "tool") setCurating(line.label);
+          if (line.kind === "tool") {
+            setCurating(line.label);
+            setCurateSteps((prev) => [...prev, { tool: line.tool, label: line.label }]);
+          }
           else if (line.kind === "error") throw new Error(line.error);
           else {
             setCuration({ response: line.response, proposal: line.proposal, tool_calls: line.tool_calls });
@@ -245,6 +250,16 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
         <input aria-label="Describe the curated experience" placeholder="Describe the curated experience" value={curateMessage} onChange={(e) => setCurateMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !curating && curate()} data-testid="curate" />
         <button type="button" className="btn primary small" onClick={curate} disabled={!!curating || !curateMessage.trim()} data-testid="curate-run">Curate</button>
       </div>
+      {curateSteps.length > 0 && (
+        <div className="list" data-testid="curate-steps" style={{ margin: "12px 0" }}>
+          {curateSteps.map((s, i) => (
+            <div className="row" key={`${s.tool}-${i}`} style={{ gridTemplateColumns: "auto 1fr", gap: 10, alignItems: "baseline" }}>
+              <code style={{ color: "#4DA3E8", fontSize: 12 }}>{s.tool}</code>
+              <span style={{ color: curating && i === curateSteps.length - 1 ? "var(--ink)" : "var(--muted)" }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {curating && <p className="hint" style={{ color: "var(--muted)" }} data-testid="curate-busy">{curating}</p>}
       {curateError && <p className="error" role="alert" data-testid="curate-error">{curateError}</p>}
       {curation && (
