@@ -216,3 +216,8 @@ only; LLM paths off unless needed.
   navy on cream 10.3:1, white on orange 5.2:1; eyebrows and code marks moved to navy since orange text on
   cream is 3.75:1). A "One use case" section carries the Customworks banner and states that the store
   exposes a callable WebMCP tool for a product's customization, with the applicability in one sentence.
+- Homepage reorganized per reviewer feedback (d5dc24a): chain strip with "exposed by" labels, the
+  merchant's contract as the centerpiece, scale cards, request_from_attendees out of the headline.
+- #24 landed as 9b316b0 (clean): the demo URL carries a signed token (t) and every demo fetch sends it
+  as x-tokuchu-demo, so a browser that drops the cookie keeps the guest session. Gate: 193 vitest,
+  fast suites, live tour 1/1.
