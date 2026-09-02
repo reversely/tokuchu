@@ -143,3 +143,7 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   printed_name answer collided with #18 and was dropped (test commit). Live flow demo from main:
   4/4, checkout page names every attendee. Left from #12's checklist: approve through a page tool
   (next), and the curation agent's prepare_handoff tool name.
+- #15 landed as 685d9b4 (clean). Resend over fetch; log mailer in dev; delivery state per request.
+- #6 landed as 36803ec (two route conflicts with #15 resolved: withOwnedEvent + awaited calls). Dev
+  without DATABASE_URL and no session runs as the local organizer for its own events only. Gate: 166
+  vitest, 18 Playwright, live flow demo 4/4. #8 closed as delivered by #12 + #6.
