@@ -24,7 +24,7 @@ function seed() {
   const event = publishEvent(createEventFromBody(BODY).id);
   const snap = snapshot(event.id);
   const name = snap.definitions.find((d) => d.key === "printed_name")!;
-  const dietary = upsertDefinition(event.id, { ...snap.definitions.find((d) => d.key === "dietary")!, constraints: { options: OPTIONS } });
+  const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const reply = submitRsvp(event.id, {
     party: { contact: { email: "one@example.com" } },
     guests: [
@@ -47,7 +47,7 @@ describe("the API operations", () => {
     const published = publishEvent(event.id);
     const invite = inviteView(published.invite_code!);
     expect(invite.event.title).toBe(BODY.title);
-    expect(invite.questions.map((q) => q.key)).toEqual(["printed_name", "dietary"]);
+    expect(invite.questions.map((q) => q.key)).toEqual(["printed_name"]);
   });
 
   it("rejects a non-ISO schedule field, a negative spots, and a negative cost", () => {
@@ -63,7 +63,7 @@ describe("the API operations", () => {
     const event = createEventFromBody(BODY);
     expect(() => submitRsvp(event.id, { guests: [{ display_name: "Ana" }] })).toThrow(/not published/);
     publishEvent(event.id);
-    const dietary = snapshot(event.id).definitions[1];
+    const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
     expect(() => submitRsvp(event.id, { guests: [{ display_name: "Guest", answers: { [dietary.id]: ["zzz"] } }] })).toThrow(/takes any of/);
   });
 

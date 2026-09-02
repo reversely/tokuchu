@@ -58,16 +58,15 @@ export function setGiftOverride(id: string, guestId: string, override: GiftOverr
 /**
  * Freezes the batch at the lock date: records which guests hold a unit and locks every definition
  * the units read, so a later cancellation resolves through the post-lock choice instead of dropping
- * out. That set is the option mapping, each personalization mapping's definition source, and any
- * extra id the vendor path names (#112: the printed name a print-shop design's name field reads).
- * The set is stored on the batch because lockValue marks only values that exist at the lock;
+ * out. That set is the option mapping and each personalization mapping's definition source. The
+ * set is stored on the batch because lockValue marks only values that exist at the lock;
  * writeValue consults the stored ids, so a guest with no value at the lock is refused all the same.
  */
-export function lockGift(id: string, date: string, extraDefinitionIds: string[] = []): Batch {
+export function lockGift(id: string, date: string): Batch {
   const gift = getGift(id);
   const rows = manifest(gift).filter((row) => COUNTED.has(row.unit_status));
   const mappingSourceIds = (gift.personalization_mappings ?? []).flatMap((m) => (m.source.type === "definition" ? [m.source.definition_id] : []));
-  const definitionIds = [...new Set([...gift.mapping.map((m) => m.definition_id), ...mappingSourceIds, ...extraDefinitionIds])];
+  const definitionIds = [...new Set([...gift.mapping.map((m) => m.definition_id), ...mappingSourceIds])];
   for (const row of rows) for (const definitionId of definitionIds) lockValue("guest", row.guest_id, definitionId, { batch_id: gift.id, date });
   return updateGift(id, { locked_at: date, locked_guest_ids: rows.map((r) => r.guest_id), locked_definition_ids: definitionIds } as Partial<GiftInput>);
 }

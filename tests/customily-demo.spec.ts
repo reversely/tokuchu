@@ -28,13 +28,12 @@ const customshop = JSON.parse(readFileSync(fileURLToPath(new URL("../src/agent/c
 const FIELDS = customshop.products[PRODUCT_ID].fields;
 const SHOP_NAME = customshop.shop_name;
 
-type DemoEvent = { title: string; host: string; starts_at: string; venue: { name: string; line1: string; city: string; region: string; postal_code: string; country: string }; spots: string; cost: string; deadline: string; needed_by: string; choices: string[]; guests: { name: string; choice: string }[]; card: string; search: string; curate: string; guest_list?: string[] };
+type DemoEvent = { title: string; host: string; starts_at: string; venue: { name: string; line1: string; city: string; region: string; postal_code: string; country: string }; spots: string; cost: string; deadline: string; needed_by: string; guests: { name: string }[]; card: string; search: string; curate: string; guest_list?: string[] };
 const DEMO_PATH = process.env.DEMO_EVENT ?? "docs/demo-event.json";
 const DEMO: DemoEvent | null = existsSync(DEMO_PATH) ? (JSON.parse(readFileSync(DEMO_PATH, "utf8")) as DemoEvent) : null;
 test.skip(!DEMO, `No demo event at ${DEMO_PATH}; copy tests/demo-event.example.json there and fill in the apparel and curation fields.`);
 const EVENT = DEMO!;
 const GUESTS = DEMO?.guests ?? [];
-const CHOICES = DEMO?.choices ?? [];
 const KEY_DELAY_MS = 35;
 const READ_MS = 2000;
 const LIVE_MS = 240_000;
@@ -118,13 +117,6 @@ test("Scene 1: the organizer publishes the event and the guests answer with the 
   await organizer.getByTestId("cost").fill(EVENT.cost);
   await organizer.getByTestId("deadline").fill(EVENT.deadline);
   await organizer.getByTestId("needed_by").fill(EVENT.needed_by);
-  await caption("Scene 1: the dietary choices in the organizer's words");
-  const choiceInput = organizer.getByTestId("questions").getByLabel(/Add a choice to/).first();
-  for (const c of CHOICES) {
-    await typeInto(organizer, choiceInput, c);
-    await choiceInput.press("Enter");
-  }
-  await expect(organizer.getByTestId("invite-preview")).toContainText(CHOICES[0]);
   if (EVENT.guest_list?.length) await organizer.getByTestId("guest-list").fill(EVENT.guest_list.filter(Boolean).join("\n"));
   await rest(organizer);
   await organizer.getByTestId("publish").click();
@@ -143,7 +135,6 @@ test("Scene 1: the organizer publishes the event and the guests answer with the 
     await typeInto(guest, guest.getByTestId("guest-name"), g.name);
     await guest.getByTestId("status").getByRole("button", { name: "Going" }).click();
     await typeInto(guest, guest.getByTestId("answer-printed_name").getByRole("textbox"), g.name);
-    await guest.getByTestId("answer-dietary").getByRole("button", { name: g.choice, exact: true }).click();
     await guest.getByTestId("send").click();
     await expect(guest.getByTestId("saved")).toHaveText("Saved as Going");
     await rest(guest, 1000);

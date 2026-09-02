@@ -72,7 +72,7 @@ function fakeShop() {
 /** A published event with a dietary question, three guests (two going, one maybe), and a gift mapped by dietary value. */
 function seed() {
   const event = publishEvent(createEventFromBody(EVENT).id);
-  const dietary = upsertDefinition(event.id, { ...snapshot(event.id).definitions.find((d) => d.key === "dietary")!, constraints: { options: OPTIONS } });
+  const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const reply = submitRsvp(event.id, {
     party: { contact: { email: BUYER.email } },
     guests: [

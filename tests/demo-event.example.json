@@ -14,23 +14,15 @@
   "cost": "",
   "deadline": "2030-01-03",
   "needed_by": "2030-01-08",
-  "choices": [
-    "",
-    "",
-    ""
-  ],
   "guests": [
     {
-      "name": "",
-      "choice": ""
+      "name": ""
     },
     {
-      "name": "",
-      "choice": ""
+      "name": ""
     },
     {
-      "name": "",
-      "choice": ""
+      "name": ""
     }
   ],
   "card": "apparel",

@@ -10,7 +10,7 @@ echo "==> pre-commit hooks"
 if command -v pre-commit >/dev/null 2>&1; then pre-commit install || true; else echo "   (pre-commit not found; install it to enable hooks)"; fi
 echo "==> .env key check"
 if [ -f .env ]; then
-  for k in OPENAI_API_KEY CUSTOMILY_SHOP_URL PRINTSHOP_URL; do
+  for k in OPENAI_API_KEY CUSTOMILY_SHOP_URL; do
     grep -q "^$k=" .env && echo "   $k present" || echo "   $k MISSING (see .env.example)"
   done
 else echo "   .env missing; copy .env.example to .env and fill it"; fi

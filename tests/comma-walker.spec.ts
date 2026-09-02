@@ -35,13 +35,12 @@ async function expectNoComma(page: Page) {
 /** A search result the fixture serves; its option names stay a single value so the "Choices" list is comma-free. */
 const RESULT = (id: string, title: string, price: number, variants: { id: string; title: string }[]) => ({ product_id: id, title, description: "", url: null, image_url: null, shop_domain: "shop.myshopify.com", shop_name: "Shop", shop_url: "https://shop", policy_links: [], price_cents: price, currency: "CAD", variants: variants.map((v) => ({ ...v, price_cents: price, currency: "CAD", available: true, options: [] })), option_names: ["Choice"], searches: ["q"], delivery: { window: { earliest: "2029-12-30", latest: "2030-01-03" }, text: "Arrives soon", confidence: "dated", error: null }, score: 0.8, terms: {}, verdict: { eligible: true, rule: null, reason: null } });
 
-/** Create, define a multi-choice question, publish, and reply so every screen has data to render. */
+/** Create, add a multi-choice question, publish, and reply so every screen has data to render. */
 async function publishedEvent(request: APIRequestContext) {
   const created = await request.post("/api/events", { data: { title: "Test event", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: VENUE, cost_per_person_cents: 2000, rsvp_deadline: "2030-01-03", delivery: { destination: "venue", address: null, needed_by: "2030-01-08" } } });
   const { id } = (await created.json()) as { id: string };
   const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { id: string; key: string; value_type: string }[] };
-  const defs = snap.definitions.map((d) => (d.value_type === "multi_enum" ? { ...d, constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] } } : d));
-  await request.put(`/api/events/${id}/definitions`, { data: { definitions: defs } });
+  const defs = ((await (await request.put(`/api/events/${id}/definitions`, { data: { definitions: [...snap.definitions, { key: "dietary", label: "Allergies and dietary restrictions", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, required_rule: "going" }] } })).json()) as { definitions: { id: string; key: string }[] }).definitions;
   const published = (await (await request.post(`/api/events/${id}/publish`)).json()) as { event: { invite_code: string } };
   const choice = defs.find((d) => d.key === "dietary")!.id;
   // Single-value answers so the guest table's answer join renders one label with no comma.
@@ -60,6 +59,7 @@ test("the draft page renders no comma in the details or the invite preview", asy
   await page.getByTestId("cost").fill("10");
   await page.getByTestId("deadline").fill("2030-01-03");
   await page.getByTestId("needed_by").fill("2030-01-08");
+  await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();
   const choiceInput = page.getByTestId("questions").getByLabel(/Add a choice to/).first();
   await choiceInput.fill("Choice one");
   await choiceInput.press("Enter");

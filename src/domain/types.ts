@@ -104,7 +104,7 @@ export const Event = z.object({
   response_options: z.array(GuestStatus),
   settings: EventSettings,
   delivery: Delivery,
-  /** The organizer's contact; a print-shop send without a buyer takes its email. */
+  /** The organizer's contact. */
   contact: z.object({ email: z.string().nullable(), phone: z.string().nullable() }),
   segments: z.array(Segment),
   definition_ids: z.array(z.string()),

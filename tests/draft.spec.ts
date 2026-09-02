@@ -20,8 +20,9 @@ test("a draft becomes a published event with the organizer's questions", async (
   // The preview follows the fields.
   await expect(page.getByTestId("invite-preview")).toContainText("Team offsite");
   await expect(page.getByTestId("invite-preview")).toContainText("Hosted by A. Host");
-  // A seeded multi-choice question starts with no choices; the organizer adds two in their words.
+  // A library multi-choice question joins with no choices; the organizer adds two in their words.
   const questions = page.getByTestId("questions");
+  await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();
   const choiceInput = questions.getByLabel(/Add a choice to/).first();
   await choiceInput.fill("Choice one");
   await choiceInput.press("Enter");
@@ -50,6 +51,7 @@ test("a case variant of a choice is rejected so the value stays unique (#138)", 
   page.on("console", (m) => { if (m.type() === "warning" || m.type() === "error") warnings.push(m.text()); });
   await page.goto("/");
   const questions = page.getByTestId("questions");
+  await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();
   const choiceInput = questions.getByLabel(/Add a choice to/).first();
   await choiceInput.fill("Choice one");
   await choiceInput.press("Enter");
@@ -67,7 +69,8 @@ test("publish waits for a required choice question to have options (#139)", asyn
   await page.getByTestId("starts_at").fill("2030-01-10T19:00");
   await page.getByTestId("city").fill("City");
   await page.getByTestId("country").fill("CA");
-  // The seeded dietary question is required when going but ships with no options, so publish is blocked.
+  // The library's dietary question is required when going but arrives with no options, so publish is blocked.
+  await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();
   await expect(page.getByTestId("publish-blocker")).toBeVisible();
   await expect(page.getByTestId("publish")).toBeDisabled();
   const choiceInput = page.getByTestId("questions").getByLabel(/Add a choice to/).first();

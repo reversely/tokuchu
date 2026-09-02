@@ -4,9 +4,8 @@ import { expect, test } from "@playwright/test";
 async function publishedEvent(request: import("@playwright/test").APIRequestContext) {
   const created = await request.post("/api/events", { data: { title: "Test event", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" }, cost_per_person_cents: 1000, rsvp_deadline: "2030-01-03" } });
   const { id } = (await created.json()) as { id: string };
-  const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { key: string; label: string; scope: string; value_type: string; constraints: Record<string, unknown>; required_rule: string }[] };
-  const defs = snap.definitions.map((d) => (d.value_type === "multi_enum" ? { ...d, constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] } } : d));
-  await request.put(`/api/events/${id}/definitions`, { data: { definitions: defs } });
+  const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { key: string }[] };
+  await request.put(`/api/events/${id}/definitions`, { data: { definitions: [...snap.definitions, { key: "dietary", label: "Allergies and dietary restrictions", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, required_rule: "going" }] } });
   const published = (await (await request.post(`/api/events/${id}/publish`)).json()) as { event: { invite_code: string } };
   return { id, code: published.event.invite_code };
 }
@@ -18,7 +17,7 @@ test("a guest replies going with answers, then edits, then cancels from the same
   await expect(page.getByTestId("send")).toBeDisabled();
   await page.getByTestId("guest-name").fill("Guest One");
   await page.getByTestId("status").getByRole("button", { name: "Going" }).click();
-  // Going makes the seeded questions required; the button waits for them.
+  // Going makes the required questions required; the button waits for them.
   await expect(page.getByTestId("send")).toBeDisabled();
   await page.getByTestId("answer-printed_name").getByRole("textbox").fill("One");
   await page.getByTestId("answer-dietary").getByRole("button", { name: "Choice A" }).click();

@@ -7,8 +7,7 @@ test("a category becomes a gift with a mapping, quantities follow the replies, a
   const created = await request.post("/api/events", { data: { title: "Test event", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" }, cost_per_person_cents: 2000, delivery: { destination: "venue", address: null, needed_by: "2030-01-08" } } });
   const { id } = (await created.json()) as { id: string };
   const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { id: string; key: string; value_type: string }[] };
-  const defs = snap.definitions.map((d) => (d.value_type === "multi_enum" ? { ...d, constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] } } : d));
-  await request.put(`/api/events/${id}/definitions`, { data: { definitions: defs } });
+  const defs = ((await (await request.put(`/api/events/${id}/definitions`, { data: { definitions: [...snap.definitions, { key: "dietary", label: "Allergies and dietary restrictions", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, required_rule: "going" }] } })).json()) as { definitions: { id: string; key: string }[] }).definitions;
   await request.post(`/api/events/${id}/publish`);
   const choice = defs.find((d) => d.key === "dietary")!.id;
   await request.post(`/api/events/${id}/rsvp`, { data: { guests: [{ display_name: "Guest One", status: "going", answers: { [choice]: ["a"] } }, { display_name: "Guest Two", status: "going", answers: { [choice]: ["none"] } }, { display_name: "Guest Three", status: "maybe" }] } });

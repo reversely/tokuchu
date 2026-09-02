@@ -170,7 +170,7 @@ function rawTools(ctx: CurationContext, state: RunState, options: RunOptions) {
     }),
     tool({
       name: "search_gifts",
-      description: "Runs the deterministic gift search for a sentence: catalog, print shop, and custom shop, with delivery probes and ranking. Returns candidates whose product_id select_gift accepts.",
+      description: "Runs the deterministic gift search for a sentence: the catalog and the custom shop, with delivery probes and ranking. Returns candidates whose product_id select_gift accepts.",
       parameters: z.object({ query: z.string().describe("The search sentence, e.g. \"personalized sweatshirts with each guest's name\"") }),
       execute: async ({ query }) => {
         try {

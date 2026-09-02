@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { errorResponse, postUpdate, updatesFor } from "../../../../../../../server/api";
-import { forwardOrganizerReply } from "../../../../../../../server/cart-api";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -20,9 +19,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
     const body = (await request.json()) as { caller?: string };
-    const update = postUpdate(id, giftId, body.caller ?? "organizer", body);
-    await forwardOrganizerReply(id, giftId, update);
-    return NextResponse.json(update, { status: 201 });
+    return NextResponse.json(postUpdate(id, giftId, body.caller ?? "organizer", body), { status: 201 });
   } catch (e) {
     return errorResponse(e);
   }
