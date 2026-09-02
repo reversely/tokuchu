@@ -5,7 +5,7 @@
  * rows from retrieved ids. Search, delivery, variant resolution, and the manifest stay
  * deterministic, and no tool sends a cart, approves an order, or checks out.
  */
-import { Agent, run, tool, type FunctionTool, type Model } from "@openai/agents";
+import type { FunctionTool, Model } from "@openai/agents";
 import { z } from "zod";
 import { COUNTED, manifest, type ManifestRow } from "../domain/gifts";
 import type { PersonalizationIssue } from "../domain/personalization";
@@ -17,6 +17,9 @@ import { giftSearch } from "../server/search";
 import type { Candidate, Funnel } from "./search";
 
 export const MODEL = "gpt-5.6-luna";
+
+/** The agent SDK's module, loaded inside runCurationAgent so a server with the agent switched off never loads it. */
+type Sdk = typeof import("@openai/agents");
 
 export type CurationContext = { eventId: string };
 
@@ -129,11 +132,11 @@ function summarized<T extends FunctionTool<CurationContext, never, unknown>>(sta
   };
 }
 
-function makeTools(ctx: CurationContext, state: RunState, options: RunOptions) {
-  return rawTools(ctx, state, options).map((t) => summarized(state, options, t as never));
+function makeTools(sdk: Sdk, ctx: CurationContext, state: RunState, options: RunOptions) {
+  return rawTools(sdk, ctx, state, options).map((t) => summarized(state, options, t as never));
 }
 
-function rawTools(ctx: CurationContext, state: RunState, options: RunOptions) {
+function rawTools({ tool }: Sdk, ctx: CurationContext, state: RunState, options: RunOptions) {
   const { eventId } = ctx;
   const search: SearchFn = options.search ?? ((id, body) => giftSearch(id, body));
   return [
@@ -298,8 +301,8 @@ function proposalFor(eventId: string, state: RunState): CurationProposal | undef
   return ProposalSchema.safeParse(proposal).success ? proposal : undefined;
 }
 
-export function curationAgent(ctx: CurationContext, options: RunOptions, state: RunState) {
-  return new Agent<CurationContext>({ name: "CurationAgent", model: options.model ?? MODEL, instructions: INSTRUCTIONS, tools: makeTools(ctx, state, options) });
+function curationAgent(sdk: Sdk, ctx: CurationContext, options: RunOptions, state: RunState) {
+  return new sdk.Agent<CurationContext>({ name: "CurationAgent", model: options.model ?? MODEL, instructions: INSTRUCTIONS, tools: makeTools(sdk, ctx, state, options) });
 }
 
 /**
@@ -309,8 +312,9 @@ export function curationAgent(ctx: CurationContext, options: RunOptions, state: 
  */
 export async function runCurationAgent(ctx: CurationContext, message: string, options: RunOptions = {}): Promise<CurationResult> {
   const state: RunState = { candidates: new Map(), giftId: null, calls: [] };
-  const agent = curationAgent(ctx, options, state);
-  const result = await run(agent, [{ role: "user", content: message }], { context: ctx, maxTurns: 16 });
+  const sdk = await import("@openai/agents");
+  const agent = curationAgent(sdk, ctx, options, state);
+  const result = await sdk.run(agent, [{ role: "user", content: message }], { context: ctx, maxTurns: 16 });
   const response = typeof result.finalOutput === "string" ? result.finalOutput : JSON.stringify(result.finalOutput ?? "");
   const proposal = proposalFor(ctx.eventId, state);
   return { response, ...(proposal ? { proposal } : {}), tool_calls: state.calls };

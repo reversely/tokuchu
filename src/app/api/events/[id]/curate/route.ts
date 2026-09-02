@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runCurationAgent } from "../../../../../agent/curation-agent";
 import { BadRequestError, errorResponse, requireEvent } from "../../../../../server/api";
+import { llmEnabled } from "../../../../../server/flags";
 import { withOwnedEvent } from "../../../../../server/ownership";
 import { withPersistedEvent } from "../../../../../server/persistence";
 
@@ -10,9 +11,11 @@ type Params = { params: Promise<{ id: string }> };
  * One CurationAgent turn (#120). Body: { message: string }. Returns { response, proposal?,
  * tool_calls, trace_id? }; with ?stream=1 the same run arrives as NDJSON lines, one
  * { kind: "tool", tool, label } per tool start and a final { kind: "done", ...result }, so the
- * page can name the current tool activity while the model works.
+ * page can name the current tool activity while the model works. With LLM_ENABLED off the route
+ * answers 501 before reading the body, so no run starts and the agent SDK stays unloaded.
  */
 export async function POST(request: Request, { params }: Params) {
+  if (!llmEnabled()) return NextResponse.json({ error: "The curation agent is switched off" }, { status: 501 });
   try {
     const { id } = await params;
     const body = (await request.json()) as { message?: string };

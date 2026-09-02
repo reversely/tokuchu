@@ -261,7 +261,8 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     onChanged();
   }
 
-  const curateBlock = (
+  /** The panel and its ask bar render only where the snapshot says the server's curation agent is switched on. */
+  const curateBlock = snap.llm_enabled && (
     <section className="block" aria-labelledby="gx-curate" style={{ marginTop: 40 }}>
       <div className="labelrow"><h2 id="gx-curate" style={{ fontSize: 22 }}>Curated experience</h2></div>
       <div className="ask" style={{ marginBottom: 16 }}>
