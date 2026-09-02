@@ -54,8 +54,9 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const guestDefs = snap.definitions.filter((d) => d.scope === "guest" && answerable(d));
   const defsById = new Map(snap.definitions.map((d) => [d.id, d]));
   const attendees = snap.guests.filter((g) => g.status === "going");
-  const gift = snap.gifts[0] as (Snapshot["gifts"][number] & { checkout_url?: string | null; locked_at?: string | null }) | undefined;
+  const gift = snap.gifts[0];
   const approved = Boolean(gift?.locked_at);
+  const fill = gift?.cart_fill ?? null;
   const vendor = gift?.shop_domain?.replace(/^https?:\/\//, "") || "the vendor";
   const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
   const incomplete = [...requests.values()].filter((r) => !r.complete).length;
@@ -218,6 +219,13 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           </div>
           {approved && gift.checkout_url && (
             <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {vendor}</a></p>
+          )}
+          {approved && !gift.checkout_url && fill?.status === "running" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart at {vendor}</p>}
+          {approved && fill?.status === "failed" && <p className="error" role="alert" data-testid="cart-failed">{fill.reason ?? "The cart did not fill"}</p>}
+          {approved && (gift.cart_blocked?.length ?? 0) > 0 && (
+            <ul className="hint" style={{ marginTop: 8 }} data-testid="cart-blocked">
+              {gift.cart_blocked!.map((b) => <li key={b.guest_id}>{snap.guests.find((g) => g.id === b.guest_id)?.display_name ?? b.guest_id}: {b.issues.join("; ")}</li>)}
+            </ul>
           )}
           {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
         </section>

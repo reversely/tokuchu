@@ -254,6 +254,18 @@ export type DeliveryWindow = z.infer<typeof DeliveryWindow>;
 export const CartBuyer = z.object({ email: z.string().optional(), phone_number: z.string().optional() });
 export type CartBuyer = z.infer<typeof CartBuyer>;
 
+/** The cart job's state: running from approval, done once the store returned the cart, failed with the reason otherwise. */
+export const CartFill = z.object({ status: z.enum(["running", "done", "failed"]), started_at: z.string(), reason: z.string().nullable() });
+export type CartFill = z.infer<typeof CartFill>;
+
+/** One store cart line the job added for a guest. */
+export const CartLine = z.object({ guest_id: z.string(), cart_line_key: z.string(), variant_id: z.string() });
+export type CartLine = z.infer<typeof CartLine>;
+
+/** A guest whose item the store refused, with the store's reasons. */
+export const CartBlocked = z.object({ guest_id: z.string(), issues: z.array(z.string()) });
+export type CartBlocked = z.infer<typeof CartBlocked>;
+
 export const Batch = z.object({
   id: z.string(),
   event_id: z.string(),
@@ -292,6 +304,14 @@ export const Batch = z.object({
   delivery_window: DeliveryWindow.nullable().optional(),
   /** Set by the lock: the shop's hosted checkout page, where the organizer pays. */
   checkout_url: z.string().nullable().optional(),
+  /** The product's own page at the store, where the merchant tools run; the shop's root stands in when unset. */
+  product_url: z.string().nullable().optional(),
+  /** Set by the cart job: where it stands and, on a failure, why. */
+  cart_fill: CartFill.nullable().optional(),
+  /** Set by the cart job: the store's cart line per guest it added. */
+  cart_lines: z.array(CartLine).nullable().optional(),
+  /** Set by the cart job: the guests whose item the store refused, with the store's reasons. */
+  cart_blocked: z.array(CartBlocked).nullable().optional(),
   /** Set by each poll of a vendor with a change feed: the last sequence number read from it. */
   vendor_seq: z.number().int().nullable().optional()
 });

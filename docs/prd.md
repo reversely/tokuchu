@@ -120,7 +120,7 @@ WebMCP development happens in both components. In Tokuchu it is the tool registr
 The interaction between the two runs over WebMCP in both directions:
 
 - **Tokuchu to the store, from the server.** Discovery calls the store's UCP endpoint as JSON-RPC with a link to Tokuchu's public agent profile, which the endpoint requires on every call.
-- **Tokuchu to the store, in a page.** The merchant tools and Shopify's page tools exist only on the store's pages, so Tokuchu's server opens a page of the store in a headless browser, injects the WebMCP polyfill before the page scripts run, waits for the tools to register on the model context, and calls them with `executeTool`. The cart the tools build belongs to that browser session; the `checkoutUrl` the cart tool returns carries the cart out of the session to the organizer.
+- **Tokuchu to the store, in a page.** The merchant tools and Shopify's page tools exist only on the store's pages, so Tokuchu's server opens a page of the store in a headless browser, injects the WebMCP polyfill before the page scripts run, waits for the tools to register on the model context, and calls them with `executeTool`. Until the theme carries the merchant tools, the server injects the asset beside the polyfill. The cart the tools build belongs to that browser session; the `checkoutUrl` the cart tool returns carries the cart out of the session to the organizer.
 - **A browser agent to Tokuchu.** A judge or organizer using a browser with WebMCP enabled opens Tokuchu's dashboard and finds the event's records registered as tools, with schemas and execute functions, and acts on them with the organizer's identity.
 - **A vendor's agent to Tokuchu.** The same tool list serves over HTTP at the MCP endpoint to a token holder, so the store side can read the manifest or post an update without a browser.
 
@@ -213,7 +213,7 @@ For each attendee the app maps the relevant values into the selected product's c
 
 The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
 
-The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason.
+The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason. The Attendees tab shows the cart link once it arrives and the failure text when the store did not fill the cart.
 
 ## 11. Product discovery and ranking
 

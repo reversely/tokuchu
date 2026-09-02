@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createGiftFromBody, errorResponse, requireEvent } from "../../../../../server/api";
+import { withStoreCustomization } from "../../../../../server/customization";
 import { withPersistedEvent } from "../../../../../server/persistence";
 import { giftsFor, quantities } from "../../../../../domain/gifts";
 
@@ -18,12 +19,13 @@ export async function GET(_: Request, { params }: Params) {
   }
 }
 
-/** Stores a gift plan (set_gift_plan) and returns it with the quantities per variant. */
+/** Stores a gift plan (set_gift_plan) and returns it with the quantities per variant. A product of a shop that answers the merchant tools takes the store's fields and variants first; that read runs before the event loads so the row is not held open for a browser. */
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id } = await params;
+    const body = await withStoreCustomization(await request.json());
     return await withPersistedEvent(id, async () => {
-      return NextResponse.json(createGiftFromBody(id, await request.json()), { status: 201 });
+      return NextResponse.json(createGiftFromBody(id, body), { status: 201 });
     });
   } catch (e) {
     return errorResponse(e);

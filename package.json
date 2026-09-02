@@ -14,7 +14,6 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && npm run typecheck --workspaces --if-present",
     "test:e2e": "playwright test",
-    "test:customily-demo": "playwright test tests/customily-demo.spec.ts",
     "setup": "bash scripts/setup.sh",
     "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
     "migrate": "tsx scripts/migrate.ts"

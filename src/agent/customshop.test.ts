@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { customshopCandidates, customshopFields, customshopHost, customshopUrl } from "./customshop";
+import { customshopCandidates, customshopHost, customshopUrl, storeMeta, type FieldsReader } from "./customshop";
+import type { PersonalizationField } from "../domain/types";
 import { cardsConfig, emptyFunnel, rank, sourcesForSentence, type EventContext } from "./search";
 
 const URL_ = "https://shop.example";
@@ -25,9 +26,21 @@ const PLAIN = {
 
 type Call = { tool: string; args: Record<string, any>; meta: Record<string, any> };
 
-/** The shop behind a fake fetch at /api/ucp/mcp: its own search_catalog and a checkout that quotes the crewneck and refuses the tee. */
+/** The crewneck's fields as the shop's get_customization answers them. */
+const CREWNECK_FIELDS: PersonalizationField[] = [
+  { key: "star_map_location", label: "Enter Location for Star Map 1", kind: "location", required: true, constraints: {} },
+  { key: "star_map_time", label: "Pick a time for Star Map 1", kind: "time", required: true, constraints: {} },
+  { key: "caption", label: "Text 2", kind: "name", required: true, constraints: { max_length: 20 } }
+];
+
+/** The shop behind a fake fetch: its /meta.json, its own search_catalog at /api/ucp/mcp, a checkout that quotes the crewneck and refuses the tee, and a store page whose get_customization knows the crewneck alone. */
 function fakeShop() {
   const calls: Call[] = [];
+  const reads: { url: string; ids: string[] }[] = [];
+  const readFields: FieldsReader = async (url, ids) => {
+    reads.push({ url, ids });
+    return new Map(ids.map((id) => [id, id === "10242071789817" ? CREWNECK_FIELDS : null]));
+  };
   const reply = (tool: string, args: Record<string, any>): unknown => {
     if (tool === "search_catalog") return { products: [CREWNECK, PLAIN], pagination: { has_next_page: false } };
     if (tool === "create_checkout") {
@@ -38,13 +51,14 @@ function fakeShop() {
     throw new Error(`The fake shop has no ${tool}.`);
   };
   const fetchImpl: typeof fetch = async (input, init) => {
+    if (String(input) === `${URL_}/meta.json`) return new Response(JSON.stringify({ name: "Customworks", currency: "CAD" }), { status: 200 });
     expect(String(input)).toBe(`${URL_}/api/ucp/mcp`);
     const body = JSON.parse(String(init?.body));
     const { meta, ...args } = body.params.arguments;
     calls.push({ tool: body.params.name, args, meta });
     return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: JSON.stringify(reply(body.params.name, args)) }] } }), { status: 200 });
   };
-  return { calls, fetchImpl, of: (tool: string) => calls.filter((c) => c.tool === tool) };
+  return { calls, reads, fetchImpl, readFields, of: (tool: string) => calls.filter((c) => c.tool === tool) };
 }
 
 describe("the custom shop as a search source", () => {
@@ -57,28 +71,34 @@ describe("the custom shop as a search source", () => {
     else process.env.CUSTOMILY_SHOP_URL = saved;
   });
 
-  it("lists the shop's products with the profile meta and a catalog object, the configured fields, and a funnel row", async () => {
+  it("lists the shop's products with the profile meta and a catalog object, the store's fields, and a funnel row", async () => {
     const shop = fakeShop();
     const funnel = emptyFunnel();
-    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, funnel });
+    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, funnel, readFields: shop.readFields });
     const [search] = shop.of("search_catalog");
     expect(search.meta).toEqual({ "ucp-agent": { profile: expect.stringContaining("https://") } });
     expect(search.args.catalog).toBeTypeOf("object");
     expect(funnel.searches).toEqual([{ query: "customshop", returned: 2, total: 2 }]);
     const crewneck = found.find((c) => c.product_id === CREWNECK.id)!;
     expect(crewneck).toMatchObject({ title: "Customized Crewneck", shop_domain: "shop.example", shop_name: "Customworks", shop_url: URL_, price_cents: 5000, currency: "CAD", searches: ["customshop"], option_names: ["Color", "Size"], image_url: "https://cdn.example/crewneck.png" });
-    expect(crewneck.personalization?.fields).toEqual([
-      { key: "star_map_location", label: "Enter Location for Star Map 1", kind: "location", required: true },
-      { key: "star_map_date", label: "Pick a date for Star Map 1", kind: "date", required: true },
-      { key: "caption", label: "Text 2", kind: "name", required: true }
-    ]);
-    expect(customshopFields(CREWNECK.id)).toEqual(crewneck.personalization?.fields);
+    expect(crewneck.personalization?.fields).toEqual(CREWNECK_FIELDS);
     expect(found.find((c) => c.product_id === PLAIN.id)?.personalization).toBeUndefined();
+    expect(shop.reads).toEqual([{ url: URL_, ids: ["10242071789817", "999"] }]);
+    expect(await storeMeta(URL_, shop.fetchImpl)).toEqual({ name: "Customworks", currency: "CAD" });
+  });
+
+  it("reads each product's fields from the store once per process", async () => {
+    const shop = fakeShop();
+    await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, readFields: shop.readFields });
+    const readsAfterFirst = shop.reads.length;
+    const again = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, readFields: shop.readFields });
+    expect(shop.reads).toHaveLength(readsAfterFirst);
+    expect(again.find((c) => c.product_id === CREWNECK.id)?.personalization?.fields).toEqual(CREWNECK_FIELDS);
   });
 
   it("probes the shop's checkout for each product so the verdict is the shop's own", async () => {
     const shop = fakeShop();
-    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl });
+    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, readFields: shop.readFields });
     expect(shop.of("create_checkout").map((c) => c.args.checkout.line_items[0].item.id)).toEqual(["gid://shopify/ProductVariant/1", "gid://shopify/ProductVariant/9"]);
     const [probe] = shop.of("create_checkout");
     expect(probe.args.checkout.fulfillment.methods[0].destinations[0]).toMatchObject({ address_locality: "Toronto", address_region: "ON", postal_code: "M5V 1A1", address_country: "CA" });
@@ -90,7 +110,7 @@ describe("the custom shop as a search source", () => {
 
   it("ranks the crewneck among catalog candidates and coverage sees its name field on a personalized request", async () => {
     const shop = fakeShop();
-    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl });
+    const found = await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, readFields: shop.readFields });
     const { ranked } = rank(found, CTX);
     expect(ranked[0].product_id).toBe(CREWNECK.id);
     expect(ranked[0].terms.coverage).toBe(1);
@@ -102,7 +122,7 @@ describe("the custom shop as a search source", () => {
     const shop = fakeShop();
     expect(customshopUrl()).toBeNull();
     expect(customshopHost()).toBeNull();
-    expect(await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl })).toEqual([]);
+    expect(await customshopCandidates(CTX, { fetchImpl: shop.fetchImpl, readFields: shop.readFields })).toEqual([]);
     expect(shop.calls).toEqual([]);
   });
 

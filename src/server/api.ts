@@ -190,8 +190,10 @@ export const GiftBody = z.object({
   mapping: z.array(VariantMappingRow).default([]),
   default_variant_id: z.string().nullable().default(null),
   variants: z.array(Variant).default([]),
-  /** The vendor's personalization schema the search read for the product, when it has one. */
+  /** The store's customization fields for the product, when it has any. */
   personalization: z.object({ fields: z.array(PersonalizationField) }).nullable().optional(),
+  /** The product's own page at the store, where the merchant tools run. */
+  product_url: z.string().nullable().default(null),
   missing_value_fallback: MissingValueFallback.default("default"),
   post_lock_cancellation: PostLockCancellation.default("keep"),
   cutoff: z.string().nullable().default(null),
@@ -243,14 +245,15 @@ export function deleteGift(eventId: string, giftId: string) {
   return { id: giftId };
 }
 
-/** The gift with its derived quantities and manifest, recomputed on every read. */
-/** The admin approves the collected attendee specs for the vendor. Locking the values freezes each
- * attendee's answers so a later edit cannot diverge from what was sent. */
-export function approveSpecs(eventId: string, giftId: string) {
+/**
+ * The organizer approves the collected attendee values. Locking them freezes each attendee's answers
+ * so a later edit cannot diverge from what the cart carries; the approval time seeds the cart job's
+ * idempotency key, and the first approval keeps it so a repeated approval replays the same cart.
+ */
+export function approveSpecs(eventId: string, giftId: string, now = new Date()) {
   const gift = requireGift(eventId, giftId);
-  lockGift(giftId, new Date().toISOString().slice(0, 10));
-  // The organizer reviews what the handoff filled at the vendor's cart; record the link once, on approval.
-  if (!gift.checkout_url && gift.shop_domain) updateGift(giftId, { checkout_url: `https://${gift.shop_domain.replace(/^https?:\/\//, "")}/cart` } as Partial<GiftInput>);
+  lockGift(giftId, now.toISOString().slice(0, 10));
+  if (!gift.approved_at) updateGift(giftId, { approved_at: now.toISOString() } as Partial<GiftInput>);
   return giftView(eventId, giftId);
 }
 

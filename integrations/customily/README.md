@@ -1,6 +1,6 @@
 # Customily WebMCP merchant tools
 
-`webmcp-customily.js` registers two tools on `document.modelContext` on every page of the store, so a browser agent can read a product's customization fields and add configured lines to the cart through Shopify's cart endpoint. The tools make no DOM writes. Each supported product carries one entry in the `PRODUCT_ADAPTERS` map at the top of the file, keyed by the numeric Shopify product id, so supporting a new product means adding one entry or one product metafield. The script also still registers the three older batch tools (`get_personalization_schema`, `validate_personalized_batch`, `create_personalized_batch`) until issue #12 removes them once the app stops calling them; those drive the Customily widget through DOM selectors and run only on the product's own page.
+`webmcp-customily.js` registers two tools on `document.modelContext` on every page of the store, so an agent can read a product's customization fields and add configured lines to the cart through Shopify's cart endpoint. The tools make no DOM writes. Each supported product carries one entry in the `PRODUCT_ADAPTERS` map at the top of the file, keyed by the numeric Shopify product id, so supporting a new product means adding one entry or one product metafield.
 
 ## Installation in the Shopify theme
 
@@ -14,9 +14,11 @@
 
 4. The page needs `document.modelContext`. A browser with native WebMCP support provides it; a headless driver injects `src/webmcp/polyfill.js` before the page scripts run. Shopify's own storefront WebMCP script registers its search, product, and cart tools under the same condition.
 
+Until the theme carries the asset, Tokuchu's server injects this file beside the polyfill into the headless store page it opens (`src/server/store-page.ts`), so the tools answer from the app before the install.
+
 ## Field definitions
 
-`get_customization` reads a product's fields from the first of three sources that answers: a page-level definition the theme exposes, the `customization` list on the product's `PRODUCT_ADAPTERS` entry, and the entry's DOM field map. The theme exposes a definition as `window.__tokuchuCustomization` or as a `<script type="application/json" id="tokuchu-customization">` block; either holds a map from product id to `{ title, fields }`, so a metafield rendered by Liquid reaches the tool with no script change:
+`get_customization` reads a product's fields from the first of three sources that answers: a page-level definition the theme exposes, the `customization` list on the product's `PRODUCT_ADAPTERS` entry, and the entry's `fields` map. The theme exposes a definition as `window.__tokuchuCustomization` or as a `<script type="application/json" id="tokuchu-customization">` block; either holds a map from product id to `{ title, fields }`, so a metafield rendered by Liquid reaches the tool with no script change:
 
 ```liquid
 <script type="application/json" id="tokuchu-customization">
@@ -48,4 +50,4 @@ Customily reads the line item properties on the order to produce the print file.
 LIVE_CUSTOMILY=1 npx playwright test tests/customily-tools-live.spec.ts
 ```
 
-`tests/customily-live.spec.ts` covers the three older tools under the same gate.
+`tests/flow-demo.spec.ts` drives both tools from the app under the same gate: the gift creation reads the fields on selection and the approval fills the cart.

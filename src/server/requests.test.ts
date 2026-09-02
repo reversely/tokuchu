@@ -161,13 +161,17 @@ describe("requesting the missing values from attendees", () => {
     expect(() => submitRsvp(event.id, { party: {}, guests: [{ display_name: "Avery Chen", status: "going", answers: { [time.id]: "9pm" } }] })).toThrow(/required form/);
   });
 
-  it("records the vendor cart link on approval", () => {
+  it("locks the answers and keeps the first approval time so the cart job's key stays put", () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
     requestFromAttendees(event.id, gift.id);
     const size = snapshot(event.id).definitions.find((d) => d.key === "variant_size")!;
     submitRsvp(event.id, { party: { contact: { email: "a@b.co" } }, guests: [{ display_name: "Avery Chen", status: "going", answers: { [size.id]: "m" } }] });
-    approveSpecs(event.id, gift.id);
-    expect(giftView(event.id, gift.id).checkout_url).toContain("springbuilt.myshopify.com/cart");
+    approveSpecs(event.id, gift.id, new Date("2030-01-01T10:00:00Z"));
+    approveSpecs(event.id, gift.id, new Date("2030-01-02T10:00:00Z"));
+    const view = giftView(event.id, gift.id);
+    expect(view.locked_at).toBe("2030-01-02");
+    expect(view.approved_at).toBe("2030-01-01T10:00:00.000Z");
+    expect(view.checkout_url ?? null).toBeNull();
   });
 });
