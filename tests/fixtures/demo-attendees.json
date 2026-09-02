@@ -1,8 +1,23 @@
 {
-  "_note": "Demo-only fake attendee dataset. The flow demo (tests/flow-demo.spec.ts) injects it through the existing RSVP API to stand in for collected survey responses, bypassing the survey UI as if the results were hand-loaded into the backend. printed_name answers the seeded Name for printing question; size fills the Size choice the organizer requests from the shirt's variants; location and time fill the star map questions the store's fields create. The name on the shirt is the attendee's display name. No app module reads this file, and nothing in the real wiring branches on it.",
+  "_note": "Demo-only fake attendee dataset. The flow demo (tests/flow-demo.spec.ts) injects it through the existing RSVP API to stand in for collected survey responses, bypassing the survey UI as if the results were hand-loaded into the backend. size fills the Size choice the organizer requests from the shirt's variants; location and time fill the star map questions the store's fields create. The name on the shirt is the attendee's display name. No app module reads this file, and nothing in the real wiring branches on it.",
   "attendees": [
-    { "display_name": "Avery Chen", "printed_name": "AVERY", "size": "M", "location": "Toronto", "time": "21:00" },
-    { "display_name": "Blake Rivera", "printed_name": "BLAKE", "size": "L", "location": "Vancouver", "time": "22:30" },
-    { "display_name": "Carmen Diaz", "printed_name": "CARMEN", "size": "XL", "location": "Montreal", "time": "20:15" }
+    {
+      "display_name": "Avery Chen",
+      "size": "M",
+      "location": "Toronto",
+      "time": "21:00"
+    },
+    {
+      "display_name": "Blake Rivera",
+      "size": "L",
+      "location": "Vancouver",
+      "time": "22:30"
+    },
+    {
+      "display_name": "Carmen Diaz",
+      "size": "XL",
+      "location": "Montreal",
+      "time": "20:15"
+    }
   ]
 }

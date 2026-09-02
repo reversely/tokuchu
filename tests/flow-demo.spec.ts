@@ -24,7 +24,7 @@ test.describe.configure({ mode: "serial" });
 test.skip(!process.env.LIVE_CUSTOMILY, "Set LIVE_CUSTOMILY=1 to run the live flow demo.");
 
 const SHOP_DOMAIN = "springbuilt.myshopify.com";
-const ATTENDEES = (JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/demo-attendees.json", import.meta.url)), "utf8")) as { attendees: { display_name: string; printed_name: string; size: string; location: string; time: string }[] }).attendees;
+const ATTENDEES = (JSON.parse(readFileSync(fileURLToPath(new URL("./fixtures/demo-attendees.json", import.meta.url)), "utf8")) as { attendees: { display_name: string; size: string; location: string; time: string }[] }).attendees;
 
 type DemoEvent = { title: string; host: string; starts_at: string; venue: { name: string; line1: string; city: string; region: string; postal_code: string; country: string }; spots: string; cost: string; deadline: string; needed_by: string; search: string; curate: string };
 const DEMO_PATH = process.env.DEMO_EVENT ?? "docs/demo-event.json";
@@ -221,7 +221,7 @@ test("3: the organizer requests the product's fields, the responses fill the rec
   const def = (key: string) => snap.definitions.find((d) => d.key === key)!;
   const sizeDef = def("variant_size");
   const sizeValue = (label: string) => sizeDef.constraints.options?.find((o) => o.label.toLowerCase() === label.toLowerCase())?.value ?? sizeDef.constraints.options?.[0]?.value;
-  const rsvp = await request.post(`/api/events/${eventId}/rsvp`, { data: { guests: ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: { [def("printed_name").id]: a.printed_name, [sizeDef.id]: sizeValue(a.size), [def("star_map_location").id]: a.location, [def("star_map_time").id]: a.time } })) } });
+  const rsvp = await request.post(`/api/events/${eventId}/rsvp`, { data: { guests: ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: { [sizeDef.id]: sizeValue(a.size), [def("star_map_location").id]: a.location, [def("star_map_time").id]: a.time } })) } });
   expect(rsvp.ok(), await rsvp.text()).toBe(true);
 
   await expect(page.getByTestId("attendee-row")).toHaveCount(ATTENDEES.length, { timeout: 10_000 });
