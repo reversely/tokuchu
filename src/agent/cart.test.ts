@@ -113,7 +113,7 @@ describe("the cart from send to order", () => {
     expect(getGift(gift.id)).toMatchObject({ cart_id: CART_ID, proposal, buyer: BUYER, cart_seq: expect.any(Number) });
   });
 
-  it("a cancellation before the lock lowers the quantity and rewrites the cart once; an unchanged plan sends nothing", async () => {
+  it("a cancellation before the checkout lowers the quantity and rewrites the cart once; an unchanged plan sends nothing", async () => {
     const shop = fakeShop();
     const { event, gift, guestIds } = seed();
     await sendGift(event.id, gift.id, shop.deps, BUYER);
@@ -151,7 +151,7 @@ describe("the cart from send to order", () => {
     expect(cutoffFor(event, null, "2029-12-01", 3)).toBe("2030-01-07");
   });
 
-  it("the lock needs approval, creates the checkout, freezes the plan's values, and stops cart updates", async () => {
+  it("the checkout needs approval, records the date, still accepts a guest's edit, and stops cart updates", async () => {
     const shop = fakeShop();
     const { event, gift, dietary, guestIds } = seed();
     await sendGift(event.id, gift.id, shop.deps, BUYER);
@@ -159,8 +159,8 @@ describe("the cart from send to order", () => {
     approveGift(event.id, gift.id, shop.deps);
     const locked = await lockAndCheckout(event.id, gift.id, shop.deps);
     expect(shop.of("create_checkout")[0].args.checkout).toMatchObject({ cart_id: CART_ID, line_items: [{ item: { id: VARIANT_A }, quantity: 1 }, { item: { id: VARIANT_B }, quantity: 1 }] });
-    expect(locked).toMatchObject({ checkout_id: CHECKOUT_ID, checkout_url: `https://${SHOP}/checkouts/1`, locked_at: "2029-12-01", locked_guest_ids: [guestIds[0], guestIds[1]] });
-    expect(() => patchRsvp(event.id, guestIds[0], { answers: { [dietary.id]: ["none"] } })).toThrow(/locked/);
+    expect(locked).toMatchObject({ checkout_id: CHECKOUT_ID, checkout_url: `https://${SHOP}/checkouts/1`, locked_at: "2029-12-01" });
+    expect(patchRsvp(event.id, guestIds[0], { answers: { [dietary.id]: ["none"] } }).values[dietary.id]).toEqual(["none"]);
     patchRsvp(event.id, guestIds[1], { status: "cant_go" });
     expect(await syncGift(event.id, gift.id, shop.deps)).toMatchObject({ updated: false });
     await lockAndCheckout(event.id, gift.id, shop.deps);
@@ -168,7 +168,7 @@ describe("the cart from send to order", () => {
     expect(shop.of("create_checkout")).toHaveLength(1);
   });
 
-  it("the cart poll locks the gift once the cutoff arrives", async () => {
+  it("the cart poll creates the checkout once the cutoff arrives", async () => {
     const shop = fakeShop();
     setCartDeps(shop.deps);
     const { event, gift } = seed();

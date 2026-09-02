@@ -1,20 +1,20 @@
 /**
  * The tour resumes where the event's state leaves off and backs up to the step that introduces the
- * next action; each step's wire names the calls in flight from the snapshot, the page, and the thread.
+ * next action; each step's wire names the calls in flight from the snapshot, the page, and the progress log.
  */
 import { describe, expect, it } from "vitest";
 import { DEMO_STORE } from "./seed";
 import { startIndex, STEPS, type TourState, type WireContext, type WireGift } from "./steps";
 
 const going = (n: number) => Array.from({ length: n }, () => ({ status: "going" }));
-const gift = (over: Partial<TourState["gifts"][number]> = {}) => [{ locked_at: null, checkout_url: null, ...over }];
+const gift = (over: Partial<TourState["gifts"][number]> = {}) => [{ approved_at: null, checkout_url: null, ...over }];
 const id = (i: number) => STEPS[i].id;
 const step = (stepId: string) => STEPS.find((s) => s.id === stepId)!;
 
 const CREWNECK: WireGift = {
   shop_domain: DEMO_STORE.shop_domain,
   product_title: "Celestial Map Crewneck",
-  locked_at: "2026-09-02T00:00:00Z",
+  approved_at: "2026-09-02T00:00:00Z",
   personalization: { fields: [{ label: "Star Map Location", kind: "text" }, { label: "Caption", kind: "text", constraints: { max_length: 20 } }] },
   variants: [{ title: "S" }, { title: "M" }],
   checkout_url: null,
@@ -45,7 +45,7 @@ describe("wire", () => {
   it("reads the fields and constraints the store answered from the gift", () => {
     expect(step("requirements").wire!(context()).map((l) => l.text)).toEqual(["store page tool  get_customization  Celestial Map Crewneck", "• Star Map Location  text", "• Caption  text  max 20", "← 2 variants  S M"]);
   });
-  it("shows both hops of the approval, the thread's posts, and the checkout host as they arrive", () => {
+  it("shows both hops of the approval, the progress log's posts, and the checkout host as they arrive", () => {
     const filling = step("cart").wire!(context({ updates: [{ text: "Filling the cart at springbuilt.myshopify.com with 3 items" }] }));
     expect(filling.map((l) => l.text)).toEqual(["Tokuchu page tool  approve_specs  Celestial Map Crewneck for 3 attendees", "store page tool  add_customized_to_cart  3 items", "← Filling the cart at springbuilt.myshopify.com with 3 items"]);
     expect(filling[1].state).toBe("working");
@@ -70,7 +70,7 @@ describe("startIndex", () => {
   });
   it("opens on the cart wait after approval and on the checkout once the link exists", () => {
     const answered = { guests: going(3), requests: [{ complete: true }] };
-    expect(id(startIndex({ ...answered, gifts: gift({ locked_at: "2026-09-02T00:00:00Z" }) }))).toBe("cart");
-    expect(id(startIndex({ ...answered, gifts: gift({ locked_at: "2026-09-02T00:00:00Z", checkout_url: "https://store/cart/c/1" }) }))).toBe("checkout");
+    expect(id(startIndex({ ...answered, gifts: gift({ approved_at: "2026-09-02T00:00:00Z" }) }))).toBe("cart");
+    expect(id(startIndex({ ...answered, gifts: gift({ approved_at: "2026-09-02T00:00:00Z", checkout_url: "https://store/cart/c/1" }) }))).toBe("checkout");
   });
 });

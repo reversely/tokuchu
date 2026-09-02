@@ -1,13 +1,13 @@
 /**
  * The cart at the shop, from send to order. Send creates the cart from the plan's quantities and
- * stores the priced proposal; approve sets the cutoff; every quantity change until the lock rewrites
- * the cart; the lock creates the checkout and freezes the values the plan reads; after payment the
- * order's status reaches the gift's thread as updates with Tokuchu as the caller.
+ * stores the priced proposal; approve sets the cutoff; every quantity change until the cutoff rewrites
+ * the cart; the checkout at the cutoff fixes the cart's lines; after payment the order's status
+ * reaches the gift's progress log as updates with Tokuchu as the caller.
  *
  * Every function takes `deps` so a test injects a fake client and a fixed clock.
  */
 import { addCalendarDays, catalogClient, createCart, createCheckoutFromCart, getCart, getOrder, parseIsoDate, totalOf, updateCart, type Cart, type CartInput, type CartLineInput, type CatalogClient, type CheckoutDestination, type Order } from "@webmcp/shopify-ucp";
-import { getGift, lockGift, manifest, quantities, updateGift, type GiftInput } from "../domain/gifts";
+import { getGift, manifest, quantities, updateGift, type GiftInput } from "../domain/gifts";
 import { currentSeq, getEvent } from "../domain/store";
 import type { Batch, CartBuyer, DeliveryWindow, Event, Proposal, UpdateKind, VendorUpdate } from "../domain/types";
 import { postUpdate, updatesFor } from "../server/api";
@@ -107,7 +107,7 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 export async function sendGift(eventId: string, giftId: string, deps: CartDeps, buyer: CartBuyer | null = null): Promise<Proposal> {
   const gift = getGift(giftId);
   const event = getEvent(eventId);
-  if (gift.locked_at) throw new CartStateError("The gift is locked; the checkout already exists.");
+  if (gift.locked_at) throw new CartStateError("The checkout already exists for this gift.");
   const lines = cartLines(gift);
   if (lines.length === 0) throw new CartStateError("The plan resolves to no unit, so there is nothing to send.");
   const withBuyer: Batch = { ...gift, buyer: buyer ?? gift.buyer ?? null };
@@ -130,7 +130,7 @@ export function approveGift(eventId: string, giftId: string, deps: CartDeps, win
 
 /**
  * Recomputes the quantities and rewrites the cart when they differ from the lines it holds.
- * Runs after every RSVP write until the lock; a locked gift's cart never changes again.
+ * Runs after every RSVP write until the checkout exists; the cart never changes after that.
  */
 export async function syncGift(eventId: string, giftId: string, deps: CartDeps): Promise<{ updated: boolean; proposal: Proposal | null }> {
   const gift = getGift(giftId);
@@ -160,7 +160,7 @@ export async function refreshCart(eventId: string, giftId: string, deps: CartDep
   return { proposal, follow_ups };
 }
 
-/** Creates the checkout from the cart, stores its id and URL, and locks the gift on today's date. */
+/** Creates the checkout from the cart and stores its id and URL with today's date as the checkout date. */
 export async function lockAndCheckout(eventId: string, giftId: string, deps: CartDeps): Promise<Batch> {
   const gift = getGift(giftId);
   if (gift.locked_at) return gift;
@@ -168,11 +168,10 @@ export async function lockAndCheckout(eventId: string, giftId: string, deps: Car
   if (!gift.approved_at) throw new CartStateError("The organizer approves the priced cart before any checkout.");
   const checkout = await createCheckoutFromCart(deps.client(), gift.shop_domain, gift.cart_id, cartInput(gift, getEvent(eventId), cartLines(gift)));
   const date = isoDate(deps.now());
-  updateGift(giftId, { checkout_id: checkout.id, checkout_url: checkout.continue_url ?? null, order_id: checkout.order?.id ?? gift.order_id, cutoff: gift.cutoff ?? date } as Partial<GiftInput>);
-  return lockGift(giftId, date);
+  return updateGift(giftId, { checkout_id: checkout.id, checkout_url: checkout.continue_url ?? null, order_id: checkout.order?.id ?? gift.order_id, cutoff: gift.cutoff ?? date, locked_at: date } as Partial<GiftInput>);
 }
 
-/** True once the gift is approved, unlocked, and its cutoff has arrived. */
+/** True once the gift is approved, has no checkout yet, and its cutoff has arrived. */
 export function lockIsDue(gift: Batch, now: Date): boolean {
   return gift.approved_at !== null && gift.approved_at !== undefined && gift.locked_at === null && gift.cutoff !== null && gift.cutoff <= isoDate(now);
 }

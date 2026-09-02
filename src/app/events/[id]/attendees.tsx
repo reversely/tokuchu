@@ -5,6 +5,8 @@ import type { Requirement } from "../../../server/api";
 import { executeThroughApi } from "../../../webmcp/register";
 import { TOOLS } from "../../../webmcp/tools";
 import { DEMO_STORE } from "../../../demo/seed";
+import type { VendorUpdate } from "../../../domain/types";
+import { dateTime } from "../../../lib/format";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -55,7 +57,7 @@ async function runTool(name: string, eventId: string, giftId: string): Promise<s
   }
 }
 
-/** The Attendees records grid, the organizer's request panel, the WebMCP routing that carries it, and the approve gate. */
+/** The Attendees records grid, the organizer's request panel, the WebMCP routing that carries it, the approve gate, and the cart job's progress log. */
 export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () => void }) {
   // A choice question with no options cannot be answered, so it is neither a column nor a request.
   const answerable = (d: Definition) => !((d.value_type === "enum" || d.value_type === "multi_enum") && (d.constraints.options?.length ?? 0) === 0);
@@ -63,13 +65,16 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const defsById = new Map(snap.definitions.map((d) => [d.id, d]));
   const attendees = snap.guests.filter((g) => g.status === "going");
   const gift = snap.gifts[0];
-  const approved = Boolean(gift?.locked_at);
+  const approved = Boolean(gift?.approved_at);
   const fill = gift?.cart_fill ?? null;
-  const vendor = gift?.shop_domain?.replace(/^https?:\/\//, "") || "the vendor";
+  const filling = fill?.status === "running";
+  const changed = attendees.filter((g) => g.changed_since_approval).length;
+  const store = gift?.shop_domain?.replace(/^https?:\/\//, "") || "the store";
   const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
   const incomplete = [...requests.values()].filter((r) => !r.complete).length;
 
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [updates, setUpdates] = useState<VendorUpdate[]>([]);
   const [busy, setBusy] = useState<null | "request" | "follow_up" | "approve">(null);
   const [error, setError] = useState<string | null>(null);
   const [approveError, setApproveError] = useState<string | null>(null);
@@ -84,8 +89,18 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
     }
   }, [snap.event.id, gift]);
 
-  // The requirement list changes with the definitions and the gift's mappings; the snapshot sequence tracks both.
-  useEffect(() => { void loadRequirements(); }, [loadRequirements, snap.seq]);
+  const loadUpdates = useCallback(async () => {
+    if (!gift || !approved) return setUpdates([]);
+    try {
+      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/updates`, { cache: "no-store" });
+      setUpdates(res.ok ? ((await res.json()) as { updates: VendorUpdate[] }).updates : []);
+    } catch {
+      setUpdates([]);
+    }
+  }, [snap.event.id, gift, approved]);
+
+  // The requirement list changes with the definitions and the gift's mappings, and the progress log with the job's posts; the snapshot sequence tracks all three.
+  useEffect(() => { void loadRequirements(); void loadUpdates(); }, [loadRequirements, loadUpdates, snap.seq]);
 
   const pending = requirements.filter((r) => !r.already);
 
@@ -168,20 +183,22 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                   <th>Attendee</th>
                   <th>Status</th>
                   {guestDefs.map((d) => <th key={d.id}>{d.label}</th>)}
-                  {requests.size > 0 && <th>Request</th>}
+                  {(requests.size > 0 || approved) && <th>Request</th>}
                 </tr>
               </thead>
               <tbody>
                 {attendees.map((g) => {
                   const request = requests.get(g.id);
                   return (
-                    <tr key={g.id} data-testid="attendee-row" data-request={request ? (request.complete ? "complete" : "incomplete") : "none"}>
+                    <tr key={g.id} data-testid="attendee-row" data-request={request ? (request.complete ? "complete" : "incomplete") : "none"} data-changed={g.changed_since_approval ? "true" : "false"}>
                       <td>{g.display_name}</td>
                       <td>{STATUS_LABEL[g.status]}</td>
                       {guestDefs.map((d) => <td key={d.id}>{cell(g.id, g.values[d.id], d, g.status === "going")}</td>)}
-                      {requests.size > 0 && (
+                      {(requests.size > 0 || approved) && (
                         <td>
-                          {request ? (
+                          {g.changed_since_approval ? (
+                            <span className="missing" data-state="changed">changed after approval</span>
+                          ) : request ? (
                             request.complete ? <span className="answered">complete</span> : <span className="missing">{requestState(request)}</span>
                           ) : (
                             <span className="quiet">nothing to ask</span>
@@ -199,10 +216,10 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
       {gift && (
         <section className="block" aria-labelledby="routing" data-testid="webmcp-routing">
-          <div className="labelrow"><h2 id="routing">How this reaches the vendor</h2><span className="eyebrow">WebMCP</span></div>
+          <div className="labelrow"><h2 id="routing">How this reaches the store</h2><span className="eyebrow">WebMCP</span></div>
           <div className="list">
-            {vendor === DEMO_STORE.shop_domain && <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-demo-store"><span>The demo store built for this project</span><span className="type"><code>{vendor}</code> trading as {DEMO_STORE.shop_name}</span></div>}
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store UCP endpoint</span><span className="type"><code>https://{vendor}/api/ucp/mcp</code></span></div>
+            {store === DEMO_STORE.shop_domain && <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-demo-store"><span>The demo store built for this project</span><span className="type"><code>{store}</code> trading as {DEMO_STORE.shop_name}</span></div>}
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store UCP endpoint</span><span className="type"><code>https://{store}/api/ucp/mcp</code></span></div>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Shopify page tools on the store's pages</span><span className="type"><code>search_catalog</code> <code>get_product</code> <code>get_cart</code> <code>update_cart</code> and the rest</span></div>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Tokuchu page tool that requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
@@ -213,19 +230,26 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
       {gift && (
         <section className="block" aria-labelledby="approve" data-testid="approve-block">
-          <div className="labelrow"><h2 id="approve">Send to vendor</h2></div>
+          <div className="labelrow"><h2 id="approve">Fill the cart</h2></div>
           <div className="sendrow">
-            <div className="lead">{gift.product_title} for {attendees.length} attendees at {vendor}</div>
-            {approved ? (
-              <span className="pill live" data-testid="specs-approved">Approved and sent to vendor</span>
-            ) : (
-              <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Sending" : "Approve and send to vendor"}</button>
-            )}
+            <div className="lead">{gift.product_title} for {attendees.length} attendees at {store}</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {approved ? (
+                <span className="pill live" data-testid="specs-approved">Approved</span>
+              ) : (
+                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Approving" : "Approve and fill the cart"}</button>
+              )}
+              {approved && changed > 0 && (
+                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || filling} data-testid="approve-again">{busy === "approve" ? "Approving" : "Approve again"}</button>
+              )}
+            </div>
           </div>
+          {approved && changed > 0 && <p className="hint" style={{ marginTop: 12 }} data-testid="changed-count">{changed} {changed === 1 ? "attendee" : "attendees"} changed an answer after approval</p>}
+          {approved && filling && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart</p>}
+          {approved && fill?.status === "done" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filled">Cart filled</p>}
           {approved && gift.checkout_url && (
-            <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {vendor}</a></p>
+            <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {store}</a></p>
           )}
-          {approved && !gift.checkout_url && fill?.status === "running" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart at {vendor}</p>}
           {approved && fill?.status === "failed" && <p className="error" role="alert" data-testid="cart-failed">{fill.reason ?? "The cart did not fill"}</p>}
           {approved && (gift.cart_blocked?.length ?? 0) > 0 && (
             <ul className="hint" style={{ marginTop: 8 }} data-testid="cart-blocked">
@@ -233,6 +257,24 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
             </ul>
           )}
           {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
+        </section>
+      )}
+
+      {gift && approved && (
+        <section className="block" aria-labelledby="progress" data-testid="cart-progress">
+          <div className="labelrow"><h2 id="progress">Cart job progress</h2><span className="eyebrow">{updates.length} {updates.length === 1 ? "post" : "posts"}</span></div>
+          {updates.length === 0 ? (
+            <p className="hint" style={{ color: "var(--muted)" }}>No posts yet</p>
+          ) : (
+            <div className="list">
+              {updates.map((u) => (
+                <div className="row" key={u.id} style={{ gridTemplateColumns: "1fr auto" }} data-testid="cart-progress-post">
+                  <span>{u.reference ? <a href={u.reference} target="_blank" rel="noreferrer">{u.text}</a> : u.text}</span>
+                  <span className="type">{dateTime(u.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
     </div>

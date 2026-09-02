@@ -41,9 +41,6 @@ export const AttributeDefinition = z.object({
 });
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
 
-export const Lock = z.object({ batch_id: z.string(), date: z.string() });
-export type Lock = z.infer<typeof Lock>;
-
 export const AttributeValue = z.object({
   subject_type: z.enum(["guest", "party", "event"]),
   subject_id: z.string(),
@@ -51,7 +48,6 @@ export const AttributeValue = z.object({
   value: z.unknown(),
   /** guest, organizer, or the token id of the agent that wrote it. */
   source: z.string(),
-  lock: Lock.nullable(),
   updated_at: z.string(),
   seq: z.number().int()
 });
@@ -290,21 +286,19 @@ export const Batch = z.object({
   order_id: z.string().nullable(),
   rules: z.array(GiftRule),
   overrides: z.record(z.string(), GiftOverride),
-  /** Set by the lock: the date and the guests whose units the checkout carries. */
+  /** Set by the checkout at the cutoff: the date the store's checkout was created, after which the cart no longer follows the replies. */
   locked_at: z.string().nullable(),
-  locked_guest_ids: z.array(z.string()),
-  /** Set by the lock: every definition the units read, so writeValue refuses a guest edit even where no value existed at the lock (#112). */
-  locked_definition_ids: z.array(z.string()).optional(),
   /** Set by send: the buyer the cart names and the cart as the shop last priced it, with the change-log seq that cart reflects. */
   buyer: CartBuyer.nullable().optional(),
   proposal: Proposal.nullable().optional(),
   cart_seq: z.number().int().nullable().optional(),
-  /** Set by approve: when the organizer approved and the delivery window the cutoff came from. */
+  /** Set by approve: when the organizer last approved and the change-log seq at that moment, so a later answer reads as changed since approval. */
   approved_at: z.string().nullable().optional(),
+  approved_seq: z.number().int().nullable().optional(),
   /** When the organizer first requested the gift's missing values from attendees; a later reply then receives the request too. */
   requested_at: z.string().nullable().optional(),
   delivery_window: DeliveryWindow.nullable().optional(),
-  /** Set by the lock: the shop's hosted checkout page, where the organizer pays. */
+  /** Set by the cart job or the checkout: the store's checkout page, where the organizer pays. */
   checkout_url: z.string().nullable().optional(),
   /** The product's own page at the store, where the merchant tools run; the shop's root stands in when unset. */
   product_url: z.string().nullable().optional(),
@@ -314,7 +308,7 @@ export const Batch = z.object({
   cart_lines: z.array(CartLine).nullable().optional(),
   /** Set by the cart job: the guests whose item the store refused, with the store's reasons. */
   cart_blocked: z.array(CartBlocked).nullable().optional(),
-  /** Set by each poll of a vendor with a change feed: the last sequence number read from it. */
+  /** Set by each poll of a store with a change feed: the last sequence number read from it. */
   vendor_seq: z.number().int().nullable().optional()
 });
 export type Batch = z.infer<typeof Batch>;

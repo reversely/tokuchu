@@ -235,7 +235,7 @@ test("3: the organizer requests the product's fields, the responses fill the rec
   const manifest = await (await request.get(`/api/events/${eventId}/gifts/${giftId}/manifest`)).json();
   writeFileSync("tests/videos/collected-results.json", JSON.stringify(manifest, null, 2));
 
-  await tut("Step 4 of 5", "Approve and fill the cart", "One click locks every attendee's answers. The app then opens the store's page and calls add_customized_to_cart once with one item per attendee.", 3500);
+  await tut("Step 4 of 5", "Approve and fill the cart", "One click records the approval. The app then opens the store's page and calls add_customized_to_cart once with one item per attendee.", 3500);
   await caption("4. The organizer approves and the app fills the store's cart");
   await page.getByTestId("approve-send").scrollIntoViewIfNeeded();
   await page.getByTestId("approve-send").click();

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { lockValue, resetState, upsertDefinition } from "../domain/store";
+import { resetState, upsertDefinition } from "../domain/store";
 import { GET as getSnapshot } from "../app/api/events/[id]/route";
 import { POST as postEvent } from "../app/api/events/route";
 import { PATCH as patchGuest } from "../app/api/events/[id]/rsvp/[guestId]/route";
@@ -7,7 +7,7 @@ import { changes, counts, createEventFromBody, createGiftFromBody, deleteGift, f
 import { PUT as putOverride } from "../app/api/events/[id]/gifts/[giftId]/overrides/[guestId]/route";
 import { DELETE as deleteGiftRoute } from "../app/api/events/[id]/gifts/[giftId]/route";
 import { publishEvent } from "../domain/store";
-import { lockGift } from "../domain/gifts";
+import { updateGift, type GiftInput } from "../domain/gifts";
 import { LOCAL_ORGANIZER_ID, setDemoIdReader, setSessionReader } from "./ownership";
 
 const BODY = {
@@ -102,13 +102,12 @@ describe("the API operations", () => {
     expect(after.entries[0]).toMatchObject({ kind: "status", from: "maybe", to: "cant_go" });
   });
 
-  it("answers a locked edit with 409 and the lock through the route handler", async () => {
+  it("accepts a guest's edit through the route handler at any time", async () => {
     const { event, name, guestIds } = seed();
-    lockValue("guest", guestIds[0], name.id, { batch_id: "gift_1", date: "2026-10-12" });
     const res = await patchGuest(new Request("http://x", { method: "PATCH", body: JSON.stringify({ answers: { [name.id]: "Anna" } }) }), { params: Promise.resolve({ id: event.id, guestId: guestIds[0] }) });
-    expect(res.status).toBe(409);
-    const body = (await res.json()) as { locked: { batch_id: string; label: string } };
-    expect(body.locked).toMatchObject({ batch_id: "gift_1", definition_id: name.id });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { values: Record<string, unknown> };
+    expect(body.values[name.id]).toBe("Anna");
   });
 
   it("creates through the route and reads the snapshot through the route", async () => {
@@ -152,12 +151,12 @@ describe("the API operations", () => {
     expect(() => giftView(event.id, gift.id)).toThrow(/No gift/);
   });
 
-  it("refuses to remove a locked or ordered gift and still removes an open one", async () => {
+  it("refuses to remove a checked-out or ordered gift and still removes an open one", async () => {
     const { event } = seed();
-    const locked = createGiftFromBody(event.id, { product_id: "prod_1", default_variant_id: "var_plain" });
-    lockGift(locked.id, "2030-01-05");
-    expect(() => deleteGift(event.id, locked.id)).toThrow(/locked/);
-    expect(() => giftView(event.id, locked.id)).not.toThrow();
+    const checkedOut = createGiftFromBody(event.id, { product_id: "prod_1", default_variant_id: "var_plain" });
+    updateGift(checkedOut.id, { locked_at: "2030-01-05" } as Partial<GiftInput>);
+    expect(() => deleteGift(event.id, checkedOut.id)).toThrow(/checked-out/);
+    expect(() => giftView(event.id, checkedOut.id)).not.toThrow();
 
     const ordered = createGiftFromBody(event.id, { product_id: "prod_2", order_id: "ord_9" });
     const res = await deleteGiftRoute(new Request("http://x", { method: "DELETE" }), { params: Promise.resolve({ id: event.id, giftId: ordered.id }) });
@@ -181,7 +180,7 @@ describe("the API operations", () => {
     expect(() => setOverride(event.id, gift.id, "guest_none", {})).toThrow(/No guest/);
   });
 
-  it("keeps one thread per gift with a change-log entry per post", () => {
+  it("keeps one progress log per gift with a change-log entry per post", () => {
     const { event } = seed();
     const before = changes(event.id, 0).seq;
     const posted = postUpdate(event.id, "gift_1", "token:vendor_1", { kind: "confirmed", text: "Confirmed.", expected_date: "2030-01-08" });

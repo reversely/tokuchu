@@ -6,7 +6,7 @@
  */
 import { matches, type Subject } from "./filter";
 import { personalized, personalizeRow, type RowPersonalization } from "./personalization";
-import { getDefinition, getEvent, guestsFor, lockValue, newId, state, subjectFor } from "./store";
+import { getDefinition, getEvent, guestsFor, newId, state, subjectFor } from "./store";
 import type { AttributeDefinition, Batch, GiftOverride, Option, SynonymRow, UnitStatus, Variant, VariantMappingRow } from "./types";
 import synonymData from "./synonyms.json";
 
@@ -14,13 +14,13 @@ export type Resolution = { product_id: string | null; variant_id: string | null;
 export type ManifestRow = Resolution & { guest_id: string; display_name: string; status: Subject["guest"]["status"]; values: Record<string, unknown> } & Partial<RowPersonalization>;
 export type Quantity = { product_id: string; variant_id: string | null; quantity: number };
 
-export type GiftInput = Omit<Batch, "id" | "event_id" | "overrides" | "locked_at" | "locked_guest_ids" | "locked_definition_ids">;
+export type GiftInput = Omit<Batch, "id" | "event_id" | "overrides" | "locked_at">;
 
 /* ---- Records ---- */
 
 export function createGift(eventId: string, input: GiftInput): Batch {
   const s = state();
-  const gift: Batch = { ...input, id: newId("gift"), event_id: eventId, overrides: {}, locked_at: null, locked_guest_ids: [], locked_definition_ids: [] };
+  const gift: Batch = { ...input, id: newId("gift"), event_id: eventId, overrides: {}, locked_at: null };
   s.gifts.set(gift.id, gift);
   return gift;
 }
@@ -53,22 +53,6 @@ export function setGiftOverride(id: string, guestId: string, override: GiftOverr
   if (override.variant_id === undefined && override.excluded === undefined) delete overrides[guestId];
   else overrides[guestId] = override;
   return updateGift(id, { overrides } as Partial<GiftInput>);
-}
-
-/**
- * Freezes the batch at the lock date: records which guests hold a unit and locks every definition
- * the units read, so a later cancellation resolves through the post-lock choice instead of dropping
- * out. That set is the option mapping and each personalization mapping's definition source. The
- * set is stored on the batch because lockValue marks only values that exist at the lock;
- * writeValue consults the stored ids, so a guest with no value at the lock is refused all the same.
- */
-export function lockGift(id: string, date: string): Batch {
-  const gift = getGift(id);
-  const rows = manifest(gift).filter((row) => COUNTED.has(row.unit_status));
-  const mappingSourceIds = (gift.personalization_mappings ?? []).flatMap((m) => (m.source.type === "definition" ? [m.source.definition_id] : []));
-  const definitionIds = [...new Set([...gift.mapping.map((m) => m.definition_id), ...mappingSourceIds])];
-  for (const row of rows) for (const definitionId of definitionIds) lockValue("guest", row.guest_id, definitionId, { batch_id: gift.id, date });
-  return updateGift(id, { locked_at: date, locked_guest_ids: rows.map((r) => r.guest_id), locked_definition_ids: definitionIds } as Partial<GiftInput>);
 }
 
 /* ---- Variant mapping ---- */
@@ -145,13 +129,13 @@ function variantFor(gift: Batch, values: Record<string, unknown>): Pick<Resoluti
 
 /**
  * Resolves one guest against the plan (PRD Stage 4): the organizer's override first, then the
- * post-lock cancellation choice, then the first matching rule's product and the mapped variant.
+ * choice for a cancellation after the checkout, then the first matching rule's product and the mapped variant.
  */
 export function resolveGuest(gift: Batch, subject: Subject): Resolution {
   const override = gift.overrides[subject.guest.id];
   if (override?.excluded) return { product_id: null, variant_id: null, unit_status: "excluded", reason: "Excluded by the organizer." };
   const rule = gift.rules.find((r) => matches(r.filter, subject));
-  const locked = gift.locked_at !== null && gift.locked_guest_ids.includes(subject.guest.id);
+  const locked = gift.locked_at !== null;
   if (locked && subject.guest.status === "cant_go") return cancelledAfterLock(gift, rule?.product_id ?? gift.product_id, override);
   if (!rule) return { product_id: null, variant_id: null, unit_status: "excluded", reason: "No plan rule matches." };
   const resolved: Resolution = rule.product_id === gift.product_id ? { product_id: rule.product_id, ...variantFor(gift, subject.values) } : { product_id: rule.product_id, variant_id: null, unit_status: "open" };
@@ -175,13 +159,12 @@ function cancelledAfterLock(gift: Batch, productId: string, override: GiftOverri
 /** The unit statuses a cart line counts: a kept or reassignable cancelled unit still ships. */
 export const COUNTED: ReadonlySet<UnitStatus> = new Set(["open", "locked", "cancelled_sunk", "cancelled_reassignable"]);
 
-/** One row per guest the recipients filter selects, plus any guest the lock recorded. A personalized product's rows carry the resolved per-guest values (#117). */
+/** One row per guest the recipients filter selects. A personalized product's rows carry the resolved per-guest values. */
 export function manifest(gift: Batch): ManifestRow[] {
-  const locked = new Set(gift.locked_guest_ids);
   const event = personalized(gift) ? getEvent(gift.event_id) : null;
   return guestsFor(gift.event_id)
     .map((guest) => subjectFor(guest))
-    .filter((subject) => locked.has(subject.guest.id) || matches(gift.recipients, subject))
+    .filter((subject) => matches(gift.recipients, subject))
     .map((subject) => ({ guest_id: subject.guest.id, display_name: subject.guest.display_name, status: subject.guest.status, values: subject.values, ...resolveGuest(gift, subject), ...(event ? personalizeRow(gift, event, subject) : {}) }));
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createGift, getGift, lockGift, manifest, proposeMapping, quantities, resolveGuest, setGiftOverride, unservable, type GiftInput } from "./gifts";
+import { createGift, getGift, manifest, proposeMapping, quantities, resolveGuest, setGiftOverride, unservable, updateGift, type GiftInput } from "./gifts";
 import { createEvent, createGuest, createParty, resetState, setGuestStatus, subjectFor, upsertDefinition, writeValue, type EventInput } from "./store";
 import type { AttributeDefinition, GiftRule, Variant } from "./types";
 
@@ -121,7 +121,7 @@ describe("the gift plan", () => {
     expect(resolveGuest(setGiftOverride(gift.id, one.id, {}), subjectFor(one)).variant_id).toBe("var_a");
   });
 
-  it("counts units per variant and drops a cancellation before the lock", () => {
+  it("counts units per variant and drops a cancellation before the checkout", () => {
     const { event, choice, one } = seed();
     const gift = createGift(event.id, plan(choice));
     expect(quantities(gift)).toEqual(expect.arrayContaining([{ product_id: "prod_1", variant_id: "var_a", quantity: 1 }, { product_id: "prod_1", variant_id: "var_b", quantity: 1 }, { product_id: "prod_1", variant_id: "var_plain", quantity: 1 }]));
@@ -129,13 +129,13 @@ describe("the gift plan", () => {
     expect(quantities(gift).find((q) => q.variant_id === "var_a")).toBeUndefined();
   });
 
-  it("applies the post-lock choice to a cancellation after the lock", () => {
+  it("applies the cancellation choice after the checkout and still accepts a guest's edit", () => {
     const { event, choice, one } = seed();
-    const gift = lockGift(createGift(event.id, plan(choice, { post_lock_cancellation: "reassign" })).id, "2030-01-05");
+    const gift = updateGift(createGift(event.id, plan(choice, { post_lock_cancellation: "reassign" })).id, { locked_at: "2030-01-05" } as Partial<GiftInput>);
     expect(resolveGuest(gift, subjectFor(one)).unit_status).toBe("locked");
-    expect(() => writeValue("guest", one.id, choice.id, "b", "guest")).toThrow(/locked/);
+    expect(writeValue("guest", one.id, choice.id, "b", "guest").value).toBe("b");
+    expect(resolveGuest(gift, subjectFor(one)).variant_id).toBe("var_b");
     expect(resolveGuest(gift, subjectFor(setGuestStatus(one.id, "cant_go", "guest")))).toMatchObject({ product_id: "prod_1", unit_status: "cancelled_reassignable" });
-    expect(quantities(gift).reduce((n, q) => n + q.quantity, 0)).toBe(3);
   });
 
   it("lists one manifest row per recipient with product, variant, status, and values", () => {

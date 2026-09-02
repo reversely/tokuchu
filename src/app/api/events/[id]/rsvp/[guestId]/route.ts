@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: Params) {
   }
 }
 
-/** A guest edits or cancels; a locked value answers 409 with the lock. */
+/** A guest edits or cancels; an edit after approval is accepted and marks the row changed. */
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { id, guestId } = await params;

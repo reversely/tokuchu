@@ -151,7 +151,7 @@ export default async function Page() {
             <div className="sec-head">
               <span className="eyebrow">Why WebMCP</span>
               <h2>The store hands the agent its own requirements.</h2>
-              <p className="why-lead">Before WebMCP an app read a store's personalization options by scraping its product page or by building one integration per vendor. WebMCP lets a store publish its search and its product options and its cart as tools with a name and a JSON Schema. Tokuchu calls those tools. Any WebMCP-enabled Shopify store answers the search. Personalization needs the store to publish the two merchant tools.</p>
+              <p className="why-lead">Before WebMCP an app read a store's personalization options by scraping its product page or by building one integration per store. WebMCP lets a store publish its search and its product options and its cart as tools with a name and a JSON Schema. Tokuchu calls those tools. Any WebMCP-enabled Shopify store answers the search. Personalization needs the store to publish the two merchant tools.</p>
             </div>
             <div className="why" data-testid="tools">
               {TOOLS.map((card) => (

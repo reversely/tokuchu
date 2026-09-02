@@ -18,8 +18,6 @@ function describe(f: Snapshot["follow_ups"][number], snap: Snapshot): string {
   if (f.kind === "unresolved") return `${n} ${guests} still Maybe${f.deadline ? ` until ${dateOnly(f.deadline)}` : ""}`;
   const gift = snap.gifts.find((g) => g.id === f.gift_id);
   if (f.kind === "unservable") return `${n} ${guests} unservable for ${gift?.product_title ?? "a gift"}`;
-  if (f.kind === "vendor_question") return `Vendor question on ${gift?.product_title ?? "a gift"} awaiting your reply`;
-  if (f.kind === "vendor_issue") return `Vendor issue on ${n} ${n === 1 ? "unit" : "units"} of ${gift?.product_title ?? "a gift"}`;
   return `${n} ${guests} without a reply`;
 }
 
@@ -109,7 +107,7 @@ export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: 
             <div className="list" data-testid="gifts">
               {snap.gifts.map((g) => {
                 const units = g.quantities.reduce((s, q) => s + q.quantity, 0);
-                const status = g.locked_at ? "locked" : g.cutoff ? "approved" : g.cart_id ? "priced" : "draft";
+                const status = g.locked_at ? "checked out" : g.checkout_url ? "cart filled" : g.approved_at || g.cutoff ? "approved" : g.cart_id ? "priced" : "draft";
                 return (
                   <div className="row" key={g.id} data-testid="gift-row" style={{ gridTemplateColumns: "1fr auto" }}>
                     <span>{g.product_title}</span>

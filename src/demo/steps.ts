@@ -17,14 +17,14 @@ export type TourTarget = { testId: string; shop?: string };
 export type TourState = {
   guests: { status: string }[];
   requests: { complete: boolean }[];
-  gifts: { locked_at: string | null; checkout_url?: string | null }[];
+  gifts: { approved_at?: string | null; checkout_url?: string | null }[];
 };
 
 /** The gift as the wire reads it: the store, the product, the fields and variants the store answered, and the cart's lines. */
 export type WireGift = {
   shop_domain: string;
   product_title: string;
-  locked_at: string | null;
+  approved_at?: string | null;
   personalization?: { fields: { label: string; kind: string; max_length?: number; constraints?: { max_length?: number } }[] } | null;
   variants: { title: string }[];
   checkout_url?: string | null;
@@ -43,7 +43,7 @@ export type WireSnapshot = TourState & {
 /** What the tour reads off the page for the wire: the search funnel rows, the ranked cards, the requested labels, and the records rows. */
 export type WirePage = { funnelRows: string[]; rankedCount: number; askedLabels: string[]; attendeeRows: number };
 
-/** One post in the gift's updates thread, as `GET /api/events/{id}/gifts/{giftId}/updates` returns it. */
+/** One post in the gift's progress log, as `GET /api/events/{id}/gifts/{giftId}/updates` returns it. */
 export type WireUpdate = { text: string; reference?: string | null };
 
 export type WireContext = { snap: WireSnapshot; gift: WireGift | null; page: WirePage; updates: WireUpdate[]; phase: TourPhase };
@@ -62,14 +62,14 @@ export type TourStep = {
   action?: TourAction;
   done?: (state: TourState) => boolean;
   wire?: (ctx: WireContext) => WireLine[];
-  /** The step's wire reads the gift's updates thread, so the tour polls it while the step runs. */
+  /** The step's wire reads the gift's progress log, so the tour polls it while the step runs. */
   readsThread?: boolean;
 };
 
 const hasGift = (s: TourState) => s.gifts.length > 0;
 const hasRequests = (s: TourState) => s.requests.length > 0;
 const hasAnswers = (s: TourState) => s.guests.filter((g) => g.status === "going").length >= 3 && hasRequests(s) && s.requests.every((r) => r.complete);
-const isApproved = (s: TourState) => Boolean(s.gifts[0]?.locked_at);
+const isApproved = (s: TourState) => Boolean(s.gifts[0]?.approved_at);
 const hasCheckout = (s: TourState) => Boolean(s.gifts[0]?.checkout_url);
 
 const CATALOG_ENDPOINT = "catalog.shopify.com/api/ucp/mcp";
@@ -137,11 +137,11 @@ function answersWire({ snap, page, phase }: WireContext): WireLine[] {
 function cartWire({ snap, gift, updates, phase }: WireContext): WireLine[] {
   if (!gift) return [];
   const count = gift.cart_lines?.length || snap.guests.filter((g) => g.status === "going").length;
-  const locked = Boolean(gift.locked_at);
-  // The cart job runs on the server once the lock is on, so its line works until the checkout link or a failure arrives.
-  const filling = locked && !gift.checkout_url && gift.cart_fill?.status !== "failed";
+  const approved = Boolean(gift.approved_at);
+  // The cart job runs on the server once the approval is recorded, so its line works until the checkout link or a failure arrives.
+  const filling = approved && !gift.checkout_url && gift.cart_fill?.status !== "failed";
   const lines = [
-    line(`Tokuchu page tool  approve_specs  ${gift.product_title} for ${plural(count, "attendee")}`, working(phase === "running" && !locked)),
+    line(`Tokuchu page tool  approve_specs  ${gift.product_title} for ${plural(count, "attendee")}`, working(phase === "running" && !approved)),
     line(`store page tool  add_customized_to_cart  ${plural(count, "item")}`, working(filling)),
     ...updates.map((u) => result(u.text))
   ];
@@ -221,7 +221,7 @@ export const STEPS: TourStep[] = [
     target: { testId: "approve-send" },
     waitTarget: "approve-block",
     title: "Approve",
-    narration: "Every row is complete, so I approve through approve_specs, a tool this page registers over WebMCP. Approval locks the answers, and the app opens the store's page and calls its add_customized_to_cart with one item per attendee.",
+    narration: "Every row is complete, so I approve through approve_specs, a tool this page registers over WebMCP. The app opens the store's page and calls its add_customized_to_cart with one item per attendee. An attendee can still edit an answer afterwards; the row then reads as changed and a second approval fills a fresh cart.",
     action: "approve",
     done: isApproved,
     wire: cartWire,
@@ -233,7 +233,7 @@ export const STEPS: TourStep[] = [
     target: { testId: "approve-block" },
     waitTarget: "approve-block",
     title: "The cart fills at the store",
-    narration: "The app is on the store's page calling add_customized_to_cart over WebMCP, and the cart job posts each step into the gift's thread. When the store answers, the checkout link appears here.",
+    narration: "The app is on the store's page calling add_customized_to_cart over WebMCP, and the cart job posts each step into the progress log below. When the store answers, the checkout link appears here, and a later approval replaces it with a fresh cart's link.",
     action: "cart",
     done: hasCheckout,
     wire: cartWire,

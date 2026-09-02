@@ -98,14 +98,14 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_manifest",
-    description: "Returns one row per guest for a gift: product, variant, unit status, and the values the caller may read. A vendor reads its batch here.",
+    description: "Returns one row per guest for a gift: product, variant, unit status, and the values the caller may read. A store's agent reads its batch here.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer", "vendor"],
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/manifest" }
   },
   {
     name: "get_changes",
-    description: "Returns the change log after a sequence number: value writes, status changes, and vendor updates. Call it with the last sequence number you saw to learn what changed.",
+    description: "Returns the change log after a sequence number: value writes, status changes, and gift updates. Call it with the last sequence number you saw to learn what changed.",
     inputSchema: { type: "object", properties: { since_seq: { type: "integer", description: "The last sequence number already seen; 0 for everything" } }, required: ["since_seq"], additionalProperties: false },
     scopes: ["organizer", "vendor"],
     route: { method: "GET", path: "/api/events/:eventId/changes", query: (a) => ({ since: str(a.since_seq ?? 0) }) }
@@ -162,35 +162,35 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "send_to_vendor",
-    description: "Sends a gift to its vendor: builds the priced proposal (the cart at the shop) from the current quantities.",
+    description: "Prices a gift at its store: builds the priced proposal (the cart at the shop) from the current quantities.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer"],
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/send" }
   },
   {
     name: "approve_specs",
-    description: "Approves the collected attendee values for a gift: the answers lock and the store's cart fills with one line per attendee. Returns the gift with its cart state.",
+    description: "Approves the collected attendee values for a gift and fills the store's cart with one line per attendee; a later approval fills a fresh cart. Returns the gift with its cart state.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer"],
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/approve-specs" }
   },
   {
     name: "approve",
-    description: "Approves a sent gift: the cart is kept and updated until the lock date, then checked out.",
+    description: "Approves a sent gift: the cart is kept and updated until the cutoff date, then checked out.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer"],
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/approve" }
   },
   {
     name: "post_update",
-    description: "Posts into a gift's thread: a vendor's confirmation, progress, shipped notice with a reference, an issue naming a guest, a question, or a proof; the organizer's replies use kind reply.",
+    description: "Posts into a gift's progress log: a confirmation, progress, a shipped notice with a reference, an issue naming a guest, a question, or a proof.",
     inputSchema: {
       type: "object",
       properties: {
         gift_id: { type: "string", description: "The gift's id" },
         kind: { type: "string", description: "What the post is", enum: ["confirmed", "in_production", "shipped", "delivered", "issue", "question", "proof", "reply"] },
         text: { type: "string", description: "The message" },
-        expected_date: { type: "string", description: "An ISO date the vendor expects, if any" },
+        expected_date: { type: "string", description: "An ISO date the store expects, if any" },
         reference: { type: "string", description: "A tracking or order reference, if any" },
         guest_id: { type: "string", description: "The guest an issue is about, if any" }
       },
@@ -202,7 +202,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_updates",
-    description: "Returns a gift's thread: every post by the vendor and the organizer, in order.",
+    description: "Returns a gift's progress log: every post by the cart job and the store, in order.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" }, since_seq: { type: "integer", description: "Only posts after this sequence number; 0 for all" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer", "vendor"],
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/updates", query: (a) => ({ since: str(a.since_seq ?? 0) }) }

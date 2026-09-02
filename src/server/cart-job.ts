@@ -3,7 +3,7 @@
  * `add_customized_to_cart` tool in one call, and the cart's checkout URL, the line keys, and any
  * refused item come back onto the gift. The job starts once the approving request's row is written,
  * runs each of its own writes in its own persisted scope so the dashboard poll sees the progress,
- * and posts each step into the gift's thread.
+ * and posts each step into the gift's progress log.
  */
 import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domain/gifts";
 import type { CartBlocked, CartLine } from "../domain/types";
@@ -59,7 +59,7 @@ function pageUrlOf(gift: { product_url?: string | null; shop_domain: string }): 
   return gift.product_url || `https://${gift.shop_domain.replace(/^https?:\/\//, "")}/`;
 }
 
-/** One progress post in the gift's thread and the matching state on the gift, in one persisted scope. */
+/** One progress post in the gift's progress log and the matching state on the gift, in one persisted scope. */
 function report(eventId: string, giftId: string, kind: "in_production" | "issue", text: string, patch: Partial<GiftInput> = {}, reference: string | null = null): Promise<void> {
   return withPersistedEvent(eventId, () => {
     postUpdate(eventId, giftId, "tokuchu", { kind, text, reference });
@@ -68,7 +68,7 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
 }
 
 /**
- * Fills the store's cart for an approved gift. Every step reports into the thread and onto the
+ * Fills the store's cart for an approved gift. Every step reports into the progress log and onto the
  * gift, so a failure reads as a `failed` cart_fill with the reason.
  */
 export async function runCartFill(eventId: string, giftId: string, deps: CartJobDeps = liveDeps): Promise<void> {
@@ -110,7 +110,7 @@ export async function runCartFill(eventId: string, giftId: string, deps: CartJob
   });
 }
 
-/** One job per gift at a time; a second approval while one runs joins it. */
+/** One job per gift at a time; a second start while one runs joins it, and approveSpecs refuses an approval while one runs. */
 const inFlight = new Map<string, Promise<void>>();
 
 /**

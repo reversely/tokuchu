@@ -70,7 +70,6 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
   const [name, setName] = useState("");
   const [status, setStatus] = useState<GuestStatus | null>(null);
   const [answers, setAnswers] = useState<Answers>({});
-  const [locked, setLocked] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<{ guest_id: string } | null>(guestId ? { guest_id: guestId } : null);
   /** The status saved by this page, shown after a save; a reload starts without it. */
@@ -115,7 +114,6 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
       setStatus(finalStatus);
       setSavedStatus(finalStatus);
     } else {
-      if (outcome.locked) setLocked({ ...locked, [outcome.locked.definition_id]: outcome.error });
       setError(outcome.error);
     }
     setSaving(false);
@@ -166,10 +164,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                   </div>
                 </div>
                 {questions.map((q) => (
-                  <div key={q.id}>
-                    <Question def={q} value={answers[q.id]} disabled={saving} onChange={(v) => setAnswers({ ...answers, [q.id]: v })} />
-                    {locked[q.id] && <p className="error" data-testid={`locked-${q.key}`}>{locked[q.id]}</p>}
-                  </div>
+                  <Question key={q.id} def={q} value={answers[q.id]} disabled={saving} onChange={(v) => setAnswers({ ...answers, [q.id]: v })} />
                 ))}
                 {missing.length > 0 && status && <p className="hint" style={{ color: "var(--muted)" }}>Still needed: {missing.map((q) => q.label).join(" and ")}</p>}
                 <div className="foot">

@@ -20,10 +20,10 @@ import {
   getGuest,
   guestsFor,
   InvalidValueError,
+  latestValueSeq,
   library,
   listGuests,
   listMissing,
-  LockedValueError,
   newEventId,
   newId,
   publishEvent,
@@ -43,7 +43,7 @@ import {
 } from "../domain/store";
 import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type Event, type MappingSource, type PersonalizationKind, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
 import { matches } from "../domain/filter";
-import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
+import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { llmEnabled } from "./flags";
@@ -145,7 +145,7 @@ export function replaceDefinitions(eventId: string, body: unknown) {
 /* ---- Snapshot and follow-ups ---- */
 
 /** A follow-up names its kind and the guests it covers; the page composes the sentence and the action from the kind. */
-export type FollowUp = { kind: "missing_value" | "unresolved" | "no_reply" | "unservable" | "vendor_question" | "vendor_issue"; definition_id: string | null; status: GuestStatus | null; guest_ids: string[]; deadline: string | null; gift_id?: string; update_id?: string };
+export type FollowUp = { kind: "missing_value" | "unresolved" | "no_reply" | "unservable"; definition_id: string | null; status: GuestStatus | null; guest_ids: string[]; deadline: string | null; gift_id?: string };
 
 /** The Overview's follow-ups (PRD Section 5): a required value missing per definition, unresolved maybes, non-responders, and guests a gift cannot serve. */
 export function followUps(eventId: string): FollowUp[] {
@@ -162,24 +162,27 @@ export function followUps(eventId: string): FollowUp[] {
   const silent = listGuests(eventId, [{ field: "status", op: "eq", value: "no_reply" }]);
   if (silent.length) out.push({ kind: "no_reply", definition_id: null, status: "no_reply", guest_ids: silent.map((g) => g.id), deadline: event.rsvp_deadline });
   for (const entry of unservable(eventId)) out.push({ kind: "unservable", definition_id: null, status: null, guest_ids: entry.guests.map((g) => g.guest_id), deadline: getGift(entry.gift_id).cutoff, gift_id: entry.gift_id });
-  // A vendor's question stays a follow-up until the organizer replies after it; an issue naming a guest stays until that guest's unit changes.
-  for (const gift of giftsFor(eventId)) {
-    const thread = [...state().updates.values()].filter((u) => u.event_id === eventId && u.gift_id === gift.id).sort((a, b) => a.seq - b.seq);
-    for (const u of thread) {
-      if (u.kind === "question" && !thread.some((r) => r.kind === "reply" && r.seq > u.seq)) out.push({ kind: "vendor_question", definition_id: null, status: null, guest_ids: [], deadline: u.expected_date, gift_id: gift.id, update_id: u.id });
-      if (u.kind === "issue" && u.guest_id && !thread.some((r) => r.kind === "reply" && r.seq > u.seq)) out.push({ kind: "vendor_issue", definition_id: null, status: null, guest_ids: [u.guest_id], deadline: u.expected_date, gift_id: gift.id, update_id: u.id });
-    }
-  }
   return out;
+}
+
+/**
+ * True when a going guest answered after the latest approval of any gift, so the organizer sees the
+ * row as changed and can approve again. An approval made before the seq was recorded counts nothing.
+ */
+function changedSinceApproval(guest: Guest, approvedSeqs: number[]): boolean {
+  if (guest.status !== "going" || approvedSeqs.length === 0) return false;
+  const latest = latestValueSeq(guest);
+  return approvedSeqs.some((seq) => latest > seq);
 }
 
 /** The dashboard's whole view; `demo` says a demo organizer owns the event, so the page can mount the tour. */
 export function snapshot(eventId: string) {
   const event = requireEvent(eventId);
-  const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g) }));
+  const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
+  const approvedSeqs = gifts.flatMap((g) => (g.approved_at && typeof g.approved_seq === "number" ? [g.approved_seq] : []));
+  const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g), changed_since_approval: changedSinceApproval(g, approvedSeqs) }));
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
-  const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
   return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: isDemoId(event.owner_id) };
 }
 
@@ -243,22 +246,26 @@ export function updateGiftFromBody(eventId: string, giftId: string, body: unknow
 
 export function deleteGift(eventId: string, giftId: string) {
   const gift = requireGift(eventId, giftId);
-  // A placed order or a lock is a committed record; removing it would drop the local trace of a real order.
+  // A placed order or a checkout is a committed record; removing it would drop the local trace of a real order.
   if (gift.order_id) throw new BadRequestError("An ordered gift cannot be removed.");
-  if (gift.locked_at || gift.cutoff) throw new BadRequestError("A locked gift cannot be removed.");
+  if (gift.locked_at || gift.cutoff) throw new BadRequestError("A checked-out gift cannot be removed.");
   removeGift(giftId);
   return { id: giftId };
 }
 
 /**
- * The organizer approves the collected attendee values. Locking them freezes each attendee's answers
- * so a later edit cannot diverge from what the cart carries; the approval time seeds the cart job's
- * idempotency key, and the first approval keeps it so a repeated approval replays the same cart.
+ * The organizer approves the collected attendee values. Each approval records its time and the
+ * change-log seq, so an answer written afterwards reads as changed and a second approval mints a new
+ * idempotency key for the cart job; the previous cart's link and state clear so the fresh cart replaces
+ * them. An approval while the job runs is refused, since the running job would overwrite the new one.
+ *
+ * Raises:
+ *   BadRequestError: when the cart job for the gift is still running.
  */
 export function approveSpecs(eventId: string, giftId: string, now = new Date()) {
   const gift = requireGift(eventId, giftId);
-  lockGift(giftId, now.toISOString().slice(0, 10));
-  if (!gift.approved_at) updateGift(giftId, { approved_at: now.toISOString() } as Partial<GiftInput>);
+  if (gift.cart_fill?.status === "running") throw new BadRequestError("The cart job is still running; approve again once it settles.");
+  updateGift(giftId, { approved_at: now.toISOString(), approved_seq: currentSeq(), checkout_url: null, cart_fill: null, cart_lines: null, cart_blocked: null } as Partial<GiftInput>);
   return giftView(eventId, giftId);
 }
 
@@ -600,7 +607,7 @@ function writeAnswer(eventId: string, guest: Guest, definitionId: string, raw: u
 
 export const RsvpPatch = z.object({ status: GuestStatus.optional(), attendance: z.record(z.string(), z.boolean()).optional(), answers: Answers.optional(), source: z.string().default("guest") });
 
-/** A guest edits or cancels from the same link; a locked value rejects the edit with the lock (409). */
+/** A guest edits or cancels from the same link at any time; an edit after approval marks the row changed. */
 export function patchRsvp(eventId: string, guestId: string, body: unknown) {
   const parsed = RsvpPatch.safeParse(body);
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
@@ -666,11 +673,11 @@ export function changes(eventId: string, since: number) {
   return { since, seq: currentSeq(), entries: changesSince(eventId, since) };
 }
 
-/* ---- Vendor updates ---- */
+/* ---- Gift updates ---- */
 
 export const UpdateBody = z.object({ kind: UpdateKind, text: z.string().default(""), expected_date: z.string().nullable().default(null), reference: z.string().nullable().default(null), asset: z.string().nullable().default(null), guest_id: z.string().nullable().default(null) });
 
-/** A vendor's or the organizer's post into a gift's thread; each becomes a change-log entry (PRD Section 9). */
+/** A post into a gift's progress log by the cart job or a token holder; each becomes a change-log entry. */
 export function postUpdate(eventId: string, giftId: string, caller: string, body: unknown): VendorUpdate {
   requireEvent(eventId);
   const parsed = UpdateBody.safeParse(body);
@@ -698,7 +705,6 @@ export function errorResponse(e: unknown): NextResponse {
   if (e instanceof BadRequestError) return NextResponse.json({ error: e.message }, { status: 400 });
   if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: 401 });
   if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
-  if (e instanceof LockedValueError) return NextResponse.json({ error: e.message, locked: { definition_id: e.definition.id, label: e.definition.label, ...e.lock } }, { status: 409 });
   throw e;
 }
 

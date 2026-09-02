@@ -65,7 +65,7 @@ export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolC
 /**
  * Registers submit_rsvp on the invite page with a schema built from the questions the attendee is
  * asked. A call runs the same sendRsvp the form runs; the link's guest id is the default record, and
- * a 409 lock or a 400 constraint failure comes back as an error result with the route's detail.
+ * a 400 constraint failure comes back as an error result with the route's detail.
  */
 export async function registerRsvpTool({ eventId, guestId, definitions, responseOptions, fetchImpl, signal, onToolCall }: { eventId: string; guestId: string | null; definitions: AttributeDefinition[]; responseOptions: GuestStatus[]; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
   const modelContext = document.modelContext;
@@ -83,7 +83,7 @@ export async function registerRsvpTool({ eventId, guestId, definitions, response
         const outcome = await sendRsvp({ eventId, guestId: typeof args.guest_id === "string" && args.guest_id ? args.guest_id : guestId, displayName: String(args.display_name ?? ""), status: args.status as GuestStatus, answers: rsvpAnswers(definitions, args) }, fetchImpl ?? globalThis.fetch.bind(globalThis));
         const result = outcome.ok
           ? textResult({ guest_id: outcome.guest.id, display_name: outcome.guest.display_name, status: outcome.guest.status, answers: Object.fromEntries(Object.entries(outcome.guest.values).map(([id, value]) => [keyOf.get(id) ?? id, value])) }, false)
-          : textResult({ error: outcome.error, status: outcome.status, locked: outcome.locked }, true);
+          : textResult({ error: outcome.error, status: outcome.status }, true);
         onToolCall?.({ name: tool.name, args, result, ok: !result.isError, duration_ms: Date.now() - started });
         return result;
       }

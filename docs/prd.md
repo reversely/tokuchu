@@ -87,7 +87,7 @@ The loop the organizer runs:
 3. **Select the vendor and product.** The organizer picks one. The app calls that store's `get_customization` and records the requirements the product carries.
 4. **Review what will be asked.** The app shows each requirement with its source: a value the RSVP already holds, a value the organizer maps to an event field, or a question for the attendee. The organizer confirms.
 5. **Attendees answer.** Each attendee with a missing value receives an email carrying their own link to a form with the fields the selected product requires. The organizer watches the records grid fill, one row per attendee and one column per requirement, and the app follows up with whoever has not answered.
-6. **Approve.** When every unit is complete, the organizer approves. The app calls `add_customized_to_cart` with one item per attendee and shows the checkout link the tool returned.
+6. **Approve.** When every unit is complete, the organizer approves. The app calls `add_customized_to_cart` with one item per attendee and shows the checkout link the tool returned. An attendee who edits an answer after approval marks their row as changed on the Attendees tab, and the organizer approves again to fill a fresh cart whose link replaces the first.
 7. **Review and check out.** The organizer opens the link, inspects the populated cart with one line per attendee, and completes the store's checkout. The app reads the order and its fulfillment state afterward through Shopify's Admin API and shows them on the dashboard.
 
 ## 5. What the store provides
@@ -138,9 +138,9 @@ The interaction between the two runs over WebMCP in both directions:
 
 - **Overview** shows response counts, the attendee table, and the editable setup sections.
 - **Guest Experience** holds the sentence box, the ranked results with the store each came from, the pick, and the confirm step that adds the gift and reads the store's fields. When a curation run is used, its tool steps stream into this tab as they happen.
-- **Attendees** shows each requirement with its source, the records grid with one row per attendee and one column per field with each cell marked answered or missing, the request and follow-up actions, the approve action, and after approval the checkout link and the order state.
+- **Attendees** shows each requirement with its source, the records grid with one row per attendee and one column per field with each cell marked answered or missing, the request and follow-up actions, the approve action, and after approval the checkout link, the cart job's progress log, and the order state. A row whose attendee edited an answer after approval reads as changed, and the approve block then offers a second approval that fills a fresh cart.
 
-**Invite form.** An attendee's link opens the event's invite with the name field, the response choices, and one control per question the attendee has been asked: a text field with the store's length limit, a choice with the store's variant values. The attendee edits from the same link until approval locks the answers. The invite page registers the same form as a WebMCP tool, `submit_rsvp`, whose input schema lists one property per requested question with the store's constraints, so an attendee's browser agent answers through a tool call.
+**Invite form.** An attendee's link opens the event's invite with the name field, the response choices, and one control per question the attendee has been asked: a text field with the store's length limit, a choice with the store's variant values. The attendee edits from the same link at any time; an edit after approval shows on the organizer's records grid as changed. The invite page registers the same form as a WebMCP tool, `submit_rsvp`, whose input schema lists one property per requested question with the store's constraints, so an attendee's browser agent answers through a tool call.
 
 ## 8. Records and Tokuchu's tools
 
@@ -149,8 +149,8 @@ The app's main internal responsibility is coordinating the stages above. It main
 - **Event**: title, date, venue, spots, RSVP deadline, delivery target, settings, owner, invite code.
 - **Party** and **Guest**: the invitation unit and each attendee with a response status and a display name.
 - **AttributeDefinition**: a question with a key, a label, a value type (text, number, boolean, enum, multi_enum, date, file, reference), constraints, and the customization field it was derived from when a store's schema created it.
-- **AttributeValue**: one attendee's answer to one question, with who gave it, when, and a lock once approval fixes it.
-- **Gift**: the chosen store and product, its variants, the requirements the store returned, the source per field, the per-attendee variant mapping, the approval time, the locked answers, the cart line keys, the checkout URL, and the order id and fulfillment state once the organizer has paid.
+- **AttributeValue**: one attendee's answer to one question, with who gave it, when, and its position in the change log.
+- **Gift**: the chosen store and product, its variants, the requirements the store returned, the source per field, the per-attendee variant mapping, the approval time and the change-log position it recorded, the cart line keys, the checkout URL, and the order id and fulfillment state once the organizer has paid.
 - **Request**: per attendee, the questions sent, the send time, and the answered state of each.
 - **CallerToken**: a scoped credential for an agent calling over HTTP, naming the readable questions and the callable tools.
 - **Change log**: every write to answers, statuses, and gifts in one rising sequence, so a poll reads what changed since a sequence number.
@@ -168,9 +168,9 @@ Tokuchu publishes its records as tools. The organizer's page registers them on `
 | `request_from_attendees` | the request per attendee for their missing fields, with an email to each |
 | `follow_up` | the request sent again to every attendee with an unanswered question |
 | `get_manifest` | one row per attendee: variant, resolved values, and each row's ready or incomplete state |
-| `approve_specs` | locks the answers, starts the cart job, records the checkout URL |
+| `approve_specs` | records the approval and starts the cart job, which records the checkout URL; a later call fills a fresh cart |
 | `send_to_vendor`, `approve` | the priced cart at the store from the quantities and the organizer's approval of it, for a product whose store publishes no merchant tools |
-| `post_update`, `get_updates` | a gift's thread: the cart job's progress posts, a vendor's notices, the organizer's replies |
+| `post_update`, `get_updates` | a gift's progress log: the cart job's posts and a store agent's notices |
 | `get_changes` | the change log after a sequence number |
 | `submit_rsvp` (invite page) | records an attendee's response and answers, with the store's constraints in its schema |
 
@@ -213,15 +213,15 @@ time: 10:30 PM
 
 **Completion.** The records grid marks each cell answered or missing. The manifest resolves every field per attendee from its source and grades each row ready or incomplete, naming the missing field. Approval is available when every row is ready.
 
-**Approval.** Approval locks the answers the gift reads, so a later edit from the invite link returns the lock and the organizer's contact. Tokuchu then fills the cart (Section 10).
+**Approval.** Approval records its time and the change log's position, and Tokuchu fills the cart (Section 10). An attendee can still edit from the invite link afterwards; the records grid marks that row as changed after approval, and the organizer approves again to fill a fresh cart.
 
 ## 10. Filling the cart and the checkout link
 
 For each attendee the app maps the relevant values into the selected product's customization fields and adds the configured item to the merchant's cart through the merchant's tool. On approval Tokuchu runs a job inside the app. The job opens the store's product page in a headless browser with the WebMCP polyfill, waits for the merchant tools to register, builds one item per ready manifest row, and calls `add_customized_to_cart` once with every item and an idempotency key derived from the gift and its approval time. The tool returns the line keys and the cart's `checkoutUrl`. Tokuchu stores both on the gift and shows the link on the Attendees tab.
 
-A second approval while the job runs joins it. The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
+An approval while the job runs is refused until the job settles. An approval after a changed answer records a new approval time, so the job runs again with a new idempotency key in a fresh browser context, the store builds a fresh cart, and the new checkout link replaces the old one. The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
 
-The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason. The Attendees tab shows the cart link once it arrives and the failure text when the store did not fill the cart.
+The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason. The Attendees tab lists those posts in order under "Cart job progress", shows the cart link once it arrives, and shows the failure text when the store did not fill the cart.
 
 ## 11. Product discovery and ranking
 

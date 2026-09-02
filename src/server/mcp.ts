@@ -2,14 +2,13 @@
  * Tokuchu's MCP endpoint (PRD Sections 7, 8, 12): the same tool list the page registers, served
  * over HTTP as JSON-RPC to token holders. A token is a row naming who may call which tools on
  * which gifts and read which definitions; every call checks it. Results are MCP-shaped: text
- * content, isError on a refusal or a failure. Nothing here spends money for a vendor token.
+ * content, isError on a refusal or a failure. Nothing here spends money for a store's token.
  */
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
 import { changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
 import { newId, state } from "../domain/store";
-import { LockedValueError } from "../domain/store";
 import type { CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
 import { cartOperations } from "./registry";
@@ -27,7 +26,7 @@ export const TokenBody = z.object({
   expires_at: z.string().nullable().default(null)
 });
 
-/** Creates a token for one holder. The organizer's own token lists every tool; a vendor's lists the vendor-scoped ones it needs. */
+/** Creates a token for one holder. The organizer's own token lists every tool; a store's lists the ones its scope allows. */
 export function createToken(eventId: string, body: unknown): CallerToken {
   requireEvent(eventId);
   const parsed = TokenBody.safeParse(body);
@@ -215,7 +214,7 @@ export async function handleRpc(eventId: string, token: CallerToken | null, rpc:
       const result = await dispatch(eventId, token, tool, args);
       return reply({ ...text(result), structuredContent: result, seq: readLatestSeq() });
     } catch (e) {
-      if (e instanceof NotFoundError || e instanceof BadRequestError || e instanceof LockedValueError) return reply(text({ error: e.message }, true));
+      if (e instanceof NotFoundError || e instanceof BadRequestError) return reply(text({ error: e.message }, true));
       throw e;
     }
   }

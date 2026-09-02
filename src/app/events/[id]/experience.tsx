@@ -6,7 +6,6 @@ import cards from "../../../agent/cards.json";
 import type { AttributeDefinition, Batch, GuestStatus } from "../../../domain/types";
 import { dateOnly, dateTime, money } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
-import type { VendorUpdate } from "../../../domain/types";
 import type { CurationProposal } from "../../../agent/curation-agent";
 
 type Step = "pick" | "results" | "recipients" | "mapping" | "list";
@@ -51,7 +50,7 @@ function sourceLabel(m: CurationProposal["personalization_mapping"][number], def
   return m.transform ? `${base} via ${m.transform.replace(/_/g, " ")}` : base;
 }
 
-/** The vendor field's label from the proposed product's schema. */
+/** The store field's label from the proposed product's schema. */
 function fieldLabel(key: string, proposal: CurationProposal): string {
   return proposal.product.personalization?.fields.find((f) => f.key === key)?.label ?? key;
 }
@@ -80,8 +79,6 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
   const [fallback, setFallback] = useState<Batch["missing_value_fallback"]>("default");
   const [postLock, setPostLock] = useState<Batch["post_lock_cancellation"]>("keep");
   const [question, setQuestion] = useState("");
-  const [thread, setThread] = useState<{ giftId: string; updates: VendorUpdate[] } | null>(null);
-  const [replyText, setReplyText] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [curateMessage, setCurateMessage] = useState("");
   const [curating, setCurating] = useState<string | null>(null);
@@ -176,38 +173,24 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     }
   }
 
-  async function openThread(gift: Batch) {
-    const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/updates`, { cache: "no-store" });
-    if (res.ok) setThread({ giftId: gift.id, updates: ((await res.json()) as { updates: VendorUpdate[] }).updates });
-  }
-  async function sendReply() {
-    if (!thread || !replyText.trim()) return;
-    const res = await fetch(`/api/events/${snap.event.id}/gifts/${thread.giftId}/updates`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "reply", text: replyText.trim(), caller: "organizer" }) });
-    if (res.ok) {
-      setReplyText("");
-      await openThread(gifts.find((g) => g.id === thread.giftId)!);
-      onChanged();
-    }
-  }
-  const KIND_LABEL: Record<VendorUpdate["kind"], string> = { confirmed: "Confirmed", in_production: "In production", shipped: "Shipped", delivered: "Delivered", issue: "Issue", question: "Question", proof: "Proof", reply: "You" };
 
-  /** Answers from the stage outputs (PRD Section 10, assistant behaviour): why a product is missing, what locks first, who is missing a value. */
+  /** Answers from the stage outputs (PRD Section 10, assistant behaviour): why a product is missing, what checks out first, who is missing a value. */
   function ask() {
     const q = question.toLowerCase();
     if (!q.trim()) return;
     if (/why|missing|not (in|on) the list|excluded/.test(q) && reply) {
       const named = reply.excluded.find((e) => q.includes(e.title.toLowerCase().slice(0, 12)));
       setAnswer(named ? `${named.title} from ${named.shop_name} excluded by the ${named.rule} rule` : reply.excluded.length ? `${reply.excluded.length} excluded: ${reply.excluded.slice(0, 5).map((e) => `${e.title} by ${e.rule}`).join(" / ")}` : "Nothing excluded in this search");
-    } else if (/lock|cutoff|deadline/.test(q)) {
+    } else if (/checkout|checks out|cutoff|deadline/.test(q)) {
       const dated = gifts.filter((g) => g.cutoff).sort((a, b) => (a.cutoff! < b.cutoff! ? -1 : 1));
-      setAnswer(dated.length ? `${dated[0].product_title} locks first on ${dateOnly(dated[0].cutoff)}` : "No lock date before approval");
+      setAnswer(dated.length ? `${dated[0].product_title} checks out first on ${dateOnly(dated[0].cutoff)}` : "No checkout date before approval");
     } else if (/name|value|answer/.test(q)) {
       const missing = snap.follow_ups.filter((f) => f.kind === "missing_value");
       setAnswer(missing.length ? missing.map((f) => `${f.guest_ids.length} without ${snap.definitions.find((d) => d.id === f.definition_id)?.label.toLowerCase()}`).join(" / ") : "Every required answer given");
     } else if (/how many|count|quantit/.test(q)) {
       setAnswer(gifts.length ? gifts.map((g) => { const n = g.quantities.reduce((s, x) => s + x.quantity, 0); return `${g.product_title} ${n} ${n === 1 ? "unit" : "units"}`; }).join(" / ") : `${counts.going} going and no gift yet`);
     } else {
-      setAnswer("Ask why a product is missing or which gift locks first or who is missing a value or how many units");
+      setAnswer("Ask why a product is missing or which gift checks out first or who is missing a value or how many units");
     }
   }
 
@@ -326,7 +309,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
       <div className="dark-card" data-testid="order-summary">
         <div className="in">
           <h2>{summaryUnits} {summaryUnits === 1 ? "gift" : "gifts"}</h2>
-          <div className="when">Quantities follow the replies until the lock date</div>
+          <div className="when">Quantities follow the replies until the checkout date</div>
           {gifts.map((g) => (
             <div key={g.id}>
               <div className="kv"><span>{g.product_title}</span><span>{g.shop_domain}</span></div>
@@ -334,7 +317,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
                 const v = g.variants.find((x) => x.id === q.variant_id);
                 return <div className="kv" key={`${q.product_id}-${q.variant_id}`}><span style={{ paddingLeft: 12 }}>{v?.title ?? "Variant"}</span><span>{q.quantity}{v?.price_cents !== null && v?.price_cents !== undefined ? ` for ${money(v.price_cents * q.quantity, v.currency ?? "CAD")}` : ""}</span></div>;
               })}
-              <div className="kv"><span style={{ paddingLeft: 12 }}>Locks</span><span>{g.cutoff ? dateOnly(g.cutoff) : "after approval"}</span></div>
+              <div className="kv"><span style={{ paddingLeft: 12 }}>Checks out</span><span>{g.cutoff ? dateOnly(g.cutoff) : "after approval"}</span></div>
             </div>
           ))}
           <div className="note">Priced on send and kept after approval</div>
@@ -473,7 +456,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
             ))}
             <div className="line"><span>Default variant for no answer</span><select aria-label="Default variant" value={defaultVariant ?? ""} onChange={(e) => setDefaultVariant(e.target.value || null)}>{(editing ? editing.variants : chosen!.variants).map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}</select></div>
             <div className="line"><span>Missing required answer</span><select aria-label="Missing answer" value={fallback} onChange={(e) => setFallback(e.target.value as Batch["missing_value_fallback"])}><option value="default">Use the default variant</option><option value="hold">Hold the unit until an answer</option><option value="blank">No unit for them</option></select></div>
-            <div className="line"><span>Cancellation after the lock</span><select aria-label="After the lock" value={postLock} onChange={(e) => setPostLock(e.target.value as Batch["post_lock_cancellation"])}><option value="keep">Keep the unit</option><option value="reassign">Offer it to a maybe</option><option value="drop">Drop it where the shop allows</option></select></div>
+            <div className="line"><span>Cancellation after the checkout</span><select aria-label="After the checkout" value={postLock} onChange={(e) => setPostLock(e.target.value as Batch["post_lock_cancellation"])}><option value="keep">Keep the unit</option><option value="reassign">Offer it to a maybe</option><option value="drop">Drop it where the shop allows</option></select></div>
             <div className="acts"><button type="button" className="btn ghost" onClick={() => (editing ? setStep("list") : setStep("recipients"))}>Back</button><button type="button" className="btn primary" onClick={confirm} disabled={!!busy} data-testid="confirm">{editing ? "Save changes" : "Add this gift"}</button></div>
           </section>
         )}
@@ -481,7 +464,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
         {step === "list" && (
           <section aria-labelledby="gx-list">
             <h1 className="title" id="gx-list">Gifts</h1>
-            <p className="lead">Quantities follow the replies until the lock date</p>
+            <p className="lead">Quantities follow the replies until the checkout date</p>
             <div data-testid="gifts">
               {gifts.map((g) => {
                 const units = g.quantities.reduce((s, q) => s + q.quantity, 0);
@@ -491,38 +474,21 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
                   <div className="item" key={g.id} data-testid="gift">
                     <div>
                       <div style={{ fontWeight: 600 }}>{g.product_title}</div>
-                      <div className="m">{[g.shop_domain, `${units} ${units === 1 ? "unit" : "units"}`, money(total, currency), g.cutoff ? `locks ${dateOnly(g.cutoff)}` : "lock date on approval", g.cart_id ? "priced at the shop" : "", g.locked_at ? "locked" : ""].filter(Boolean).join(" / ")}</div>
+                      <div className="m">{[g.shop_domain, `${units} ${units === 1 ? "unit" : "units"}`, money(total, currency), g.cutoff ? `checks out ${dateOnly(g.cutoff)}` : "checkout date on approval", g.cart_id ? "priced at the shop" : "", g.locked_at ? "checked out" : ""].filter(Boolean).join(" / ")}</div>
                       <div className="m">{g.quantities.map((q) => `${g.variants.find((v) => v.id === q.variant_id)?.title ?? "Variant"} ${q.quantity}`).join(" / ") || "no units yet"}</div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button type="button" className="btn ghost small" onClick={() => (thread?.giftId === g.id ? setThread(null) : openThread(g))} data-testid="thread-gift">{thread?.giftId === g.id ? "Hide thread" : "Thread"}</button>
                       <button type="button" className="btn ghost small" onClick={() => beginEdit(g)} data-testid="edit-gift">Edit</button>
                       <button type="button" className="btn ghost small" onClick={() => act(g, "remove")} data-testid="remove-gift">Remove</button>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      {!g.cart_id && <button type="button" className="btn primary small" onClick={() => act(g, "send")} disabled={!!busy || units === 0} data-testid="send-gift">Send to vendor</button>}
+                      {!g.cart_id && <button type="button" className="btn primary small" onClick={() => act(g, "send")} disabled={!!busy || units === 0} data-testid="send-gift">Price at the store</button>}
                       {g.cart_id && !g.cutoff && <button type="button" className="btn primary small" onClick={() => act(g, "approve")} disabled={!!busy} data-testid="approve-gift">Approve</button>}
                     </div>
                   </div>
                 );
               })}
             </div>
-            {thread && (
-              <div className="list" style={{ marginBottom: 16 }} data-testid="thread">
-                {thread.updates.length === 0 && <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">No posts yet</span></div>}
-                {thread.updates.map((u) => (
-                  <div className="row" key={u.id} style={{ gridTemplateColumns: "auto 1fr auto" }}>
-                    <span className={`tag${u.kind === "reply" ? " quiet" : ""}`}>{KIND_LABEL[u.kind]}</span>
-                    <span>{[u.text, u.expected_date ? `expected ${dateOnly(u.expected_date)}` : "", u.reference ?? ""].filter(Boolean).join(" / ")}</span>
-                    <span className="type">{dateTime(u.created_at)}</span>
-                  </div>
-                ))}
-                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}>
-                  <input aria-label="Reply to the vendor" placeholder="Reply to the vendor" value={replyText} onChange={(e) => setReplyText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendReply()} style={{ border: 0, padding: 0, font: "inherit", width: "100%" }} data-testid="reply" />
-                  <button type="button" className="btn ghost small" onClick={sendReply} disabled={!replyText.trim()}>Send</button>
-                </div>
-              </div>
-            )}
             <div className="acts">
               <button type="button" className="btn ghost" onClick={() => setStep("pick")} data-testid="add-gift">Add another gift</button>
               <div className="ask" style={{ flex: 1 }}>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { changesSince, countBy, createEvent, createGuest, createParty, definitionsFor, InvalidValueError, listGuests, listMissing, lockValue, LockedValueError, publishEvent, resetState, setGuestStatus, upsertDefinition, writeValue, type EventInput } from "./store";
+import { changesSince, countBy, createEvent, createGuest, createParty, definitionsFor, InvalidValueError, latestValueSeq, listGuests, listMissing, publishEvent, resetState, setGuestStatus, upsertDefinition, writeValue, type EventInput } from "./store";
 
 const EVENT: EventInput = {
   type: "event",
@@ -60,12 +60,14 @@ describe("the store", () => {
     expect(changesSince(event.id, changes.at(-2)!.seq)).toHaveLength(1);
   });
 
-  it("rejects a guest edit of a locked value with the lock, and lets the organizer through", () => {
+  it("accepts a guest's later edit and raises the guest's latest value seq with it", () => {
     const { ana, name } = seed();
-    writeValue("guest", ana.id, name.id, "Ana", "guest");
-    lockValue("guest", ana.id, name.id, { batch_id: "gift_1", date: "2026-10-12" });
-    expect(() => writeValue("guest", ana.id, name.id, "Anna", "guest")).toThrow(LockedValueError);
-    expect(writeValue("guest", ana.id, name.id, "Anna", "organizer").value).toBe("Anna");
+    const first = writeValue("guest", ana.id, name.id, "Ana", "guest");
+    expect(latestValueSeq(ana)).toBe(first.seq);
+    const second = writeValue("guest", ana.id, name.id, "Anna", "guest");
+    expect(second.value).toBe("Anna");
+    expect(second.seq).toBeGreaterThan(first.seq);
+    expect(latestValueSeq(ana)).toBe(second.seq);
   });
 
   it("lists, counts, and finds missing values through the filter grammar", () => {

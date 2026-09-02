@@ -1,6 +1,6 @@
 /**
  * What runs after a write. An RSVP write can change a gift's quantities, so each gift with a cart
- * and no lock gets a cart sync; the sync runs after the response so the guest's reply never waits
+ * and no checkout yet gets a cart sync; the sync runs after the response so the guest's reply never waits
  * on the shop.
  */
 import { syncGift } from "../agent/cart";

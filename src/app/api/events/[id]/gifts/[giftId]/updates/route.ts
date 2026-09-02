@@ -4,7 +4,7 @@ import { withOwnedEvent } from "../../../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
-/** The thread for one gift (get_updates). */
+/** The progress log for one gift (get_updates). */
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: Params) {
   }
 }
 
-/** A post from the organizer (kind reply, or any kind when Tokuchu writes a Shopify status). The MCP endpoint posts for vendors with their token as caller. */
+/** A post into the gift's progress log from this page; the MCP endpoint posts for a token holder with the token as caller. */
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;

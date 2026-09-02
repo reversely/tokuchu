@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetState, publishEvent } from "../domain/store";
+import { updateGift, type GiftInput } from "../domain/gifts";
 import type { PersonalizationField } from "../domain/types";
-import { approveSpecs, createEventFromBody, createGiftFromBody, followUp, giftRequirements, giftView, requestFromAttendees, setPersonalizationMappings, snapshot, submitRsvp } from "./api";
+import { approveSpecs, createEventFromBody, createGiftFromBody, followUp, giftRequirements, giftView, patchRsvp, requestFromAttendees, setPersonalizationMappings, snapshot, submitRsvp } from "./api";
 import { setMailer, type MailMessage } from "./mail";
 
 const BODY = {
@@ -219,17 +220,37 @@ describe("requesting the missing values from attendees", () => {
     expect(() => submitRsvp(event.id, { party: {}, guests: [{ display_name: "Avery Chen", status: "going", answers: { [time.id]: "9pm" } }] })).toThrow(/required form/);
   });
 
-  it("locks the answers and keeps the first approval time so the cart job's key stays put", async () => {
+  it("accepts an edit after approval, marks the guest changed, and a second approval mints a new key and clears the old checkout link", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
     await requestFromAttendees(event.id, gift.id);
     const size = snapshot(event.id).definitions.find((d) => d.key === "variant_size")!;
-    submitRsvp(event.id, { party: { contact: { email: "a@b.co" } }, guests: [{ display_name: "Avery Chen", status: "going", answers: { [size.id]: "m" } }] });
+    const { guest_ids } = submitRsvp(event.id, { party: { contact: { email: "a@b.co" } }, guests: [{ display_name: "Avery Chen", status: "going", answers: { [size.id]: "m" } }] });
+    const first = approveSpecs(event.id, gift.id, new Date("2030-01-01T10:00:00Z"));
+    expect(first.approved_at).toBe("2030-01-01T10:00:00.000Z");
+    expect(first.locked_at).toBeNull();
+    updateGift(gift.id, { checkout_url: "https://springbuilt.myshopify.com/cart/c/old", cart_fill: { status: "done", started_at: "2030-01-01T10:00:01Z", reason: null } } as Partial<GiftInput>);
+    const guest = () => snapshot(event.id).guests.find((g) => g.id === guest_ids[0])!;
+    expect(guest().changed_since_approval).toBe(false);
+
+    expect(patchRsvp(event.id, guest_ids[0], { answers: { [size.id]: "l" } }).values[size.id]).toBe("l");
+    expect(guest().changed_since_approval).toBe(true);
+
+    // The cart job's idempotency key is the gift id and the approval time, so a new time is a new key.
+    const second = approveSpecs(event.id, gift.id, new Date("2030-01-02T10:00:00Z"));
+    expect(second.approved_at).toBe("2030-01-02T10:00:00.000Z");
+    expect(second.approved_seq).toBeGreaterThan(first.approved_seq!);
+    expect(second.checkout_url).toBeNull();
+    expect(second.cart_fill).toBeNull();
+    expect(guest().changed_since_approval).toBe(false);
+  });
+
+  it("refuses an approval while the cart job runs", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id);
     approveSpecs(event.id, gift.id, new Date("2030-01-01T10:00:00Z"));
-    approveSpecs(event.id, gift.id, new Date("2030-01-02T10:00:00Z"));
-    const view = giftView(event.id, gift.id);
-    expect(view.locked_at).toBe("2030-01-02");
-    expect(view.approved_at).toBe("2030-01-01T10:00:00.000Z");
-    expect(view.checkout_url ?? null).toBeNull();
+    updateGift(gift.id, { cart_fill: { status: "running", started_at: "2030-01-01T10:00:01Z", reason: null } } as Partial<GiftInput>);
+    expect(() => approveSpecs(event.id, gift.id, new Date("2030-01-02T10:00:00Z"))).toThrow(/still running/);
+    expect(giftView(event.id, gift.id).approved_at).toBe("2030-01-01T10:00:00.000Z");
   });
 });

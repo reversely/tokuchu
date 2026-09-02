@@ -143,7 +143,7 @@ async function answer(eventId: string, setNote: Note): Promise<void> {
 
 async function approve(setNote: Note): Promise<void> {
   click({ testId: "approve-send" });
-  await waitFor(orFailure({ testId: "specs-approved" }, "approve-error"), "Locking the answers", 30_000, setNote);
+  await waitFor(orFailure({ testId: "specs-approved" }, "approve-error"), "Recording the approval", 30_000, setNote);
 }
 
 async function cart(setNote: Note): Promise<void> {
