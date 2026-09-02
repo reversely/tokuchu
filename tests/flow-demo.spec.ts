@@ -124,7 +124,7 @@ test.afterAll(async () => {
 test("1: create the event", async () => {
   test.setTimeout(LIVE_MS);
   await page.goto("/events/new");
-  await tut("Step 1 of 5", "Create the event", "The organizer fills in the event details and publishes it, which creates a link attendees reply through.");
+  await tut("Step 1 of 5", "Create the event", "The organizer fills in the event details and publishes it. Publishing creates the link attendees reply through.");
   await caption("1. Create the event");
   await typeInto(page.getByTestId("title"), EVENT.title);
   await page.getByTestId("starts_at").fill(EVENT.starts_at);
@@ -151,7 +151,7 @@ test("1: create the event", async () => {
 test("2: the organizer searches the catalog, physically picks the store, and the app reads the store's customization", async () => {
   test.setTimeout(LIVE_MS + 60_000);
   await page.getByTestId("tab-experience").click();
-  await tut("Step 2 of 5", "Search the catalog over WebMCP", "The organizer describes the merch. The search calls Shopify's UCP catalog and the store's own endpoint and returns a ranked list of real products.", 5000);
+  await tut("Step 2 of 5", "Search the catalog over WebMCP", "The organizer describes the item. The search calls Shopify's Global Catalog and the store's own endpoint and returns a ranked list of real products.", 5000);
   await caption("2. Search the catalog over WebMCP");
   await typeInto(page.getByTestId("sentence"), EVENT.search);
   await page.getByRole("button", { name: "Search", exact: true }).click();
@@ -195,7 +195,7 @@ test("2: the organizer searches the catalog, physically picks the store, and the
   expect(fields.map((f) => f.key)).toEqual(["star_map_location", "star_map_time", "caption"]);
   expect(fields.find((f) => f.key === "caption")?.constraints?.max_length).toBe(20);
   expect(stored.variants).toHaveLength(6);
-  await webmcpOverlay(`get_customization · ${SHOP_DOMAIN}`, [`product ${stored.product_title}`, ...fields.map((f) => `• ${f.label} (${f.kind}${f.constraints?.max_length ? `, max ${f.constraints.max_length}` : ""})`), `← ${stored.variants.length} variants`, ...stored.variants.map((v) => `• ${v.title}`)], 6500);
+  await webmcpOverlay(`get_customization at ${SHOP_DOMAIN}`, [`product ${stored.product_title}`, ...fields.map((f) => `• ${f.label} (${f.kind}${f.constraints?.max_length ? `, max ${f.constraints.max_length}` : ""})`), `← ${stored.variants.length} variants`, ...stored.variants.map((v) => `• ${v.title}`)], 6500);
   await clearWebmcpOverlay();
   await caption("2. The store's fields and variants are on the gift");
   await rest(1500);
@@ -207,7 +207,7 @@ test("3: the organizer requests the product's fields, the responses fill the rec
 
   await page.getByTestId("tab-attendees").click();
   await expect(page.getByTestId("requested-info")).toBeVisible({ timeout: 10_000 });
-  await tut("Step 3 of 5", "Request the details from attendees", "The store's fields become the requirements. The name comes from the RSVP; the star map location and time and the size are asked of each attendee with the store's constraints and choices.", 5500);
+  await tut("Step 3 of 5", "Request the details from attendees", "The store's fields become the requirements. The name comes from the RSVP. The star map location and time and the size go to each attendee as questions with the store's limits and choices.", 5500);
   await caption("3. The organizer requests the size and the star map details");
   await expect(page.getByTestId("requested-field").filter({ hasText: "Size" })).toBeVisible({ timeout: 10_000 });
   await page.getByTestId("request-fields").click();
@@ -226,8 +226,8 @@ test("3: the organizer requests the product's fields, the responses fill the rec
 
   await expect(page.getByTestId("attendee-row")).toHaveCount(ATTENDEES.length, { timeout: 10_000 });
   await expect(page.locator('[data-state="missing"]')).toHaveCount(0);
-  await tut("Step 4 of 5", "Review the responses and the routing", "Each response fills a row in the records grid, one column per answer. The panel below names the WebMCP tools that carry the order to the store.", 6000);
-  await caption("4. The records grid, and the WebMCP routing to the store");
+  await tut("Step 4 of 5", "Review the responses and the routing", "Each response fills a row in the records grid with one column per answer. The panel below names the WebMCP tools that carry the order to the store.", 6000);
+  await caption("4. The records grid and the WebMCP routing to the store");
   await page.getByTestId("webmcp-routing").scrollIntoViewIfNeeded();
   await rest(4500);
 
@@ -246,7 +246,7 @@ test("3: the organizer requests the product's fields, the responses fill the rec
   expect(checkoutUrl).toContain("/cart/c/");
   const filled = await gift();
   expect(filled.cart_fill?.status).toBe("done");
-  await webmcpOverlay(`add_customized_to_cart · ${SHOP_DOMAIN}`, [`${ATTENDEES.length} items, one per attendee`, ...ATTENDEES.map((a) => `• ${a.display_name}: ${a.size}, ${a.location}, ${a.time}`), `← checkout_url ${checkoutUrl.split("?")[0]}`], 6500);
+  await webmcpOverlay(`add_customized_to_cart at ${SHOP_DOMAIN}`, [`${ATTENDEES.length} items, one per attendee`, ...ATTENDEES.map((a) => `• ${a.display_name}: ${a.size}, ${a.location}, ${a.time}`), `← checkout_url ${checkoutUrl.split("?")[0]}`], 6500);
   await clearWebmcpOverlay();
   await caption(`4. Approved; the cart is ready to review at ${storeName}`);
   await rest(3000);
@@ -254,7 +254,7 @@ test("3: the organizer requests the product's fields, the responses fill the rec
 
 test("4: the store's cart holds one line per attendee", async () => {
   test.setTimeout(LIVE_MS);
-  await tut("Step 5 of 5", "The cart at the store", `The link the store returned opens its checkout in any browser with a personalized line for every attendee.`, 5000);
+  await tut("Step 5 of 5", "The cart at the store", "The link the store returned opens its checkout in any browser with a personalized line for every attendee.", 5000);
   await caption(`5. ${storeName}'s cart holds a configured unit per attendee`);
   const fresh = await browserRef.newContext({ viewport: { width: 1440, height: 940 }, recordVideo: { dir: "tests/videos", size: { width: 1440, height: 940 } } });
   try {

@@ -131,7 +131,7 @@ describe("CurationAgent proposes from retrieved context (#120)", () => {
     // The instructions demand reading the context first, and every tool of the run is offered.
     const first = model.requests[0];
     expect(first.systemInstructions).toMatch(/call read_event and read_definitions first/);
-    expect(first.tools.map((t) => t.name)).toEqual(expect.arrayContaining(["read_event", "read_definitions", "read_missing_values", "search_gifts", "read_personalization_schema", "select_gift", "set_mappings", "read_manifest", "prepare_handoff"]));
+    expect(first.tools.map((t) => t.name)).toEqual(expect.arrayContaining(["read_event", "read_definitions", "read_missing_values", "search_gifts", "read_personalization_schema", "select_gift", "set_mappings", "read_manifest", "prepare_cart"]));
 
     // The gift the run created carries the searched product and the validated mapping rows.
     const gift = giftsFor(event.id)[0];
@@ -179,19 +179,19 @@ describe("CurationAgent proposes from retrieved context (#120)", () => {
     expect(result.proposal).toBeUndefined();
   });
 
-  it("offers no cart, checkout, or approval tool, and the handoff tool only reports the next step", async () => {
+  it("offers no cart, checkout, or approval tool, and the cart summary tool only reports the next step", async () => {
     const { event } = seed();
     const model = scriptedModel((request, turn) => {
       const results = outputsByName(request);
       if (turn === 1) return [call("c1", "search_gifts", { query: "sweatshirts" })];
       if (turn === 2) return [call("c2", "select_gift", { product_id: SWEATSHIRT.product_id, gift_id: null })];
-      if (turn === 3) return [call("c3", "prepare_handoff", { gift_id: (results.select_gift![0] as { gift_id: string }).gift_id })];
-      expect(results.prepare_handoff![0]).toMatchObject({ units: 2, next_step: expect.stringContaining("organizer sends") });
-      return [say("Ready for the organizer to send from the dashboard.")];
+      if (turn === 3) return [call("c3", "prepare_cart", { gift_id: (results.select_gift![0] as { gift_id: string }).gift_id })];
+      expect(results.prepare_cart![0]).toMatchObject({ units: 2, next_step: expect.stringContaining("organizer requests") });
+      return [say("Ready for the organizer to request the values from the dashboard.")];
     });
     await runCurationAgent({ eventId: event.id }, "Sweatshirts.", { model, search: fakeSearch });
     const tools = model.requests[0].tools.map((t) => t.name);
-    for (const forbidden of ["send", "approve", "checkout", "lock", "cart", "pay"]) expect(tools.some((t) => t.includes(forbidden))).toBe(false);
+    for (const forbidden of ["send", "approve", "checkout", "lock", "add_", "pay"]) expect(tools.some((t) => t.includes(forbidden))).toBe(false);
     const gift = giftsFor(event.id)[0];
     expect(gift.cart_id).toBeNull();
     expect(gift.checkout_id).toBeNull();

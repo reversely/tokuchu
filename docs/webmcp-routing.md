@@ -26,7 +26,7 @@ Tokuchu is the organizer's app. The store is a Shopify storefront that speaks We
 | 6. Review and pay | the organizer in a browser | the cart's `checkoutUrl` | Shopify's checkout | the URL the cart tool returned |
 | 7. Read the order | Tokuchu's server | GraphQL Admin API (`src/server/shopify-admin.ts`) | Shopify Admin | HTTPS with a client-credentials token |
 
-Hops 2, 3, and 4 and the store half of hop 5 run over WebMCP tools. The approval itself runs over HTTP because the Attendees tab registers no tool for it yet. Hop 1 runs over HTTP because the Global Catalog exists only at its endpoint; the store's own page tool `search_catalog` covers one store and Tokuchu's search spans many. Hop 7 runs after checkout, where Shopify exposes orders through the Admin API alone.
+Hops 2, 3, 4, and 5 run over WebMCP tools; the Attendees tab's approve button runs the `approve_specs` definition through `executeThroughApi` as its request buttons do. Hop 1 runs over HTTP because the Global Catalog exists only at its endpoint; the store's own page tool `search_catalog` covers one store and Tokuchu's search spans many. Hop 7 runs after checkout, where Shopify exposes orders through the Admin API alone.
 
 ## The bridge
 

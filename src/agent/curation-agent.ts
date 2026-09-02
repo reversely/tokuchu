@@ -52,7 +52,7 @@ const LABELS: Record<string, string> = {
   select_gift: "Selecting the product",
   set_mappings: "Mapping the RSVP fields",
   read_manifest: "Validating the attendee configurations",
-  prepare_handoff: "Preparing the vendor handoff"
+  prepare_cart: "Preparing the cart summary"
 };
 
 const INSTRUCTIONS = `You are the CurationAgent for one event. The organizer describes a curated personalized item in natural language; you read the event through tools, search the catalog, select one product, and map RSVP and event fields into its personalization inputs.
@@ -66,7 +66,7 @@ Rules:
 - When set_mappings returns errors, fix the rows it names and store again; do not report success over stored errors.
 - After storing mappings, call read_manifest and report the coverage: how many attendees are ready, how many incomplete, and each issue in one short sentence naming the gap.
 - When a required vendor field has no valid source, say what is missing and ask the organizer one focused question instead of guessing.
-- You never send a cart, approve an order, or check out; the organizer does that on the dashboard. prepare_handoff only reports what happens next.
+- You never send a cart, approve an order, or check out; the organizer does that on the dashboard. prepare_cart only reports what happens next.
 - Keep the final reply short and concrete: the proposed product, each mapping in plain words, the coverage numbers, and any gap.`;
 
 const GOING = [{ field: "status", op: "eq" as const, value: "going" }];
@@ -256,8 +256,8 @@ function rawTools(ctx: CurationContext, state: RunState, options: RunOptions) {
       }
     }),
     tool({
-      name: "prepare_handoff",
-      description: "Reports what the vendor handoff will carry: the units the manifest counts, the delivery target, and the organizer's next step. Reads only; sending and approval stay with the organizer.",
+      name: "prepare_cart",
+      description: "Reports what the store's cart will carry: the units the manifest counts, the delivery target, and the organizer's next step. Reads only; requesting values and approval stay with the organizer.",
       parameters: z.object({ gift_id: z.string() }),
       execute: async ({ gift_id }) => {
         const gift = requireGift(eventId, gift_id);
@@ -269,7 +269,7 @@ function rawTools(ctx: CurationContext, state: RunState, options: RunOptions) {
           units: rows.filter((r) => COUNTED.has(r.unit_status)).length,
           ready: summarizeManifest(rows).ready,
           delivery: { label: target.label, needed_by: target.needed_by },
-          next_step: "The organizer sends the gift to the vendor and approves the priced cart on the dashboard."
+          next_step: "The organizer requests the missing values from attendees and approves on the dashboard, which fills the store's cart."
         };
       }
     })

@@ -107,7 +107,7 @@ The loop the organizer runs:
 
 `add_customized_to_cart` validates every item against the requirements before adding any: an unknown key, a missing required value, or a value over its maximum length returns the item's issues and adds nothing. A repeated call with the same idempotency key adds nothing and returns the recorded lines.
 
-**The shareable cart.** The storefront's session cart resolves as a Storefront API cart, `gid://shopify/Cart/{token}`, whose `checkoutUrl` takes the form `{shop}/cart/c/{token}?key=...`. That URL opens the cart at Shopify's checkout in any browser, with every line and its properties. Measured on the demo store on 2026-09-03: a cart built in one session opened in a fresh browser with both personalized lines shown. Cart permalinks carry properties on the first line only, so they cannot express a multi-attendee cart.
+**The shareable cart.** The storefront's session cart resolves as a Storefront API cart, `gid://shopify/Cart/{token}`, whose `checkoutUrl` takes the form `{shop}/cart/c/{token}?key=...`. That URL opens the cart at Shopify's checkout in any browser, with every line and its properties. The live suite `tests/customily-tools-live.spec.ts` builds a cart with two lines in one session and opens the URL in a fresh browser, where both personalized lines show. Cart permalinks carry properties on the first line only, so they cannot express a multi-attendee cart.
 
 **Shopify's Admin API.** Tokuchu reads orders and fulfillment state through the GraphQL Admin API with a client-credentials grant. The store and the app share one Shopify organization. Card data stays with Shopify's checkout.
 
@@ -126,15 +126,17 @@ The interaction between the two runs over WebMCP in both directions:
 
 ## 7. Screens
 
-**Sign-in.** The organizer enters an email address and receives a magic link. Following it opens their events. An attendee's invite link opens without a session.
+**Landing.** The root route `/` shows the problem, the five-step walkthrough with one clip per step, and the three store tools. Its button opens `/events/new` for a signed-in organizer and the sign-in page otherwise.
 
-**Draft.** One page holds Details (title, date and time, host, location, spots, cost per person, RSVP deadline, description), Delivery (one address for every unit and a needed-by date), and Settings. The right column renders the invite from the same data. One button publishes and creates the link.
+**Sign-in.** The organizer enters an email address and receives a magic link. Following it opens `/events`, the list of the events the organizer owns. An attendee's invite link opens without a session.
+
+**Draft.** The page at `/events/new` holds Details (title, date and time, host, location, spots, cost per person, RSVP deadline, description), Delivery (one address for every unit and a needed-by date), and Settings. The right column renders the invite from the same data. One button publishes and creates the link.
 
 **Dashboard.** The published event shows three tabs.
 
 - **Overview** shows response counts, the attendee table, and the editable setup sections.
-- **Guest Experience** holds the sentence box, the ranked results with the store each came from, the pick, and the fields the store returned with their sources. The organizer confirms the sources here. When a curation run is used, its tool steps stream into this tab as they happen.
-- **Attendees** shows the questions requested from attendees, the records grid with one row per attendee and one column per field with each cell marked answered or missing, the request and follow-up actions, the approve action, and after approval the checkout link and the order state.
+- **Guest Experience** holds the sentence box, the ranked results with the store each came from, the pick, and the confirm step that adds the gift and reads the store's fields. When a curation run is used, its tool steps stream into this tab as they happen.
+- **Attendees** shows each requirement with its source, the records grid with one row per attendee and one column per field with each cell marked answered or missing, the request and follow-up actions, the approve action, and after approval the checkout link and the order state.
 
 **Invite form.** An attendee's link opens the event's invite with the name field, the response choices, and one control per question the attendee has been asked: a text field with the store's length limit, a choice with the store's variant values. The attendee edits from the same link until approval locks the answers. The invite page registers the same form as a WebMCP tool, `submit_rsvp`, whose input schema lists one property per requested question with the store's constraints, so an attendee's browser agent answers through a tool call.
 
@@ -151,18 +153,22 @@ The app's main internal responsibility is coordinating the stages above. It main
 - **CallerToken**: a scoped credential for an agent calling over HTTP, naming the readable questions and the callable tools.
 - **Change log**: every write to answers, statuses, and gifts in one rising sequence, so a poll reads what changed since a sequence number.
 
-Tokuchu publishes its records as tools. The organizer's page registers them on `document.modelContext`, and the MCP endpoint at `/api/events/{id}/mcp` serves the same list to a token holder over JSON-RPC. Each tool maps onto one API route.
+Tokuchu publishes its records as tools. The organizer's page registers them on `document.modelContext`, and the MCP endpoint at `/api/events/{id}/mcp` serves the same list to a token holder over JSON-RPC. Each tool maps onto one API route, and the Attendees tab's buttons run the `request_from_attendees`, `follow_up`, and `approve_specs` definitions through the same mapping.
 
 | Tool | Returns or does |
 | --- | --- |
 | `get_guest`, `list_guests` | one attendee or the attendees matching a filter, with typed answers |
 | `count_by`, `get_summary`, `list_missing` | per-option counts, several counts in one call, attendees with no answer |
 | `search_gifts` | the ranked candidates from every source with the funnel |
-| `configure_product` | the gift for a product and the fields its `get_customization` returned |
-| `set_field_sources` | the source per requirement, or the validation errors |
-| `request_from_attendees` | the request per attendee for their missing fields |
+| `set_gift_plan` | the gift for a product; a product at a store that answers the merchant tools takes the fields and variants its `get_customization` returned |
+| `set_personalization_mapping` | the source per requirement, or the validation errors |
+| `get_requirements` | each requirement of the gift's product with the source that fills it |
+| `request_from_attendees` | the request per attendee for their missing fields, with an email to each |
+| `follow_up` | the request sent again to every attendee with an unanswered question |
 | `get_manifest` | one row per attendee: variant, resolved values, and each row's ready or incomplete state |
-| `approve_specs` | locks the answers, fills the store's cart, records the checkout URL |
+| `approve_specs` | locks the answers, starts the cart job, records the checkout URL |
+| `send_to_vendor`, `approve` | the priced cart at the store from the quantities and the organizer's approval of it, for a product whose store publishes no merchant tools |
+| `post_update`, `get_updates` | a gift's thread: the cart job's progress posts, a vendor's notices, the organizer's replies |
 | `get_changes` | the change log after a sequence number |
 | `submit_rsvp` (invite page) | records an attendee's response and answers, with the store's constraints in its schema |
 
@@ -188,7 +194,7 @@ Responses return to the app
 Customization data becomes complete
 ```
 
-**Requests.** The app generates a request for the missing values and sends it to the relevant attendees by email through Resend, each carrying the attendee's own link. The attendee receives a form containing the fields required for the selected product. Their submitted values return to the app and attach to their attendee record. The app records per attendee which questions were sent and when, and it sends a follow-up to every attendee whose request still has an unanswered question. In development the link is logged in place of the email.
+**Requests.** The app generates a request for the missing values and sends it to the relevant attendees by email through Resend, each carrying the attendee's own link. The attendee receives a form containing the fields required for the selected product. Their submitted values return to the app and attach to their attendee record. The app records per attendee which questions were sent and when, and it sends a follow-up to every attendee whose request still has an unanswered question. Resend carries the message in production or when `MAIL_LIVE=1` is set; any other process writes one line per message with the recipient and the link to the server log.
 
 Once the required data has been collected, the app holds a complete set of values for each unit. For example:
 
@@ -207,11 +213,11 @@ time: 10:30 PM
 
 **Approval.** Approval locks the answers the gift reads, so a later edit from the invite link returns the lock and the organizer's contact. Tokuchu then fills the cart (Section 10).
 
-## 10. Filling the cart and the handoff
+## 10. Filling the cart and the checkout link
 
 For each attendee the app maps the relevant values into the selected product's customization fields and adds the configured item to the merchant's cart through the merchant's tool. On approval Tokuchu runs a job inside the app. The job opens the store's product page in a headless browser with the WebMCP polyfill, waits for the merchant tools to register, builds one item per ready manifest row, and calls `add_customized_to_cart` once with every item and an idempotency key derived from the gift and its approval time. The tool returns the line keys and the cart's `checkoutUrl`. Tokuchu stores both on the gift and shows the link on the Attendees tab.
 
-The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
+A second approval while the job runs joins it. The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
 
 The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason. The Attendees tab shows the cart link once it arrives and the failure text when the store did not fill the cart.
 
@@ -227,16 +233,16 @@ Discovery searches the Global Catalog and each configured store's UCP endpoint f
 
 ## 12. Deployment and accounts
 
-- **Host.** A Render Web Service built from a Dockerfile that bundles Node and Chromium, because the approval job drives the store page with Playwright.
+- **Host.** A Render Web Service built from a Dockerfile that bundles Node and Chromium, because the approval job drives the store page with Playwright. `render.yaml` declares the service, the database, and the environment as a Blueprint, and each deploy runs the migration before the new server starts.
 - **Database.** Render Postgres. Each event is one row holding its records as a JSON document, plus the sign-in tables. A request loads its event's document, runs the domain code, and writes the document back.
-- **Sign-in.** Auth.js with a magic-link provider and Resend as the sender. An allowlist of organizer emails in the environment decides who may sign in. Each event records the user id of the organizer who created it. Organizer routes require a session and check the event's owner: a request with no session answers 401 or goes to the sign-in page, and a session that owns another event answers 403 or the not-found page. Invite links, the RSVP routes, and the read of a guest's own record by the id on the invite link stay public and never return the owner. Without `DATABASE_URL` outside production a request with no session runs as one local organizer, so the dev server and the browser suites need no sign-in; an event a signed-in account owns still answers such a request as it answers a stranger.
-- **Environment.** `DATABASE_URL`, `AUTH_SECRET`, `RESEND_API_KEY`, `ORGANIZER_EMAILS`, `OPENAI_API_KEY`, `CUSTOMILY_SHOP_URL`, and the four Shopify Admin keys. Secrets live in Render's environment and in a local `.env` that stays out of the repository.
+- **Sign-in.** Auth.js with a magic-link provider and Resend as the sender. An allowlist of organizer emails in the environment decides who may sign in. Each event records the user id of the organizer who created it. Organizer routes require a session and check the event's owner: a request with no session answers 401 or goes to the sign-in page, and a session that owns another event answers 403 or the not-found page. Invite links, the RSVP routes, and the read of a guest's own record by the id on the invite link stay public and never return the owner. Without `DATABASE_URL` outside production the events live in the process's memory, and a request with no session runs as one local organizer, so the dev server and the browser suites need no database and no sign-in; an event a signed-in account owns still answers such a request as it answers a stranger.
+- **Environment.** `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `APP_URL`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `MAIL_LIVE`, `ORGANIZER_EMAILS`, `OPENAI_API_KEY`, `CUSTOMILY_SHOP_URL`, and the four Shopify Admin keys, as `.env.example` lists them. Secrets live in Render's environment and in a local `.env` that stays out of the repository.
 
 ## 13. Tests and the recorded demo
 
 Vitest covers the domain, the operations, the tool list, the comparison, and the request tracking. Playwright covers the draft, the invite, the dashboard tabs, and the tools through the polyfill. The live suites, gated by `LIVE_CUSTOMILY=1`, run against the demo store.
 
-The recorded demo runs in this order: sign in and create the event; describe the item and watch the search rank the store's crewneck; pick it and watch `get_customization` return the fields; request the size and the name from attendees; load the attendee responses; watch the grid complete; approve; open the checkout link in a fresh browser and see one line per attendee. The responses in the recording are loaded through the RSVP API in place of email replies.
+The recorded demo (`tests/flow-demo.spec.ts`) runs against a dev server with no database, where a request without a session runs as the local organizer, in this order: create and publish the event; describe the item and watch the search rank the store's crewneck; pick it and watch `get_customization` return the fields and the variants; request the size and the star map values from attendees; load the attendee responses; watch the grid complete; approve and watch `add_customized_to_cart` return the checkout link; open the link in a fresh browser and see one line per attendee. The responses in the recording are loaded through the RSVP API in place of email replies. With `TUTORIAL=1` the recording carries a step banner per step in place of the captions.
 
 ## 14. Decisions taken
 
