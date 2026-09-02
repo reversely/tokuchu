@@ -201,3 +201,8 @@ only; LLM paths off unless needed.
   prefetch now gets 204 without a cookie; a demo caller on an event it does not own is sent to
   /demo from the page and from the dashboard poll. Verified on production: prefetch 204, wrong
   event redirects to /demo.
+- #22 landed as 7ea583d (clean). Wire block per step with end-and-page labels (Tokuchu page tool,
+  invite page tool, store page tool, Shopify page tool, store UCP endpoint), wait anchoring, the
+  demo-store labeling in the pick step and the routing panel. Gate: 189 vitest, 21 Playwright, live
+  tour 1/1. User asked next (#23): drop the post-approval lock (allow overwrite, re-approve refills
+  a fresh cart) and sweep the vendor-era copy.
