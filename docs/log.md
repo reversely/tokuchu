@@ -177,3 +177,11 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   the layout tag into the live Tinker theme (previous layout saved locally). Verified with the polyfill
   alone: get_customization and add_customized_to_cart register from the theme with three fields and six
   variants. The app now injects only the polyfill. Live tools spec and flow demo green.
+
+## 2026-09-02 — Guest demo mode (#19, #20, #21)
+
+User: a guest demo on the live site on a per-visitor test organizer, the flow-demo steps run live in
+that session with spotlight callouts and a first-person organizer narration panel (text only), guests
+only; LLM paths off unless needed.
+- #21 landed as 0cab585 (clean). LLM_ENABLED off by default: curate route 501, panel hidden, SDK
+  loaded dynamically only when on. Gate: 169 vitest, 19 Playwright.
