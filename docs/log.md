@@ -152,3 +152,7 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
 - #9 landed as 3c37c46 (clean). Playwright v1.62.1-noble image, standalone output, esbuild-compiled
   migrate.mjs as preDeployCommand, Blueprint plans 1c-2g and 0.1c-256mb in ohio. Build verified here;
   the image build and the Blueprint apply wait for the Render workspace (#2 stays open for that).
+- #7 landed as 4755f86 (clean). Homepage at /, draft at /events/new, list at /events; five
+  GIFs under 1 MB in public/media captured by scripts/capture-home-media.ts. Gate: 166 vitest, 19
+  Playwright, live flow demo 4/4. The static screenshot shows each GIF's first frame only; judge the
+  clips in the browser.
