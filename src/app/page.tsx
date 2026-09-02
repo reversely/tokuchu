@@ -17,7 +17,7 @@ const STEPS: Step[] = [
   {
     title: "Describe the item and pick the product.",
     body: [
-      "On the Guest Experience tab the organizer types one sentence about the item. The search calls search_catalog at Shopify's Global Catalog and at the store's own endpoint and ranks what comes back.",
+      "On the Guest Experience tab the organizer types one sentence about the item. Tokuchu searches the common Shopify catalog and the participating store's own endpoint and merges the results and ranks them against the sentence.",
       "The organizer picks the Customworks star map crewneck from the ranked results."
     ],
     window: "Tokuchu Guest Experience",
@@ -25,19 +25,19 @@ const STEPS: Step[] = [
     alt: "The search ranking the store's crewneck and the organizer picking it"
   },
   {
-    title: "The store returns its requirements and the app compares them with the RSVP.",
+    title: "The store states what the crewneck needs and Tokuchu resolves where each value comes from.",
     body: [
       "Confirming the pick calls the store's get_customization tool on its product page. The tool answers with the fields the crewneck needs and their limits: a star map location and a time and a printed name under 20 characters.",
-      "The app compares each field with what the RSVP already holds. The printed name comes from the RSVP. The location and the time and the size become questions for each attendee."
+      "Tokuchu resolves each field against the RSVP record. The printed name is already there. The location and the time and the size are missing and become the attendee request."
     ],
     window: "Tokuchu Attendees",
     media: "/media/step3-requirements.gif",
     alt: "The requirements the store returned with the source of each value"
   },
   {
-    title: "Request the values and watch the records fill.",
+    title: "The merchant's schema becomes the attendee request.",
     body: [
-      "One click sends each attendee an email with a link to a form holding only the fields the crewneck needs. Each reply fills a row in the records grid with one column per field. The app follows up with whoever has not answered.",
+      "Tokuchu turns the store's WebMCP schema directly into the attendee form. One click sends each attendee an email with a link to a form holding only the missing fields with the store's limits on each. Each reply fills a row in the records grid and the app follows up with whoever has not answered.",
       "The replies in this recording load through the RSVP API in place of email replies."
     ],
     window: "Tokuchu Attendees",
@@ -45,10 +45,10 @@ const STEPS: Step[] = [
     alt: "The request going out and the responses filling the records grid"
   },
   {
-    title: "Approve and open the checkout.",
+    title: "The merchant receives one configured item per attendee.",
     body: [
-      "When every row is complete the organizer approves. The app calls the store's add_customized_to_cart tool once with one item per attendee.",
-      "The tool returns a checkout link and the organizer opens it to a cart with one line per attendee and the values on every line."
+      "When every row is complete the organizer approves. Tokuchu calls the store's add_customized_to_cart tool once with the completed batch and one item per attendee.",
+      "The store returns its Shopify checkout with one line per attendee and the values on every line. The organizer reviews it and pays."
     ],
     window: "Customworks checkout",
     media: "/media/step5-approve-checkout.gif",
@@ -57,9 +57,25 @@ const STEPS: Step[] = [
 ];
 
 const TOOLS = [
-  { tool: "search_catalog", title: "Find the product", body: "The search calls Shopify's catalog tools at the Global Catalog and at each store's endpoint and ranks the results for the organizer's sentence." },
-  { tool: "get_customization", title: "Read the requirements", body: "The store's own tool returns the fields the product needs and their limits. A field the RSVP does not hold becomes a question for each attendee." },
-  { tool: "add_customized_to_cart", title: "Write the order", body: "The store's second tool adds one configured line per attendee to the cart and returns the checkout link the organizer opens." }
+  { tool: "search_catalog", by: "Exposed by Shopify WebMCP", title: "Find candidate products", body: "Shopify's common storefront tool answers at the Global Catalog and at each store's endpoint. Tokuchu merges the results and ranks them against the organizer's sentence." },
+  { tool: "get_customization", by: "Exposed by Customworks WebMCP", title: "Return the product's requirements", body: "The store's own tool returns the fields this product needs and their limits. Tokuchu resolves each field against the RSVP record and asks attendees only for what is missing." },
+  { tool: "add_customized_to_cart", by: "Exposed by Customworks WebMCP", title: "Submit one configured item per attendee", body: "The store's ordering tool takes the completed batch and fills its cart with one line per attendee and returns the Shopify checkout." }
+];
+
+/** The chain the hero draws: what happens at each stage and which end exposes the capability. */
+const CHAIN = [
+  { stage: "Find", call: "search_catalog", by: "Shopify WebMCP", what: "Search Shopify products" },
+  { stage: "Read", call: "get_customization", by: "Customworks WebMCP", what: "The store returns location and time and name under 20 and size" },
+  { stage: "Collect", call: "attendee responses", by: "Tokuchu", what: "Ask each attendee only for the missing values" },
+  { stage: "Order", call: "add_customized_to_cart", by: "Customworks WebMCP", what: "One configured item per attendee and the Shopify checkout" }
+];
+
+/** The demo crewneck's contract as the store returns it and the source Tokuchu resolves for each field. */
+const CONTRACT = [
+  { field: "Location", rule: "required", source: "ask the attendee" },
+  { field: "Time", rule: "required", source: "ask the attendee" },
+  { field: "Printed name", rule: "required and under 20 characters", source: "already in the RSVP" },
+  { field: "Size", rule: "required", source: "ask the attendee" }
 ];
 
 function Window({ title, children }: { title: string; children: ReactNode }) {
@@ -83,6 +99,7 @@ export default async function Page() {
           <div className="navlinks">
             <ul>
               <li><a href="#problem">The problem</a></li>
+              <li><a href="#contract">The contract</a></li>
               <li><a href="#story">Walkthrough</a></li>
               <li><a href="#why">Why WebMCP</a></li>
               <li><a href="/events" data-testid="my-events-link">Your events</a></li>
@@ -97,14 +114,19 @@ export default async function Page() {
         <section className="hero">
           <div className="wrap">
             <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
-            <h1 className="sr-only">Turn an RSVP list into one personalized order per attendee.</h1>
-            <p className="sub">Tokuchu runs on WebMCP tools at both ends. Four calls carry an event from a guest list to a filled cart.</p>
-            <ul className="hero-tools" data-testid="hero-tools">
-              <li><code>search_catalog</code><span>Shopify's storefront tool finds the product</span></li>
-              <li><code>get_customization</code><span>the store's own tool states what the product needs</span></li>
-              <li><code>request_from_attendees</code><span>Tokuchu's page tool collects each attendee's values</span></li>
-              <li><code>add_customized_to_cart</code><span>the store's cart tool fills one line per attendee</span></li>
-            </ul>
+            <h1>Turn an RSVP list into one personalized order per attendee.</h1>
+            <p className="sub">Choose a product once. Tokuchu reads the merchant's WebMCP requirements and collects the missing values from every attendee and prepares the completed order for review.</p>
+            <ol className="chain" data-testid="chain">
+              {CHAIN.map((c) => (
+                <li key={c.stage}>
+                  <span className="stage">{c.stage}</span>
+                  <code>{c.call}</code>
+                  <span className="by">{c.by}</span>
+                  <span className="what">{c.what}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="contract-line">WebMCP is the contract between Tokuchu and the storefront. Shopify exposes the common commerce capabilities. Customworks adds the product-specific requirements and the bulk customization action.</p>
             <div className="cta">
               <a className="btn primary big" href={start} data-testid="start-hero">Create an event</a>
               <a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a>
@@ -117,9 +139,53 @@ export default async function Page() {
           <div className="wrap">
             <div className="sec-head">
               <span className="eyebrow">The problem</span>
-              <h2>Personalizing an event means collecting one answer per attendee per field.</h2>
-              <p>An organizer orders a conference tote printed with each attendee's name or a crewneck showing a star map of the venue on the event date. Choosing the item takes one decision. Collecting what the store needs to make one unit per person takes a question to every attendee.</p>
-              <p>The organizer asks each attendee for a size and a spelling and keeps the answers in a spreadsheet. The organizer then chases the attendees who have not replied and re-types each row into the store's checkout. A wrong name or size on a unit costs a reprint and a late delivery.</p>
+              <h2>Choosing the gift takes one decision. Personalizing 500 of them takes 500 records.</h2>
+              <p>An organizer orders a crewneck showing a star map of the venue on the event date and printed with each attendee's name. The store needs a location and a time and a name and a size for every unit. The organizer asks each attendee and keeps the answers in a spreadsheet and chases whoever has not replied and re-types each row into the store's checkout. A wrong name or size costs a reprint and a late delivery.</p>
+            </div>
+            <div className="scale" data-testid="scale">
+              <div className="card">
+                <span className="eyebrow">This demo</span>
+                <strong>3 attendees</strong>
+                <p>Live end to end against the store and its checkout.</p>
+              </div>
+              <div className="card">
+                <span className="eyebrow">A real event</span>
+                <strong>500 attendees × 3 fields = 1,500 values</strong>
+                <p>The same steps at the scale an event team works at.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="contract">
+          <div className="wrap">
+            <div className="sec-head">
+              <span className="eyebrow">The merchant's contract</span>
+              <h2>A personalized product can tell Tokuchu how to order it.</h2>
+              <p>The store publishes its required fields and their limits and its ordering operation as WebMCP tools. Tokuchu reads those requirements and resolves each value against the RSVP record and asks attendees only for what is missing.</p>
+            </div>
+            <div className="contract" data-testid="contract">
+              <div className="contract-col">
+                <span className="eyebrow">Customworks returns</span>
+                <ul>
+                  {CONTRACT.map((r) => <li key={r.field}><span>{r.field}</span><code>{r.rule}</code></li>)}
+                </ul>
+              </div>
+              <div className="contract-arrow" aria-hidden="true">→</div>
+              <div className="contract-col">
+                <span className="eyebrow">Tokuchu resolves the source</span>
+                <ul>
+                  {CONTRACT.map((r) => <li key={r.field}><span>{r.field}</span><code className={r.source.startsWith("already") ? "have" : "ask"}>{r.source}</code></li>)}
+                </ul>
+              </div>
+              <div className="contract-arrow" aria-hidden="true">→</div>
+              <div className="contract-col formmock" data-testid="formmock">
+                <span className="eyebrow">The attendee form</span>
+                <label>Your star map location<i /></label>
+                <label>Time<i /></label>
+                <label>Name<i /><small>12 / 20</small></label>
+                <label className="chips">Size<span><b>S</b><b>M</b><b>L</b><b>XL</b></span></label>
+              </div>
             </div>
           </div>
         </section>
@@ -151,7 +217,7 @@ export default async function Page() {
                         <span className="eyebrow">The store in this walkthrough</span>
                         <h3>Customworks</h3>
                         <p>Customworks is the trial Shopify store created for this project. Beside Shopify's own storefront tools it exposes WebMCP functions for Tokuchu's agents to use: one that returns the customization a product needs and its limits and one that fills the cart with configured lines. The next step reads the first of them.</p>
-                        <p>The same contract fits any store whose products are made to order. Event merchandise is one case. Team kits and named gifts and engraved awards follow the same path once the store publishes the functions.</p>
+                        <p>The same pattern supports other made-to-order products when the merchant exposes its required fields and its fulfillment action through WebMCP. Team kits and engraved awards and attendee gifts and printed merchandise follow the same path.</p>
                       </div>
                     </div>
                   )}
@@ -165,13 +231,14 @@ export default async function Page() {
           <div className="wrap">
             <div className="sec-head">
               <span className="eyebrow">Why WebMCP</span>
-              <h2>The store hands the agent its own requirements.</h2>
-              <p className="why-lead">Before WebMCP an app read a store's personalization options by scraping its product page or by building one integration per store. WebMCP lets a store publish its search and its product options and its cart as tools with a name and a JSON Schema. Tokuchu calls those tools. Any WebMCP-enabled Shopify store answers the search. Personalization needs the store to publish the two merchant tools.</p>
+              <h2>Shopify gives every store a common commerce surface. Customworks extends it for made-to-order work.</h2>
+              <p className="why-lead">The store publishes its required fields and validation rules and its ordering operation as WebMCP tools with a name and a JSON Schema. Tokuchu works from the merchant's actual fulfillment rules instead of a hard-coded integration. Before WebMCP an app scraped the product page or built one integration per store.</p>
             </div>
             <div className="why" data-testid="tools">
               {TOOLS.map((card) => (
                 <div className="card" key={card.tool}>
                   <span className="tag">{card.tool}</span>
+                  <span className="by">{card.by}</span>
                   <h3>{card.title}</h3>
                   <p>{card.body}</p>
                 </div>

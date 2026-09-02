@@ -262,10 +262,35 @@ table.records .quiet { color: var(--muted); }
 /* The hero banner shares the field's cream, so it carries no frame and its edges fade into the page. */
 .home .hero-banner { max-width: 600px; margin: -20px auto 0; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
 .home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; }
-.home .hero-tools { list-style: none; margin: 18px auto 0; padding: 0; max-width: 720px; display: grid; gap: 8px; }
-.home .hero-tools li { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: baseline; text-align: left; font-size: 16px; color: var(--ink-2); }
-.home .hero-tools code { font-family: var(--mono); font-size: 13.5px; color: var(--navy); background: var(--card); padding: 3px 8px; border-radius: 6px; justify-self: end; }
-@media (max-width: 640px) { .home .hero-tools li { grid-template-columns: 1fr; gap: 4px; } .home .hero-tools code { justify-self: start; } }
+.home .hero h1 { text-align: center; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.08; margin: 8px auto 0; max-width: 22ch; }
+.home .chain { list-style: none; margin: 26px auto 0; padding: 0; max-width: 1040px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: stage; }
+.home .chain li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 14px; display: grid; gap: 6px; text-align: left; }
+.home .chain li + li::before { content: "→"; position: absolute; left: -14px; top: 18px; color: var(--ink-3); font-size: 16px; }
+.home .chain .stage { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--navy); }
+.home .chain code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.home .chain .by { font-size: 12.5px; font-weight: 600; color: var(--sky-dark); }
+.home .chain .what { font-size: 14px; color: var(--ink-2); line-height: 1.4; }
+.home .contract-line { margin: 20px auto 0; max-width: 62ch; text-align: center; font-size: 16px; color: var(--ink-2); }
+.home .scale { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 32px; max-width: 760px; }
+.home .scale .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: grid; gap: 6px; }
+.home .scale strong { font-family: var(--font-display), "Zilla Slab", serif; font-size: 24px; line-height: 1.2; color: var(--ink); }
+.home .scale p { font-size: 15px; color: var(--ink-2); }
+.home .contract { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 0.9fr); gap: 18px; align-items: stretch; margin-top: 36px; }
+.home .contract-col { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; display: grid; gap: 12px; align-content: start; }
+.home .contract-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.home .contract-col li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 15.5px; color: var(--ink); border-bottom: 1px solid var(--line-2); padding-bottom: 8px; }
+.home .contract-col code { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); text-align: right; }
+.home .contract-col code.ask { color: var(--sky-dark); }
+.home .contract-col code.have { color: var(--navy); }
+.home .contract-arrow { align-self: center; font-size: 28px; color: var(--ink-3); }
+.home .formmock label { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.home .formmock i { display: block; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); }
+.home .formmock small { justify-self: end; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.home .formmock label.chips { grid-template-columns: 1fr; }
+.home .formmock label.chips span { display: flex; gap: 6px; }
+.home .formmock b { display: inline-grid; place-items: center; width: 40px; height: 30px; margin-right: 6px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 13px; color: var(--ink); background: var(--ground); }
+.home .why .by { display: block; font-size: 12.5px; font-weight: 600; color: var(--sky-dark); margin-top: 6px; }
+@media (max-width: 900px) { .home .chain { grid-template-columns: 1fr; } .home .chain li + li::before { display: none; } .home .contract { grid-template-columns: 1fr; } .home .contract-arrow { transform: rotate(90deg); justify-self: center; } .home .scale { grid-template-columns: 1fr; } }
 .home .hero .cta { justify-content: center; }
 .home .hero .note { text-align: center; }
 .home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

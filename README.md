@@ -2,6 +2,17 @@
 
 Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled storefronts to coordinate personalized purchases for events. It acts as the agentic orchestration layer over WebMCP tools on both ends: Shopify's commerce tools for discovery, the demo store's own `get_customization` tool for the product's requirements, and the store's `add_customized_to_cart` tool, which fills the cart through Shopify's cart endpoint and returns the checkout link the organizer pays at. Tokuchu's own records register as WebMCP tools on the organizer's page. The project is built against one live demo store, deployed as a separate component, and is a submission to The WebMCP Challenge. The specification is `docs/prd.md` and the hop-by-hop routing is `docs/webmcp-routing.md`.
 
+## Who exposes what
+
+| Capability | Exposed by | Purpose |
+| --- | --- | --- |
+| `search_catalog` | Shopify WebMCP | Find candidate products at the Global Catalog and at each store's endpoint |
+| `get_customization` | Customworks WebMCP | Return the product's personalization requirements and their limits |
+| attendee collection | Tokuchu | Resolve each requirement against the RSVP and collect the missing values from each attendee |
+| `add_customized_to_cart` | Customworks WebMCP | Submit one configured item per attendee and return the Shopify checkout |
+
+Shopify gives every store a common commerce surface. Customworks extends it with the operations a made-to-order product needs. Tokuchu's own records also register as WebMCP tools on the organizer's page, so a browser agent can drive the same steps; the four rows above are the calls the product depends on.
+
 ## What is in it
 
 | Path | Role |
