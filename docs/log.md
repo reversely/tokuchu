@@ -159,3 +159,12 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
 - #16 landed as 7d15963 (clean). Docs reconciled with the shipped code; prepare_handoff renamed
   prepare_cart; tutorial re-recorded: tests/videos/flow-demo-2026-09-02-with-checkout.mp4 (2:22).
   Open on the user's side: #14 theme install, #2 live deploy (Render workspace), the license file.
+- Render (#2): the workspace is set via the API (tea-…6q0). The existing free native-Node service
+  `tokuchu` failed on every push: `next start -p 3113` versus Render's PORT 10000, plus Auth.js
+  UntrustedHost with no AUTH_URL. A paid Postgres and a Docker service were refused with 402 (no
+  card on the workspace). Interim without a card: free Postgres `tokuchu-db` (expires in 30 days),
+  the service's env set from .env (never printed), build installs Chromium and copies public/static
+  into the standalone dir, start runs the migration then the standalone server. The Blueprint path
+  (Docker on 1c-2g) waits for a payment method.
+- #14: the theme write was blocked by the session's permission classifier; scripts/install-theme-adapter.ts
+  does it from the owner's terminal (dry-run verified against the live Tinker theme).
