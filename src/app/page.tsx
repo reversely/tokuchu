@@ -94,20 +94,15 @@ export default async function Page() {
 
       <main id="top">
         <section className="hero">
-          <div className="wrap hero-grid">
-            <div>
-              <span className="eyebrow">Personalized orders for events</span>
-              <h1>Turn an RSVP list into one personalized order per attendee.</h1>
-              <p className="sub">Tokuchu reads a product's requirements from a WebMCP store and asks each attendee only for the values that product needs. The finished cart returns to the organizer with one line per attendee.</p>
-              <div className="cta">
-                <a className="btn primary big" href={start} data-testid="start-hero">Create an event</a>
-                <a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a>
-              </div>
-              <p className="note"><b>Works with</b> Shopify stores over WebMCP and the GraphQL Admin API.</p>
+          <div className="wrap">
+            <img className="banner" src="/media/tokuchu-banner.png" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
+            <h1 className="sr-only">Turn an RSVP list into one personalized order per attendee.</h1>
+            <p className="sub">Tokuchu reads a product's requirements from a WebMCP store and asks each attendee only for the values that product needs. The finished cart returns to the organizer with one line per attendee.</p>
+            <div className="cta">
+              <a className="btn primary big" href={start} data-testid="start-hero">Create an event</a>
+              <a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a>
             </div>
-            <Window title="Customworks checkout">
-              <img src="/media/step5-approve-checkout.gif" alt="The store's checkout holding one personalized crewneck per attendee" />
-            </Window>
+            <p className="note"><b>Works with</b> Shopify stores over WebMCP and the GraphQL Admin API.</p>
           </div>
         </section>
 
@@ -142,6 +137,18 @@ export default async function Page() {
                   </Window>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="usecase" data-testid="usecase">
+          <div className="wrap usecase">
+            <img className="banner" src="/media/customworks-banner.png" alt="Customworks. Make it your own. A Shopify storefront for the 2026 WebMCP Challenge" loading="lazy" />
+            <div className="usecase-copy">
+              <span className="eyebrow">One use case</span>
+              <h2>A store that publishes what its products need.</h2>
+              <p>Customworks is the demo storefront built for this project. Beside Shopify's own storefront tools it exposes a callable WebMCP tool that returns the customization a product needs and its limits. Tokuchu reads that tool on the pick and fills the store's cart through its second tool.</p>
+              <p>The same contract fits any store whose products are made to order. Event merchandise is one case. Team kits and named gifts and engraved awards follow the same path once the store publishes the tool.</p>
             </div>
           </div>
         </section>

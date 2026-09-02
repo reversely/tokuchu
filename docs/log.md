@@ -211,3 +211,8 @@ only; LLM paths off unless needed.
   "Approve and fill the cart", "Fill the cart", "How this reaches the store", "Cart job progress";
   the organizer reply path and the Guest Experience thread button are gone; the Overview's vendor
   follow-ups deleted. Gate: 190 vitest, 21 Playwright, live tour 1/1 (flow demo 4/4 in the worktree).
+- Homepage: the Tokuchu banner (public/media/tokuchu-banner.png, quantized under 1 MB) replaces the hero
+  grid; the palette follows it (field #e9d8bf, ink #1b2b3f, accent #bc451b on buttons only; measured:
+  navy on cream 10.3:1, white on orange 5.2:1; eyebrows and code marks moved to navy since orange text on
+  cream is 3.75:1). A "One use case" section carries the Customworks banner and states that the store
+  exposes a callable WebMCP tool for a product's customization, with the applicability in one sentence.
