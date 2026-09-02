@@ -287,6 +287,8 @@ export const Batch = z.object({
   cart_seq: z.number().int().nullable().optional(),
   /** Set by approve: when the organizer approved and the delivery window the cutoff came from. */
   approved_at: z.string().nullable().optional(),
+  /** When the organizer first requested the gift's missing values from attendees; a later reply then receives the request too. */
+  requested_at: z.string().nullable().optional(),
   delivery_window: DeliveryWindow.nullable().optional(),
   /** Set by the lock: the shop's hosted checkout page, where the organizer pays. */
   checkout_url: z.string().nullable().optional(),

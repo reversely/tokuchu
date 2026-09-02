@@ -137,6 +137,22 @@ describe("requesting the missing values from attendees", () => {
     expect(vi.mocked(console.info).mock.calls[0][0]).toContain(`guest=${blake.id}`);
   });
 
+  it("issues the request to an attendee who replies after it was sent", () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id);
+    requestFromAttendees(event.id, gift.id);
+    expect(snapshot(event.id).requests).toHaveLength(0);
+    seedAttendees(event.id);
+    expect(snapshot(event.id).requests).toHaveLength(2);
+    const sizeId = snapshot(event.id).definitions.find((d) => d.key === "variant_size")!.id;
+    const late = submitRsvp(event.id, { party: { contact: { email: "c@d.co" } }, guests: [{ display_name: "Casey Park", status: "going", answers: { [sizeId]: "m" } }] });
+    const row = snapshot(event.id).requests.find((r) => r.guest_id === late.guest_ids[0])!;
+    expect(row).toBeDefined();
+    expect(row.definition_ids).not.toContain(sizeId);
+    expect(row.complete).toBe(false);
+    expect(snapshot(event.id).requests).toHaveLength(3);
+  });
+
   it("refuses a time that is not HH:MM on the question the time field created", () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);

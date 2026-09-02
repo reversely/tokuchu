@@ -98,3 +98,35 @@ integrations/customily/README.md (to the two-tool contract #11 implements), docs
 and step copy). Deleted docs/webmp-integration.md (the earlier task brief). Left untouched:
 docs/architecture.html (untracked, describes the vendor-agent design; superseded). Tickets #10–#16 carry
 the code changes; the code still implements the previous tools until they close.
+
+## 2026-09-02 — Autonomous ticket run
+
+Base committed as 61d8341 (docs rewrite + the earlier iteration's Attendees tab, request-fields,
+handoff page, tutorial mode). GIFs in docs/media/ stay untracked (pre-commit large-file hook); #7
+re-captures them. Worktree agents branch from the commit they see; the first wave branched from
+ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a time, accuracy over speed.
+
+- #3 landed as 5068a55 (cherry-pick of c62f721). Suite 137 passed / 7 skipped.
+- #11 landed as 68deebc (cherry-pick of f7afe5e; README conflict resolved to the worktree side). Live
+  test passed from main: two lines, checkout_url opens in a fresh context with both names, replay adds
+  nothing. Open: the Customily production-file question (no order placed); the time field's property
+  label ("Pick a time for Star Map 1") is a guess since the widget names no input for it.
+- #10 landed as 0c8c68d (cherry-pick of 90432d7; doc conflicts resolved to main, code to the worktree).
+  Suite 119 passed / 5 skipped. Fast Playwright: 14 pass; tests/webmcp.spec.ts fails on a tool-name
+  list that has been out of date since the initial commit (14 tools, spec lists 13); #13 rewrites it.
+  The dietary library row is un-seeded (seed: false) rather than deleted, so the draft's required-choice
+  publish blocker keeps a path.
+- #13 landed as df1d15f (cherry-pick of 9b58cd0). Landing #10 had regressed tests/flow-demo.spec.ts to
+  its pre-checkpoint step 3 (I took the worktree's whole file); #13's copy restored it and #10's two
+  edits were re-applied by hand. Gate: 124 vitest, 15 fast Playwright (webmcp.spec green again).
+  Name rule: a library-seeded printed_name does not override the display name; an organizer-created one does.
+- #4 landed as ae7cbd1 (cherry-pick of 4fbf0d9; conflicts in api.ts imports and the request-fields
+  route resolved by hand; #13's follow-up route wrapped too). Tests run on PGlite; prod uses pg via
+  DATABASE_URL; no DATABASE_URL outside production falls back to memory with one warning. Known limit:
+  two concurrent writes to one event are last-write-wins. Gate: 133 vitest, 15 fast Playwright.
+- Screenshot gate on #13 (docs/progress/2026-09-02-issue-13-attendees-requests.png) found two defects:
+  the library-seeded printed_name shows "missing" on every row while the chip says the name comes from
+  the RSVP (filed #18); an attendee who replies after the request was sent never gets a request row
+  (fixed next as fix(requests)).
+- fix(requests): a gift records requested_at when the organizer requests; each RSVP write then issues the
+  request to going attendees without a row. Verified on screen (docs/progress, after-fix capture).

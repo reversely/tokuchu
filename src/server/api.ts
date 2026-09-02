@@ -387,7 +387,7 @@ export function requestFromAttendees(eventId: string, giftId: string) {
         }
       }
     }
-    updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows } as Partial<GiftInput>);
+    updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows, requested_at: gift.requested_at ?? new Date().toISOString() } as Partial<GiftInput>);
     const asked = askedDefinitionIds(resolved, definitionsFor(eventId));
     for (const guest of listGuests(eventId, GOING)) {
       const missing = missingDefinitionIds(guest, asked);
@@ -410,6 +410,27 @@ export function followUp(eventId: string, giftId: string) {
     console.info(`Follow-up to ${guest.display_name}: ${attendeeLink(event, guest)}`);
   }
   return snapshot(eventId);
+}
+
+/**
+ * Issues a gift's request to every going attendee who has no request row and lacks an answer. It runs
+ * after each RSVP write for every gift whose request has gone out (`requested_at`), so an attendee who replies
+ * after the organizer's request still receives one.
+ */
+export function requestFromLateAttendees(eventId: string): void {
+  const event = requireEvent(eventId);
+  for (const gift of giftsFor(eventId)) {
+    if (!gift.requested_at) continue;
+    const requested = new Set(requestsFor(eventId, gift.id).map((r) => r.guest_id));
+    const asked = askedDefinitionIds(giftRequirements(eventId, gift.id), definitionsFor(eventId));
+    for (const guest of listGuests(eventId, GOING)) {
+      if (requested.has(guest.id)) continue;
+      const missing = missingDefinitionIds(guest, asked);
+      if (!missing.length) continue;
+      upsertRequest(eventId, guest.id, gift.id, missing);
+      console.info(`Request to ${guest.display_name}: ${attendeeLink(event, guest)}`);
+    }
+  }
 }
 
 /** Every request on the event with, per question, whether the attendee has answered it. */
@@ -542,6 +563,7 @@ export function submitRsvp(eventId: string, body: unknown) {
     for (const [definitionId, raw] of Object.entries(g.answers ?? {})) writeAnswer(eventId, guest, definitionId, raw, "guest");
     return guest;
   });
+  requestFromLateAttendees(eventId);
   afterRsvpWrite(eventId);
   return { party_id: created.party?.id ?? guests[0]?.party_id ?? null, guest_ids: guests.map((g) => g.id) };
   });
@@ -571,6 +593,7 @@ export function patchRsvp(eventId: string, guestId: string, body: unknown) {
   for (const [definitionId, raw] of Object.entries(parsed.data.answers ?? {})) writeAnswer(eventId, guest, definitionId, raw, parsed.data.source);
   for (const [segment, present] of Object.entries(parsed.data.attendance ?? {})) guest = setGuestAttendance(guestId, segment, present);
   if (parsed.data.status) guest = setGuestStatus(guestId, parsed.data.status, parsed.data.source);
+  requestFromLateAttendees(eventId);
   afterRsvpWrite(eventId);
   return { ...guest, values: valuesFor(guest) };
   });
