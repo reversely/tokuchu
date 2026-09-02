@@ -59,3 +59,44 @@ export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolC
   }
   return { supported: true, toolNames: organizerTools.map((t) => t.name) };
 }
+
+/**
+ * Registers the vendor-scoped tools on `document.modelContext` for one gift token, so a vendor agent
+ * reads the manifest and posts status over WebMCP (document.modelContext), not a raw JSON-RPC call.
+ * Each tool is fulfilled against the token-scoped endpoint, so a token only ever sees what it may.
+ */
+export async function registerVendorTools({ eventId, token, fetchImpl, signal, onToolCall }: { eventId: string; token: string; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
+  const modelContext = document.modelContext;
+  if (!modelContext) return { supported: false };
+  const doFetch = fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const vendorTools = TOOLS.filter((t) => t.scopes.includes("vendor"));
+  for (const tool of vendorTools) {
+    await modelContext.registerTool(
+      {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        execute: async (args, options) => {
+          const started = Date.now();
+          let result: ToolResult;
+          try {
+            const response = await doFetch(`/api/events/${encodeURIComponent(eventId)}/mcp`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: tool.name, arguments: (args ?? {}) as ToolArgs } }),
+              signal: options?.signal
+            });
+            const body = (await response.json()) as { result?: ToolResult; error?: { message: string } };
+            result = body.error ? textResult({ error: body.error.message }, true) : (body.result ?? textResult({ error: "no result" }, true));
+          } catch (cause) {
+            result = textResult({ error: cause instanceof Error ? cause.message : String(cause) }, true);
+          }
+          onToolCall?.({ name: tool.name, args: (args ?? {}) as ToolArgs, result, ok: !result.isError, duration_ms: Date.now() - started });
+          return result;
+        }
+      },
+      { signal }
+    );
+  }
+  return { supported: true, toolNames: vendorTools.map((t) => t.name) };
+}

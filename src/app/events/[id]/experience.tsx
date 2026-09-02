@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Snapshot } from "./dashboard";
 import type { Scored } from "../../../agent/search";
 import cards from "../../../agent/cards.json";
@@ -18,6 +18,22 @@ type Recipients = "going" | "going_maybe" | "everyone";
 const RECIPIENT_FILTERS: Record<Recipients, { field: string; op: string; value?: unknown }[]> = { going: [{ field: "status", op: "eq", value: "going" }], going_maybe: [{ field: "status", op: "in", value: ["going", "maybe"] }], everyone: [] };
 const RECIPIENT_LABEL: Record<Recipients, string> = { going: "Guests going", going_maybe: "Going and maybe", everyone: "Everyone invited" };
 const STATUS_LABEL: Record<GuestStatus, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
+
+/** A line icon per gift category, drawn in the card so the four choices read at a glance. */
+const CARD_ICONS: Record<string, ReactNode> = {
+  gift_sets: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="18" height="13" rx="1" /><path d="M3 12h18M12 8v13" /><path d="M12 8C9 8 7 6.5 7 5.2 7 4.3 7.8 4 8.5 4c2 0 3.5 4 3.5 4Zm0 0c3 0 5-1.5 5-2.8 0-.9-.8-1.2-1.5-1.2-2 0-3.5 4-3.5 4Z" /></svg>
+  ),
+  food_drink: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V8Z" /><path d="M16 9h2.5a2.5 2.5 0 0 1 0 5H16" /><path d="M8 3v2M11 3v2M14 3v2" /></svg>
+  ),
+  apparel: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 3 4 6l2 3.2 2-1.1V21h8V8.1l2 1.1L20 6l-4.5-3-1.4 1.6a3 3 0 0 1-4.2 0L8.5 3Z" /></svg>
+  ),
+  stationery: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4" /><path d="M9 12h6M9 16h4" /></svg>
+  )
+};
 
 type GiftWithQuantities = Snapshot["gifts"][number];
 
@@ -127,7 +143,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     try {
       const source = editing ?? chosen;
       if (!source) throw new Error("No product chosen");
-      const variants = editing ? editing.variants : chosen!.variants.map((v) => ({ id: v.id, title: v.title, price_cents: v.price_cents, currency: v.currency }));
+      const variants = editing ? editing.variants : chosen!.variants.map((v) => ({ id: v.id, title: v.title, price_cents: v.price_cents, currency: v.currency, available: v.available, options: v.options }));
       const rows = Object.entries(mapping).filter(([, variantId]) => variantId).map(([key, variantId]) => { const [definition_id, value] = key.split("|"); return { definition_id, value, variant_id: variantId! }; });
       const recipientsFilter = RECIPIENT_FILTERS[recipients];
       const body = { product_id: editing ? editing.product_id : chosen!.product_id, shop_domain: editing ? editing.shop_domain : chosen!.shop_domain, product_title: editing ? editing.product_title : chosen!.title, recipients: recipientsFilter, rules: [{ filter: recipientsFilter, product_id: editing ? editing.product_id : chosen!.product_id }], mapping: rows, default_variant_id: defaultVariant, variants, missing_value_fallback: fallback, post_lock_cancellation: postLock, delivery_window: editing ? (editing.delivery_window ?? null) : (chosen!.delivery?.window ?? null), personalization: editing ? (editing.personalization ?? null) : (chosen!.personalization ?? null) };
@@ -348,7 +364,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
             <div className="cats" data-testid="cards">
               {cards.cards.map((c) => (
                 <button key={c.key} type="button" className="cat" onClick={() => search({ card: c.key })} disabled={!!busy || !target.needed_by} data-testid={`card-${c.key}`}>
-                  <span className="ph" />
+                  <span className="ph" aria-hidden="true">{CARD_ICONS[c.key]}</span>
                   <span>{c.label}</span>
                 </button>
               ))}

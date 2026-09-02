@@ -242,9 +242,65 @@ export function deleteGift(eventId: string, giftId: string) {
 /** The admin approves the collected attendee specs for the vendor. Locking the values freezes each
  * attendee's answers so a later edit cannot diverge from what was sent. */
 export function approveSpecs(eventId: string, giftId: string) {
-  requireGift(eventId, giftId);
+  const gift = requireGift(eventId, giftId);
   lockGift(giftId, new Date().toISOString().slice(0, 10));
+  // The organizer reviews what the handoff filled at the vendor's cart; record the link once, on approval.
+  if (!gift.checkout_url && gift.shop_domain) updateGift(giftId, { checkout_url: `https://${gift.shop_domain.replace(/^https?:\/\//, "")}/cart` } as Partial<GiftInput>);
   return giftView(eventId, giftId);
+}
+
+/** An option label as a stable value token, matching the invite form's option values. */
+function slugValue(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
+}
+
+export type Requestable = { key: string; label: string; value_type: ValueType; options?: { value: string; label: string }[]; already: boolean; source: "variant" | "personalization" };
+
+/**
+ * The per-attendee questions a curated gift implies, derived from the product the search read so the
+ * choices come from the store, not a fixed list: the product's variant option (Size) as a choice, and
+ * a text field for the name the vendor prints. `already` marks the ones the event already asks.
+ */
+export function giftRequestables(eventId: string, giftId: string): Requestable[] {
+  const gift = requireGift(eventId, giftId);
+  const has = (key: string) => definitionsFor(eventId).some((d) => d.key === key);
+  const out: Requestable[] = [];
+  const byOption = new Map<string, Map<string, string>>();
+  for (const v of gift.variants ?? []) for (const o of v.options ?? []) {
+    if (!byOption.has(o.name)) byOption.set(o.name, new Map());
+    byOption.get(o.name)!.set(slugValue(o.label), o.label);
+  }
+  const optionName = [...byOption.keys()].find((n) => /size/i.test(n)) ?? [...byOption.entries()].find(([, m]) => m.size > 1)?.[0];
+  if (optionName) {
+    const options = [...byOption.get(optionName)!].map(([value, label]) => ({ value, label }));
+    if (options.length > 1) out.push({ key: `variant_${slugValue(optionName)}`, label: optionName, value_type: "enum", options, already: has(`variant_${slugValue(optionName)}`), source: "variant" });
+  }
+  if ((gift.personalization?.fields ?? []).some((f) => f.kind === "text" || f.kind === "name" || f.kind === "monogram")) {
+    out.push({ key: "printed_name", label: "Name for printing", value_type: "text", already: has("printed_name"), source: "personalization" });
+  }
+  return out;
+}
+
+/**
+ * Creates the guest questions a curated gift implies (giftRequestables) so attendees are asked them,
+ * and wires each variant-choice option to its variant on the gift. The organizer actions this from the
+ * Attendees tab; it persists on the event, and the invite form and the records grid pick it up.
+ */
+export function requestFromAttendees(eventId: string, giftId: string) {
+  const gift = requireGift(eventId, giftId);
+  const mappingRows = [...gift.mapping];
+  for (const r of giftRequestables(eventId, giftId)) {
+    if (r.already) continue;
+    const def = upsertDefinition(eventId, { namespace: "core", key: r.key, label: r.label, scope: "guest", value_type: r.value_type, constraints: r.value_type === "enum" ? { options: r.options } : { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
+    if (r.source === "variant" && r.options) {
+      for (const o of r.options) {
+        const variant = gift.variants.find((v) => (v.options ?? []).some((vo) => slugValue(vo.label) === o.value));
+        if (variant && !mappingRows.some((m) => m.definition_id === def.id && m.value === o.value)) mappingRows.push({ definition_id: def.id, value: o.value, variant_id: variant.id });
+      }
+    }
+  }
+  if (mappingRows.length !== gift.mapping.length) updateGift(giftId, { mapping: mappingRows } as Partial<GiftInput>);
+  return snapshot(eventId);
 }
 
 export function giftView(eventId: string, giftId: string) {

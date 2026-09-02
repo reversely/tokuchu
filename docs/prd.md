@@ -1,257 +1,260 @@
-# Tokuchu: Turn your RSVP list into seamless agentic procurement for events
+# Tokuchu: agentic event procurement over WebMCP
 
 ## 1. Summary
 
-Tokuchu collects attendance for an event and the personalization data each attendee's merchandise needs, then turns that data into orders at WebMCP-enabled Shopify stores. The organizer chooses which products the event will order. Tokuchu reads each product's personalization schema through WebMCP and builds the attendee survey from that schema, so the store defines the questions and the organizer stops authoring them by hand. An attendee signs up through an RSVP link or a ticket link. When the organizer approves the attendee, either automatically or by hand as a setting decides, Tokuchu requests the fields that attendee's items need in one survey, and it merges a field that two products share so a question such as a printed name is asked once. At a cutoff, which the organizer sets to fire when signups close, a fixed period after that, or on a manual trigger, Tokuchu confirms and audits the order list, skips any attendee who did not answer as the non-responder setting decides, and orders the goods from the stores.
+Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled storefronts to coordinate personalized purchases for events. WebMCP lets a web page publish tools: functions with a name, a description, and a JSON Schema for their input, registered on the page's model context, which an agent discovers and calls. Shopify's storefronts publish such tools on every page and answer the same calls over HTTP at each store's UCP endpoint. Tokuchu acts as the agentic orchestration layer over those tools: it consumes the merchant's capabilities, coordinates the attendee information those capabilities require, and uses the resulting structured data to prepare the personalized purchase.
 
-The organizer authorizes the spend once, and Tokuchu can then place the orders within that authorization without further clicks. The secure form of that authorization is a delegated payment token described in Section 9. The demo models attendance, approval, the survey, the cutoff, and a placed test order on a real store, and it shows payment authorization and paid ticketing as future features, so no real money moves.
+The app begins with an RSVP list containing attendees and the information associated with them. The organizer uses the app to source personalized products for those attendees. The app searches Shopify stores through Shopify's existing WebMCP commerce capabilities and returns products that match the organizer's request. The organizer reviews the recommended products and selects the vendor and product to use. The app then calls the merchant's own WebMCP tool, `get_customization`, which returns the merchant-specific customization requirements for the selected product in structured form, so the app holds no predefined field list for any product. The app compares those requirements with the information already associated with each attendee, determines which required values are missing for each attendee, and sends each attendee a request for those values by email. Responses return to the app and attach to the attendee record; the app tracks who has completed the request and follows up where information remains missing. Once every unit's values are complete, the app uses Shopify's existing WebMCP cart functionality, through the merchant's `add_customized_to_cart` tool, to add one configured item per attendee to the merchant's cart. The resulting cart returns to the organizer, who inspects it and completes checkout.
 
-Tokuchu's page registers its records as WebMCP tools, so a browser agent reads and acts on them with the organizer's identity. The same tools serve over HTTP from Tokuchu's server, so a vendor's own agent reads the manifest and the change feed for its batch and posts confirmations, progress, and questions back. A vendor that sells through Shopify reports through its order; a vendor that runs an agent of its own reports through Tokuchu.
+The product is designed around event-scale personalization. The organizer makes one procurement decision for an event, and the app handles the individualized information required to configure the corresponding item for each attendee. The core behavior in one line:
 
-This design keeps the RSVP form as the attendee's survey surface, keeps the `AttributeDefinition` and `AttributeValue` records that store the questions and answers, keeps the WebMCP tool list and the two paths that reach it, and keeps the vendor selection and reporting of Sections 8 and 10. It changes where the survey questions come from: the configured products' personalization schemas, read live through WebMCP, replace a hand-authored question library as the source of what to ask. An organizer-written question becomes an addition to that derived set rather than its origin.
+```
+Find a customizable product
+→ learn what that merchant needs
+→ collect those values from the right attendees
+→ use the completed data to prepare the customized order
+→ return the order to the organizer for review
+```
+
+Tokuchu is built against one specific demo site: a live Shopify store, deployed as a separate component of the project, whose theme carries the merchant tools and whose celestial-map shirt the search surfaces (Section 6). Tokuchu is itself a WebMCP publisher. The organizer's page registers the event's records as tools on its model context, and the same list serves over HTTP to a token holder, so a browser agent or a vendor's agent reads attendees, answers, and the manifest through tool calls. Tokuchu deploys on Render with a Postgres database and a magic-link sign-in.
 
 ## 2. Conventions
 
-- A **record** names a row in Tokuchu's store. Every domain item (a question, a role, a gift plan, an approval, a payment authorization) occupies a row; the code knows eight value types, one filter grammar, and the tool list in Section 6.
-- A **tool** names one definition (name, description, input schema, the API route it maps to) rendered two ways: the page registers it on `document.modelContext`, where a browser agent calls it, and Tokuchu's MCP endpoint at `/api/events/{id}/mcp` serves it, where an agent with a token posts `tools/call`. Both render the same list, and one route sits behind each.
-- A **caller token** names a row that records who holds it (a vendor domain or a person), which event, which definitions it may read, which tools it may call, and when it expires. The organizer's page needs none; every HTTP caller presents one.
-- A **Shopify call** names an HTTP POST from Tokuchu's server to a Shopify MCP endpoint: the Global Catalog at `catalog.shopify.com/api/ucp/mcp` or a shop's own endpoint at `{shop}/api/ucp/mcp`. The body names a tool and its arguments. Shopify makes no call to Tokuchu.
-- A **source** names where discovery finds a product: the Shopify Global Catalog, the print shop, or a configured custom shop. Discovery searches every configured source; Section 10 ranks the results.
-- A **personalization field** names one value a vendor prints on a unit, as the vendor's schema states it: key, label, kind (text, name, monogram, date, location, star_map, color, word_list), required flag, and limits. Tokuchu reads this schema through WebMCP and never hardcodes it.
-- The **survey** names the set of fields Tokuchu asks an approved attendee to fill. Tokuchu derives the survey from the personalization schemas of the products the organizer configured, merging fields that share a key so each question appears once.
-- A **mapping** sends one value into one vendor field: an attendee's survey answer, an event field (title, starts_at, venue), or a literal, with an optional transform (uppercase, lowercase, date_only, location_query). When the survey field key matches the vendor field key, the mapping is implicit.
-- **Attendance** names how a person joins: an RSVP reply, or a ticket. A ticket may be free or paid; a free-ticket holder still receives merchandise, so ticketing gates attendance and does not fund the order.
-- **Approval** names the organizer's decision that an attendee counts toward the order. A setting makes approval automatic on signup or manual per attendee. Approval is the event that triggers that attendee's survey request.
-- The **delivery target** names where the goods ship and by when. A per-event setting sends every unit to one address (the venue or another address the organizer sets) or collects each attendee's own address in the survey and ships to each person.
-- A **payment authorization** names the organizer's standing consent to spend up to an amount at named stores before an expiry. Section 9 describes its secure form. Tokuchu stores the authorization's reference and bounds, never a card number.
-- Money appears in minor units (cents) as Shopify returns it. Dates use ISO form.
-- Section 13 records the decisions taken.
-
-## 3. Measurements of Shopify's agent surface
-
-The room planner's storefront survey and the favor survey in `spikes/favor-vendors/` established what a shop answers.
-
-- Every surveyed shop answers `tools/list` at `{shop}/api/ucp/mcp` with the same thirteen tools: `search_catalog`, `lookup_catalog`, `get_product`, `create_cart`, `get_cart`, `update_cart`, `cancel_cart`, `create_checkout`, `get_checkout`, `update_checkout`, `complete_checkout`, `cancel_checkout`, `get_order`. Each shop requires one credential: a link to a public agent profile document.
-- `search_catalog` takes free text and filters: `ships_to` (an address), `ships_from` (a list of countries the shop is located in), `available`, `price` (min, max), `categories`, `attributes` (Color, Size, Target gender), `price_tier` (low, medium, high within a product's category), `shops`. It returns up to 50 products a page with `total_count`; each product names its seller and its option names.
-- `get_product` returns the full description, every variant with its option values, prices, and availability, and accepts free-text buyer preferences.
-- `create_cart` and `update_cart` take `line_items[] = { item: { id: variant }, quantity }`, a buyer (email, phone), a fulfillment destination, and discount codes. No line carries a note, an attribute, or text.
-- `create_checkout` returns fulfillment options whose titles carry the delivery window; the room planner reads the same field for delivery evidence. `complete_checkout` takes a payment instrument.
-- The checkout's card fields render inside per-field iframes served from `checkout.pci.shopifyinc.com`, so the card data stays with Shopify's payment host and never reaches Tokuchu. Section 9 uses this boundary.
-- The Global Catalog answers 429 after a burst of searches; Tokuchu spaces its calls and retries for up to a minute.
-
-Three consequences follow for a Shopify-fronted order: personalization reduces to variant choice and quantity in the cart; a printed name reaches the vendor outside the cart, through the manifest, the print shop's units, or the custom shop's storefront adapter (Sections 7 and 8); and the cart's contents over time carry everything the shop receives through the cart.
-
-## 4. The user and the loop
-
-The user is an events organizer who runs a recurring event, such as a company symposium or a birthday, and needs each attendee's personalization data collected and turned into vendor orders. In a week she configures the merchandise the event will send, approves the people who sign up, reviews the order list before it goes out, and authorizes the spend. A wrong name on a unit or a missing size costs her a reprint and a late delivery, so the record names who submitted each value and when it locked.
-
-The loop she runs:
-
-1. **Create the event.** She sets the title, date, venue, spots, the RSVP deadline, and the delivery target, then publishes and receives an RSVP or ticket link.
-2. **Configure the merchandise.** She searches the configured stores through WebMCP (Section 10), picks one or more products, and confirms the mapping from event fields and survey answers into each product's personalization fields. Tokuchu reads each product's schema and builds the survey from it.
-3. **People sign up.** Attendees reply through the link. A paid ticket collects money in a future release; a free ticket or an RSVP records attendance now.
-4. **Approve.** Tokuchu approves each attendee automatically or holds them for her, as the approval setting decides. Approval issues that attendee's survey request for the fields their items need.
-5. **Collect the survey.** The attendee fills the merged survey once. Adding a product later can send a follow-up request for only its new fields.
-6. **Cut off, confirm, audit.** At the cutoff she set, Tokuchu freezes the order list, resolves each unit's values, and reports which units are ready, incomplete, or excluded. A non-responder's unit is skipped or held as the setting decides, never guessed.
-7. **Authorize and order.** She authorizes the spend once (Section 9). Tokuchu orders the goods from the stores within that authorization, or she places each order herself.
-8. **Report and deliver.** Each vendor reports progress into the same records, and the goods ship to the target the delivery setting names.
-
-## 5. Organizer and attendee screens
-
-**Draft.** One page holds four sections: Details (title, date and time, host, location, spots, cost per person, RSVP deadline, description); Delivery (one address for every unit, or per-attendee addresses collected in the survey, plus a needed-by date); Merchandise (the products the event will order, each added from the store search of Section 10, with its mapping shown); and Settings (approval automatic or manual, the cutoff trigger, reminders, the non-responder rule, per-attendee shipping). The right column renders the invite from the same data. One button publishes and creates the link.
-
-**Published.** The same page becomes the dashboard with two tabs.
-
-- **Overview.** The tab shows response counts (going, maybe, can't go, no reply) and approval counts (approved, pending); follow-ups (approved attendees with a survey still open, attendees missing a required field, unresolved maybes, unservable attendees); the attendee table; the order summary with each product's unit count and price; and the editable setup sections, which state the delivery target and the cutoff.
-- **Merchandise.** The tab shows each configured product with the survey fields it needs, the unit count per variant, the price, the delivery window, and the cutoff, with Edit, Remove, Send to vendor, Add another product, and an ask bar for questions such as which order confirms first or who is missing a value. The organizer configures a product here through the store search and the mapping review; Section 10 ranks the search.
-
-**Payment.** The dashboard shows a Payment panel where the organizer will authorize the spend. In this release the panel is present and greyed, labeled a future feature, and it moves no money. Section 9 describes the authorization the panel will take.
-
-**Survey.** An approved attendee opens a survey link scoped to them. The form shows the merged fields the configured products need: a text field for a printed name, a select whose options are the store's real variant values for a size, a location and a date for a star map. Every option comes from the store's schema through WebMCP. The attendee edits or resubmits from the same link until the cutoff. A value the cutoff locked rejects a later edit and shows the organizer's chosen path (Section 7, Cancellations).
-
-## 6. Data model and Tokuchu's tools
-
-The model holds eight entities and two derived records.
-
-**Event**: id, type, segments (each with id, name, capacity), venue address, event date, RSVP deadline, cost per person, spots, field definition list, delivery (one address or per-attendee, the address when set, needed-by date), settings (approval mode, cutoff trigger, non-responder rule, per-attendee shipping).
-
-**Party** names the invitation unit: id, guest ids, contact, plus-one allowance.
-
-**Guest**: id, party id, role (a row the organizer creates: guest, plus-one, child, speaker), status, approval (pending, approved, declined), attendance kind (rsvp or ticket), attendance as a map of segment id to boolean, display name.
-
-**AttributeDefinition**: id, namespace (`core`, `organizer`, or `derived`), key, label, scope (guest, party, event), value type, constraints (options, min, max, max length, pattern), default visibility, required rule, creator, and the vendor field it came from when the definition was derived from a product schema. The eight value types cover text, number, boolean, enum, multi_enum, date, file, reference. A derived definition reads its options and limits from the store's schema, so a size question carries the store's real variant values. Validation, form rendering, and aggregation switch on the value type and read everything else from the row.
-
-**AttributeValue**: subject type, subject id, definition id, typed value, source (guest, organizer, or agent), lock (batch id and date, or null), updated timestamp, sequence number.
-
-**Batch** (derived): gift id, product id, shop domain, recipients filter, variant mapping (definition value to variant id), default variant, fallback for a missing value, post-lock cancellation choice, cutoff, `cart_id`, `checkout_id`, `order_id`, `locked_definition_ids`, per-guest unit status: open, locked, unservable, held, excluded, cancelled_reassignable, cancelled_sunk. A personalized product's batch also stores the vendor's field schema and the mappings `set_personalization_mapping` stored; its manifest rows add the resolved value per field, a status (ready, incomplete, invalid), and the issues, each with a code (missing_source, missing_value, invalid_type, too_long, unsupported_value).
-
-**PaymentAuthorization** (future): id, event id, provider reference (a vaulted payment method), the amount cap, the store whitelist, the expiry, the status. Tokuchu stores the reference and the bounds; the card data stays with the provider (Section 9).
-
-**VendorUpdate**: gift id, caller token, kind (confirmed, in_production, shipped, delivered, issue, question, proof), text, expected date, reference (a tracking number or an order number), asset (for a proof), created timestamp, sequence number. Tokuchu records an organizer's reply as a VendorUpdate of kind `reply` with the organizer as caller.
-
-**CallerToken**: id, event id, holder (a vendor domain or a person), gift ids it covers, readable definition ids, callable tools, expiry, the agent profile URL it presented last.
-
-**Change log** (derived): the ordered sequence of writes to AttributeValues, to Guest.status and Guest.approval, and of VendorUpdates, read by sequence number. A vendor needs to see a cancellation, and the organizer needs to see a vendor's confirmation, so the log records both.
-
-Filters use one grammar everywhere: a list of `{field, op, value}` where field holds a structural path (`status`, `approval`, `role`, `attendance.<segment id>`, `party.size`) or a definition id.
-
-The table below lists Tokuchu's tools. Each maps one definition onto the route beside it; the page renders it and the MCP endpoint serves it. The Scope column says which callers may use it.
-
-| Tool | Route | Scope | Returns or does |
-| --- | --- | --- | --- |
-| `get_guest(id, fields[])` | `GET /api/events/:id/guests/:guestId` | organizer | one guest with typed values |
-| `list_guests(filter, fields[])` | `GET /api/events/:id/guests?filter=` | organizer | matching guests |
-| `set_approval(guest_id, decision)` | `POST /api/events/:id/guests/:guestId/approval` | organizer | the approval, and the survey request it issued |
-| `count_by(definition_id, filter)` | `GET /api/events/:id/counts?definition=&filter=` | organizer, vendor (readable definitions only) | per-option counts for enum and multi_enum; sum and quartile buckets for number; true and false counts for boolean |
-| `list_missing(definition_id, filter)` | `GET /api/events/:id/missing?definition=&filter=` | organizer | approved guests with no value |
-| `get_summary(filter, definition_ids[])` | `GET /api/events/:id/summary?...` | organizer, vendor (readable definitions only) | `count_by` for several definitions in one call |
-| `get_manifest(gift_id)` | `GET /api/events/:id/gifts/:giftId/manifest` | organizer, vendor (its gift ids, its readable definitions) | one row per guest: variant, unit status, and the values the token may read; a personalized gift's rows add the resolved field values with their status and issues |
-| `get_changes(since_seq)` | `GET /api/events/:id/changes?since=` | organizer, vendor (entries visible to it) | the change log after a sequence number |
-| `search_gifts(card?, sentence?)` | `POST /api/events/:id/search` | organizer | the ranked candidates from every source, the excluded ones with the rule that excluded each, and the funnel per search |
-| `configure_product(product_id)` | `POST /api/events/:id/gifts` | organizer | the gift plan for the product, and the survey fields its schema derived |
-| `set_gift_plan(gift_id, rules[])` | `PATCH /api/events/:id/gifts/:giftId` | organizer | the derived quantities per variant |
-| `set_personalization_mapping(gift_id, mappings[])` | `POST /api/events/:id/gifts/:giftId/personalization` | organizer | the stored mappings, or the validation errors to fix |
-| `send_to_vendor(gift_id)` and `approve(gift_id)` | `POST .../send`, `POST .../approve` | organizer | the priced proposal; the approval |
-| `post_update(gift_id, kind, text, expected_date?, reference?, asset?)` | `POST /api/events/:id/gifts/:giftId/updates` | vendor (its gift ids), organizer (kind `reply`) | the update as recorded, with its sequence number |
-| `get_updates(gift_id, since_seq?)` | `GET /api/events/:id/gifts/:giftId/updates` | organizer, vendor | the thread for one gift |
-
-In the page the organizer acts as caller and needs no token. Over HTTP every call carries a token, and Tokuchu checks the token's readable definitions, gift ids, and callable tools on every call, so a definition's visibility list binds vendors. A vendor token holds no tool that spends money.
-
-## 7. Deriving the survey and resolving the order
-
-**Deriving the survey.** When the organizer configures a product, `configure_product` reads the product's personalization schema through WebMCP: the print shop's `get_design`, the custom shop's storefront `get_personalization_schema`, or a Shopify product's variant option names from `get_product`. Each field the schema names becomes an `AttributeDefinition` in the `derived` namespace, carrying the store's real options and limits, so a size question offers the store's variant values and a name question carries the store's length limit. Configuring a second product adds only the fields the first did not already cover: two products that both name a printed name share one definition by key, so the survey asks it once. The merged set of derived definitions is the survey.
-
-**Issuing the survey.** Approving an attendee (`set_approval` with `approved`, or the automatic path the setting names) marks the attendee approved and issues a survey request for the definitions their configured products need. The request reaches the attendee through the reminder channel in Settings; email delivery is the channel, and it ships in the same future release as payment authorization, so the demo issues the per-attendee survey link and shows it in the app.
-
-**Variant mapping.** When the organizer selects a Shopify product, its option values arrive from `get_product`. Tokuchu matches each option value to a survey answer by label through a synonym table; Tokuchu shows an unmatched option to the organizer to map by hand or leave as the default variant. This step makes no model call.
-
-**Personalization mapping.** `set_personalization_mapping` validates each row against the product's field schema and the event's definitions before storing: the field must exist, every required field must have a mapping, a definition source must exist and match the field's scope, the source's value type must fit the field's kind, and a transform must fit its source. Each failure returns a code (unknown_field, unmapped_required, unknown_definition, scope_mismatch, incompatible_type, incompatible_transform) and a message naming the row. The kind and transform compatibility tables are data rows in the code, so a new kind or transform is a row, not a branch. When a survey field key matches a vendor field key, Tokuchu writes the mapping without asking.
-
-**Resolution.** Each manifest read resolves every mapped field per approved guest: the source's raw value (the attendee's answer, the event field, or the literal), then the transform, then the field's checks (a date field needs an ISO date, a word_list needs words, a length limit, an allowed-value list). A row grades ready when every field resolves, incomplete when a source or value is missing, and invalid when a value fails its field. A missing value passes through a transform untouched, so the issue names the real cause.
-
-**Quantity and variant derivation.** A batch's recipients filter (default `status = going AND approval = approved`) selects guests. The quantity per variant counts the matches mapped to that variant; a guest with no value takes the default variant or the organizer's fallback, or the non-responder rule skips the unit. Counts recompute on every write until the cutoff, and each recompute that changes a quantity queues one `update_cart`.
-
-**The cutoff.** The cutoff fires when signups close, a fixed period after that, or on the organizer's manual trigger, as the setting names. At the cutoff Tokuchu freezes the order list, marks every value a batch reads as locked through `locked_definition_ids`, and audits each unit as ready, incomplete, or excluded. A locked value rejects a later attendee edit and shows the organizer the change path. A non-responder's unit is skipped or held as the non-responder rule decides, and the audit names each skipped unit and its attendee.
-
-**Cancellations.** A status change to can't go or a withdrawn approval appends a change-log entry. Before the cutoff it lowers the variant's quantity and queues `update_cart`. After the cutoff the organizer's choice on the plan screen applies: keep the unit (cancelled_sunk), reassign it to a maybe (cancelled_reassignable), or drop it when the checkout's terms allow.
-
-## 8. The loop call by call
-
-The loop uses three kinds of call: a WebMCP tool call in the page, a Tokuchu API call on the same origin, and a Shopify call from server to shop.
-
-**Draft, publish, signups, approval.** `POST /api/events`, `POST .../publish`, then attendees `POST .../rsvp` and `PATCH .../rsvp/:guestId`, and the organizer `POST .../guests/:guestId/approval` or the automatic path. Approving a guest issues the survey request. The dashboard polls `GET /api/events/:id` for the snapshot. This stage makes no Shopify call.
-
-**Configuring merchandise.** The Merchandise tab sends `POST /api/events/:id/search` with a card key or a sentence; the discovery search of Section 10 answers with ranked candidates. The organizer picks a product; `configure_product` reads its schema and derives the survey fields; `set_personalization_mapping` stores the mapping, implicit where keys match.
-
-**Collecting the survey.** Each approved attendee opens their survey link and submits answers through `PATCH .../rsvp/:guestId`, which writes the derived-definition values. Adding a product after some attendees answered issues a follow-up request for only the new fields.
-
-**Cutoff and audit.** At the cutoff Tokuchu freezes the list, locks the values, and produces the manifest with each unit's status and issues. The Overview shows the ready, incomplete, and excluded counts and names each skipped attendee.
-
-**Sending and keeping a Shopify cart current.**
-
-1. `POST .../send`: the agent calls `create_cart` at the shop with one line per variant at its quantity, the organizer's email and phone as buyer, and the delivery target as destination. The priced cart comes back; Tokuchu stores `cart_id` and shows the proposal.
-2. `POST .../approve`: the organizer approves the plan; Tokuchu sets the lock date from the delivery window and the vendor's lead time.
-3. Until the lock date, every write that changes a quantity triggers `update_cart`; `get_cart` on each poll detects a dropped line and raises a follow-up.
-4. At the cutoff: `create_checkout` from the cart; values lock; the order is placed as Section 9 describes. Tokuchu stores `checkout_id`.
-5. After the order: `get_order` on each poll; the dashboard shows the status.
-
-**An order on a print-shop design.** The same send, approve, and sync operations run through the shop's tools instead of a cart. Send builds one unit per counted manifest row, calls `create_batch`, and orders it when `validate_units` finds no issue; a unit the shop cannot print becomes an Overview follow-up naming the attendee. Approve accepts the proof and locks the plan, including the printed-name definition so a later edit cannot diverge from the approved proof. Each poll reads the shop's `get_changes` and writes the new entries into the gift's thread.
-
-**Personalized units on the custom shop.** For a product on the custom shop, the vendor execution agent (`scripts/personalize-agent.ts`) reads the personalized manifest from Tokuchu's MCP endpoint and produces the whole batch on the live storefront through the Customily adapter's three batch tools (`get_personalization_schema`, `validate_personalized_batch`, `create_personalized_batch`). It configures one unit per ready row, reloading the product page between units so each Customily location control resolves on a fresh page, and it posts one update carrying the checkout URL and the per-recipient preview URLs. The tools accept a Shopify GID or a bare product id. Section 9 describes the order the run then places.
-
-**Vendor progress, both directions.** Once a batch is approved, the organizer or Tokuchu issues a token for that gift. A Shopify shop reports through `get_order`; a vendor with its own agent posts `get_manifest`, `get_changes`, and `post_update` on its own schedule, and the organizer's replies return on the vendor's next `get_changes`. The dashboard shows one thread per gift. An organizer reply on a print-shop gift forwards to the shop's `post_message`, so the shop's own thread carries it.
-
-## 9. Payments and spend authorization
-
-Two movements of money reach an event: the organizer pays the vendor for the merchandise, and, in a future release, attendees pay for tickets. One rule governs both: Tokuchu never stores or reads a card number. The card is captured by a payment provider whose fields Tokuchu never renders, and Tokuchu holds only a reference, a status, and the bounds the organizer set.
-
-**Paying the vendor.** The secure form uses a delegated payment token under the Agentic Commerce Protocol, which OpenAI, Stripe, and Meta maintain, and which Shopify's Universal Commerce Protocol composes with through the Agent Payments Protocol. The sequence:
-
-1. **Authorize once.** The organizer saves a payment method in the provider's hosted fields and sets a mandate: an amount cap, a store whitelist, and an expiry. Tokuchu stores the provider reference and the mandate as a `PaymentAuthorization` record. No card number reaches Tokuchu.
-2. **Request a scoped token.** At the cutoff, for the confirmed order list, Tokuchu asks the provider for a Shared Payment Token scoped to the vendor and the batch amount, at or under the mandate cap, with an expiry. The token is single-use and constrained by that amount and expiry.
-3. **Complete the vendor checkout with the token.** Tokuchu hands the token to the vendor's UCP checkout, and the vendor's payment provider charges a payment intent from the token. No card is typed.
-4. **Reconcile.** Order confirmations and status arrive by webhook; Tokuchu records the order id and status. Steps 2 to 4 run within the mandate, so unattended ordering cannot exceed the amount, the stores, or the expiry the organizer set, and the organizer can revoke the mandate.
-
-Step 3 depends on the vendor store accepting a delegated payment token over UCP. When a store offers that path, Tokuchu orders unattended within the mandate. When a store offers only its standard checkout, the secure alternative is the organizer completing the store's own hosted checkout, whose card fields render in Shopify's PCI iframes (Section 3), so Tokuchu still never sees the card; the organizer completes that path by hand.
-
-**Collecting from ticket buyers.** A paid ticket routes through Stripe Connect, whose hosted checkout keeps Tokuchu out of PCI scope and pays out to the organizer. A free ticket collects no money, and a free-ticket holder still receives merchandise, so ticket sales and the merchandise order stay separate.
-
-**In this release.** The Payment panel is present and greyed, and it moves no real money. The demo places its order on a store in test mode, where Shopify's own test card completes the checkout, so the loop reaches a placed order without a real charge. Real payment authorization, the delegated token, and paid ticketing ship as the future features the panel names.
-
-## 10. Product discovery and ranking
-
-Discovery finds the products the organizer configures. It runs in two stages over every configured source, and it ranks the results so the organizer picks from the top. In this release the sources are the Shopify Global Catalog, the print shop, and the organizer's own custom shop behind `CUSTOMILY_SHOP_URL`; the search discovers WebMCP stores, and the custom-shop source is scoped to the organizer's store because it answers the UCP and Customily endpoints.
-
-### Inputs
-
-- Event record: the delivery target (the address and the needed-by date), cost per person, the approved count.
-- Organizer intent: a card or a sentence. A card marked personalized, or a sentence naming a name or a personalized item, marks the request personalized, and the coverage term of Stage 2 reads that mark.
-- The configuration row: delivery buffer in days (3), lead-time cap in days (14), the term weights.
-- Per candidate, from its source: variants and option values, the delivery window or the refusal, the seller's policy links, availability.
-
-### Stage 1: eligibility
-
-A product passes only if every rule holds, and the first failing rule is the reason the results screen gives.
-
-1. Ships to the target: a checkout probe the shop refused excludes the product, with the shop's message as the reason.
-2. Delivery: a probe that returned a window passes only when the window's latest date plus the buffer falls on or before the needed-by date. A probe that returned no window leaves the product eligible with delivery unknown and a scoring penalty.
-3. Price: the unit price falls at or under the budget.
-4. Availability: at least one variant is available.
-
-Quantity limits surface later: Shopify publishes no minimum or maximum, so a `create_cart` error at send time signals the limit, and the print shop's `quote_batch` refuses below its minimum before ranking.
-
-### Stage 2: scoring
-
-Each eligible product receives a score from weighted terms, each normalized to 0 to 1:
-
-- Coverage: for a personalized request, 1 when the candidate carries a personalization field of kind name and 0 otherwise, so a product that cannot print the name ranks below one that can; for any other request, 1 (weight 30).
-- Lead-time margin: days between the window's latest date and the needed-by date, capped at 14; 0 when the window is unknown (weight 25).
-- Price fit: 1 when the unit price is between 60% and 100% of the budget, falling to 0 at a price of nothing, 0 above the budget (weight 20). The amount is a budget to spend, so a cheaper product does not outrank one that uses it.
-- Delivery confidence: 1 for a dated window from the checkout, 0.5 for a duration, 0 for unknown (weight 15).
-- Cancellation terms: 0.5 when the seller carries a refund-policy link, 0 otherwise (weight 10).
-- Seller signal: 0.4 for a public shop URL, 0.3 for four or more policy links, 0.3 for a delivery window from the probe (weight 5).
-
-Weights live in the cards configuration row. The top five fill the results screen; Show 5 more extends the list.
-
-### Assignment and resolution
-
-A gift plan holds an ordered list of rules, each a filter in the standard grammar and a product. The first rule whose filter matches a guest assigns that guest's product. The default plan carries one rule: `status = going AND approval = approved` receives the configured product. Section 7 resolves each guest's variant and unit status on every read, and the organizer can override a guest's product or variant in the attendee table.
-
-## 11. The category cards and the catalog
-
-The Merchandise tab offers four cards (Gift sets, Food & drink, Apparel, Stationery) and a sentence box. Each card maps to a configuration row holding one or more searches: a query string and, where one fits, a Shopify taxonomy id in the `categories` filter. The favor survey in `spikes/favor-vendors/` ran 24 queries for New York (shops located in the US) and for Toronto (shops located in Canada, shipping to M6H), and the stationery survey in `spikes/stationery/` ran the personalization queries.
-
-**The `categories` filter takes taxonomy ids.** Shopify's Standard Product Taxonomy ids returned matches where the category names returned nothing: `ae-2-1` (Party Supplies), `fb` (Food, Beverages & Tobacco), `aa` (Apparel & Accessories), `os` (Office Supplies), `tg` (Toys & Games), `hg` (Home & Garden), `bu` (Bundles). A result carries no category field of its own, so the caller sends the id and cannot learn it from a result. `price_tier` returns a different slice of the same query per tier.
-
-| Card | Searches (query, taxonomy id) | Sources |
+- **WebMCP** names the browser API by which a page registers tools on `document.modelContext` (or `navigator.modelContext`) with `registerTool`, and an agent lists them with `getTools` and runs one with `executeTool`. A browser with native support provides the model context; otherwise a polyfill script loaded before the page's own scripts provides it.
+- A **tool** names one registered function: a name, a description, an input schema in JSON Schema, an optional output schema, and an execute function. A **tool call** names one invocation with arguments that fit the input schema, returning content and structured content.
+- An **agent** names the caller of tools. In this document the agent is Tokuchu's server driving a headless browser page, Tokuchu's curation agent running a language model with tool wrappers, or a browser agent acting on the organizer's page.
+- A **store** names a Shopify storefront that publishes WebMCP tools. Its **page tools** register on every page's model context. Its **UCP endpoint** at `{shop}/api/ucp/mcp` answers the same tool calls as JSON-RPC from a server.
+- A **merchant tool** names a page tool the merchant adds to the theme beyond Shopify's own: `get_customization` and `add_customized_to_cart`.
+- A **customization requirement** names one value the merchant needs to make a unit, as `get_customization` states it: key, label, kind (text, name, location, date, time, image), required flag, and constraints (a maximum length, an allowed set).
+- A **record** names a row in Tokuchu's database. A **question** names an `AttributeDefinition` record: one value Tokuchu asks an attendee for, with a value type and constraints. An **answer** names an `AttributeValue` record for one attendee and one question.
+- A **source** for a requirement names where its value comes from: an answer the attendee gave, a field of the event (the venue, the date), or a literal the organizer typed.
+- A **request** names the set of questions Tokuchu sent to one attendee, with the time it was sent and the answered state of each question.
+- A **unit** names one configured item for one attendee: a variant plus a value per requirement.
+- Money appears in minor units as Shopify returns it. Dates use ISO form.
+
+## 3. The three WebMCP uses
+
+The app uses WebMCP in three connected parts of the same workflow.
+
+1. **Product discovery.** The app uses Shopify's existing WebMCP functionality to retrieve products from Shopify storefronts that may satisfy the organizer's procurement request. It calls `search_catalog`, `lookup_catalog`, and `get_product` at the Global Catalog and at each store's UCP endpoint, so it works with storefronts through the commerce capabilities Shopify already exposes (Section 11).
+2. **Product-specific customization discovery.** The selected merchant exposes its own WebMCP tool, `get_customization`, which returns the specific customization inputs the chosen product requires. For the celestial-map shirt this includes the required name, location, and time values and their constraints, such as the name remaining under 20 characters. This merchant tool extends the standard Shopify commerce capabilities with information specific to the merchant's product and fulfillment process, and it lets the merchant communicate its own fulfillment requirements to the app in structured form (Section 9).
+3. **Customized cart creation.** After the app has collected the required customization data from attendees, it uses Shopify's existing cart functionality, through the merchant's `add_customized_to_cart` tool, to create the configured cart items. The app therefore uses information retrieved from the merchant's tool together with attendee responses to execute the order through Shopify (Section 10). The merchant tool wraps Shopify's cart endpoint because Shopify's own cart tools carry a variant and a quantity per line and no text (Section 5).
+
+The full app flow:
+
+```
+RSVP list
+    ↓
+Organizer requests personalized products
+    ↓
+App searches Shopify storefronts through WebMCP
+    ↓
+Relevant products are returned
+    ↓
+Organizer selects a vendor and product
+    ↓
+App calls the merchant's get_customization WebMCP tool
+    ↓
+Merchant returns the exact customization fields it requires
+    ↓
+App compares those requirements with existing attendee data
+    ↓
+Missing attendee-specific values are identified
+    ↓
+App sends attendees forms requesting the missing information
+    ↓
+Attendee responses return to the app
+    ↓
+App tracks completion and follows up where necessary
+    ↓
+All required customization values are assembled
+    ↓
+App uses Shopify WebMCP to populate customized cart items
+    ↓
+Completed cart is returned to the organizer
+    ↓
+Organizer reviews and checks out
+```
+
+## 4. The organizer and the loop
+
+The organizer runs a recurring event, such as an annual symposium, and orders one personalized item per attendee. In one week the organizer publishes the event, chooses the item, and collects answers as replies arrive. A wrong name or size on a unit costs them a reprint and a late delivery, so every answer records who gave it and when.
+
+The loop the organizer runs:
+
+1. **Sign in and create the event.** The organizer sets the title, the date, the venue, the spots, the RSVP deadline, and the delivery target, then publishes. Publishing creates the link attendees reply through.
+2. **Request personalized products.** The organizer types a sentence such as "personalized star map crewnecks with each attendee's name". The app calls the catalog tools and shows ranked products with the store each came from.
+3. **Select the vendor and product.** The organizer picks one. The app calls that store's `get_customization` and records the requirements the product carries.
+4. **Review what will be asked.** The app shows each requirement with its source: a value the RSVP already holds, a value the organizer maps to an event field, or a question for the attendee. The organizer confirms.
+5. **Attendees answer.** Each attendee with a missing value receives an email carrying their own link to a form with the fields the selected product requires. The organizer watches the records grid fill, one row per attendee and one column per requirement, and the app follows up with whoever has not answered.
+6. **Approve.** When every unit is complete, the organizer approves. The app calls `add_customized_to_cart` with one item per attendee and shows the checkout link the tool returned.
+7. **Review and check out.** The organizer opens the link, inspects the populated cart with one line per attendee, and completes the store's checkout. The app reads the order and its fulfillment state afterward through Shopify's Admin API and shows them on the dashboard.
+
+## 5. What the store provides
+
+**Shopify's UCP endpoint.** Every surveyed store answers `tools/list` at `{shop}/api/ucp/mcp` with thirteen tools: `search_catalog`, `lookup_catalog`, `get_product`, `create_cart`, `get_cart`, `update_cart`, `cancel_cart`, `create_checkout`, `get_checkout`, `update_checkout`, `complete_checkout`, `cancel_checkout`, `get_order`. Each call carries a link to a public agent profile document. The Global Catalog at `catalog.shopify.com/api/ucp/mcp` answers the same search across stores. Tokuchu's discovery (Section 11) calls these from the server.
+
+**Shopify's page tools.** The store's pages load Shopify's storefront WebMCP script, which registers ten tools on `document.modelContext`: `browse_store`, `search_catalog`, `get_product`, `show_variant`, `get_cart`, `update_cart`, `cancel_cart`, `proceed_to_checkout`, `manage_orders`, and `search_shop_policies_and_faqs`. The script registers them only when a model context exists before it runs, so a headless driver injects the polyfill first.
+
+**What a Shopify cart line carries.** A UCP line item holds an id, an item, a quantity, and totals. The page tool `update_cart` takes a variant id and a quantity. Neither carries a text value, so a printed name reaches the store through the merchant tool below, which adds the line with Shopify's cart endpoint and the values as line item properties.
+
+**The merchant tools.** The theme registers two more tools on every page:
+
+| Tool | Input schema | Returns |
 | --- | --- | --- |
-| Gift sets | "gift sets" with `bu`; "party favors" with `ae-2-1` | shopify |
-| Food & drink | "dessert box gift", "cookie favors", "chocolate favor box" with `fb` | shopify |
-| Apparel | "tote bag gift", "t-shirt favors" with `aa` | shopify, customshop |
-| Stationery | "sticker sheet", "stationery gifts", "personalized stationery" with `os` | shopify, printshop |
+| `get_customization` | `{ product_id }` | the requirements with their kinds and constraints, read from a product metafield the theme exposes, and the live variants |
+| `add_customized_to_cart` | `{ items[]: { recipient_ref, variant_id, values }, idempotency_key }` | one cart line per item added through `/cart/add.js` with the values as properties, the line keys, and the cart's `checkoutUrl` |
 
-The catalog reads the price ceiling in minor units (cents), the unit it returns prices in, so Tokuchu sends the cost per person in cents. A search for Food & drink to Toronto under $18 returns 74 distinct products, 56 of which pass every rule. Five products in 1,189 New York rows carry an option a name could go in; every other personalized product takes the name somewhere the cart cannot carry, which is why a printed name travels the manifest, the print-shop unit, or the custom-shop adapter rather than a cart line (decision 1 in Section 13).
+`add_customized_to_cart` validates every item against the requirements before adding any: an unknown key, a missing required value, or a value over its maximum length returns the item's issues and adds nothing. A repeated call with the same idempotency key adds nothing and returns the recorded lines.
 
-## 12. Integration tests
+**The shareable cart.** The storefront's session cart resolves as a Storefront API cart, `gid://shopify/Cart/{token}`, whose `checkoutUrl` takes the form `{shop}/cart/c/{token}?key=...`. That URL opens the cart at Shopify's checkout in any browser, with every line and its properties. Measured on the demo store on 2026-09-03: a cart built in one session opened in a fresh browser with both personalized lines shown. Cart permalinks carry properties on the first line only, so they cannot express a multi-attendee cart.
 
-In the page: Playwright opens the dashboard with `?webmcp=polyfill`, and `await document.modelContext.getTools()` returns the tool names of Section 6. Executing `get_summary` returns the seeded counts, `set_gift_plan` changes the derived quantities on the page, and a write against another event's id returns `isError: true` and changes nothing.
+**Shopify's Admin API.** Tokuchu reads orders and fulfillment state through the GraphQL Admin API with a client-credentials grant. The store and the app share one Shopify organization. Card data stays with Shopify's checkout.
 
-Over HTTP: `tools/list` at `/api/events/{id}/mcp` returns the same names. With a vendor token, `get_manifest` returns only that token's gift and readable definitions, `list_guests` returns `isError: true`, and `post_update` with kind `confirmed` appears on the dashboard's thread and in `get_changes` within one poll. With no token every call returns `isError: true`.
+## 6. The demo store and the interaction between the two components
 
-The CurationAgent runs under vitest against a scripted model and an injected search, so a run stores real mappings and builds a real proposal without the catalog or the OpenAI API. The Printshop workspace's demo suite records the Tokuchu-to-print-shop path end to end. Two live suites, gated by `LIVE_CUSTOMILY=1`, cover the custom shop: a smoke test of the storefront adapter's tools, and the three experiments of the integration spec (per-guest lettering, the event-level star map, and mixed personalization where the guest's size answer picks the Shopify variant), each building its own event, running the vendor execution agent, and reaching a placed test order on the store.
+The project has two deployed components. Tokuchu is the organizer's app. The demo store is a live Shopify store, `springbuilt.myshopify.com`, trading as Customworks, which sells a customizable celestial-map shirt through the Customily app. The store was selected and configured so that this product surfaces clearly when the app searches for customizable products through Shopify's WebMCP tools: a search for a personalized star map crewneck ranks it within the first page of results from the Global Catalog and the store's own UCP endpoint. The app's flow is developed, tested, and recorded against this store. Any other WebMCP-enabled store answers discovery and Shopify's own tools; personalization on another store needs that store to publish the two merchant tools.
 
-## 13. Decisions taken
+WebMCP development happens in both components. In Tokuchu it is the tool registry on the organizer's page and the MCP endpoint. In the store it is the theme asset that registers `get_customization` and `add_customized_to_cart` on every page, and the product metafield that holds the shirt's requirements: a name limited to 20 characters, a location, and a time for the star map, with six size variants. Building those tools in the store is part of the project's scope, and a change to the shirt's requirements is a change to the metafield rather than to Tokuchu.
 
-1. **Names travel outside the cart.** A Shopify cart carries variant and quantity only, so a printed name travels on three paths: the print shop takes it in each unit's values, the custom shop takes it through the storefront adapter's tools, and any vendor with a token reads it from the manifest when the organizer makes that definition readable.
-2. **The organizer pays for the merchandise.** The organizer funds the whole order rather than collecting shares from attendees. A ticket, free or paid, gates attendance, and a free-ticket holder still receives merchandise, so ticketing and merchandise funding stay separate.
-3. **Per-attendee shipping is a setting.** The event ships every unit to one address, or the survey collects each attendee's address and ships to each person.
-4. **The survey fields merge.** A field two products share is asked once, so an attendee answers a printed name a single time however many products carry it.
-5. **Approval and non-responders are settings.** Approval fires automatically on signup or waits for the organizer. A non-responder's unit is skipped or held at the cutoff, never filled with a guessed value.
-6. **Authorized spend, optionally auto-executed.** The organizer authorizes the spend once through a mandate, and Tokuchu orders within it unattended, or the organizer places each order. Section 9 gives the secure form.
-7. **Discovery scoped to the configured store.** Discovery searches WebMCP stores; the custom-shop source runs against the organizer's own store because it answers the UCP and Customily endpoints.
+The interaction between the two runs over WebMCP in both directions:
 
-## 14. MVP boundary
+- **Tokuchu to the store, from the server.** Discovery calls the store's UCP endpoint as JSON-RPC with a link to Tokuchu's public agent profile, which the endpoint requires on every call.
+- **Tokuchu to the store, in a page.** The merchant tools and Shopify's page tools exist only on the store's pages, so Tokuchu's server opens a page of the store in a headless browser, injects the WebMCP polyfill before the page scripts run, waits for the tools to register on the model context, and calls them with `executeTool`. The cart the tools build belongs to that browser session; the `checkoutUrl` the cart tool returns carries the cart out of the session to the organizer.
+- **A browser agent to Tokuchu.** A judge or organizer using a browser with WebMCP enabled opens Tokuchu's dashboard and finds the event's records registered as tools, with schemas and execute functions, and acts on them with the organizer's identity.
+- **A vendor's agent to Tokuchu.** The same tool list serves over HTTP at the MCP endpoint to a token holder, so the store side can read the manifest or post an update without a browser.
 
-The MVP covers one event with sample attendees; attendance by RSVP or free ticket; organizer approval, automatic or manual; a survey derived from the configured products' schemas through WebMCP, with each field's options read from the store and shared fields merged; per-attendee survey collection until a cutoff that fires on close, after a period, or manually; the audit that grades each unit ready, incomplete, or excluded and skips a non-responder per setting; product discovery against the live Global Catalog with delivery probes and the print-shop and custom-shop sources; a real cart at the chosen shop updated on every quantity change until the cutoff; a print-shop batch from units through proof to delivered; the custom shop's batch reaching a placed test order; the tools of Section 6 in the page and at the MCP endpoint with vendor tokens; a scripted vendor agent that reads the manifest and posts a confirmation and a shipped update. The Payment panel is present and greyed, payment authorization and paid ticketing are future features, and the order places in test mode, so no real money moves.
+## 7. Screens
 
-The video demo runs in this order: create the event, configure a personalized product from the store search, open the survey as an approved attendee and answer the derived fields, reach the cutoff and read the audit, send the batch and watch the cart or the custom-shop units fill, place the test order, then watch the vendor's confirmation arrive on the dashboard.
+**Sign-in.** The organizer enters an email address and receives a magic link. Following it opens their events. An attendee's invite link opens without a session.
+
+**Draft.** One page holds Details (title, date and time, host, location, spots, cost per person, RSVP deadline, description), Delivery (one address for every unit and a needed-by date), and Settings. The right column renders the invite from the same data. One button publishes and creates the link.
+
+**Dashboard.** The published event shows three tabs.
+
+- **Overview** shows response counts, the attendee table, and the editable setup sections.
+- **Guest Experience** holds the sentence box, the ranked results with the store each came from, the pick, and the fields the store returned with their sources. The organizer confirms the sources here. When a curation run is used, its tool steps stream into this tab as they happen.
+- **Attendees** shows the questions requested from attendees, the records grid with one row per attendee and one column per field with each cell marked answered or missing, the request and follow-up actions, the approve action, and after approval the checkout link and the order state.
+
+**Invite form.** An attendee's link opens the event's invite with the name field, the response choices, and one control per question the attendee has been asked: a text field with the store's length limit, a choice with the store's variant values. The attendee edits from the same link until approval locks the answers. The invite page registers the same form as a WebMCP tool, `submit_rsvp`, whose input schema lists one property per requested question with the store's constraints, so an attendee's browser agent answers through a tool call.
+
+## 8. Records and Tokuchu's tools
+
+The app's main internal responsibility is coordinating the stages above. It maintains: event information, the RSVP list, attendee information, the selected vendor, the selected product, the merchant's customization requirements, the required attendee responses, the submitted customization values, response completion state, cart preparation state, and the final cart link. These map onto the records below.
+
+- **Event**: title, date, venue, spots, RSVP deadline, delivery target, settings, owner, invite code.
+- **Party** and **Guest**: the invitation unit and each attendee with a response status and a display name.
+- **AttributeDefinition**: a question with a key, a label, a value type (text, number, boolean, enum, multi_enum, date, file, reference), constraints, and the customization field it was derived from when a store's schema created it.
+- **AttributeValue**: one attendee's answer to one question, with who gave it, when, and a lock once approval fixes it.
+- **Gift**: the chosen store and product, its variants, the requirements the store returned, the source per field, the per-attendee variant mapping, the approval time, the locked answers, the cart line keys, the checkout URL, and the order id and fulfillment state once the organizer has paid.
+- **Request**: per attendee, the questions sent, the send time, and the answered state of each.
+- **CallerToken**: a scoped credential for an agent calling over HTTP, naming the readable questions and the callable tools.
+- **Change log**: every write to answers, statuses, and gifts in one rising sequence, so a poll reads what changed since a sequence number.
+
+Tokuchu publishes its records as tools. The organizer's page registers them on `document.modelContext`, and the MCP endpoint at `/api/events/{id}/mcp` serves the same list to a token holder over JSON-RPC. Each tool maps onto one API route.
+
+| Tool | Returns or does |
+| --- | --- |
+| `get_guest`, `list_guests` | one attendee or the attendees matching a filter, with typed answers |
+| `count_by`, `get_summary`, `list_missing` | per-option counts, several counts in one call, attendees with no answer |
+| `search_gifts` | the ranked candidates from every source with the funnel |
+| `configure_product` | the gift for a product and the fields its `get_customization` returned |
+| `set_field_sources` | the source per requirement, or the validation errors |
+| `request_from_attendees` | the request per attendee for their missing fields |
+| `get_manifest` | one row per attendee: variant, resolved values, and each row's ready or incomplete state |
+| `approve` | locks the answers, fills the store's cart, records the checkout URL |
+| `get_changes` | the change log after a sequence number |
+| `submit_rsvp` (invite page) | records an attendee's response and answers, with the store's constraints in its schema |
+
+## 9. Deriving the questions and tracking completion
+
+**Comparison.** When the organizer selects a product, the app stores the requirements `get_customization` returned and compares them with the information already associated with each attendee. A requirement whose value the RSVP already holds, such as a name, needs no question. A requirement the organizer maps to an event field, such as the venue for a location, needs no question. Every other requirement becomes a question for the attendee, carrying the store's constraint, so a 20-character limit on the name becomes a 20-character limit on the question, and a variant axis such as size becomes a choice whose options are the store's variant values. The app determines per attendee which required values are missing.
+
+For example, the RSVP may already know an attendee's name but not the location and time they want used for their celestial map. The collection sequence:
+
+```
+Organizer selects product
+        ↓
+Merchant returns customization requirements
+        ↓
+App compares requirements with attendee data
+        ↓
+Missing values are identified
+        ↓
+Attendees receive requests for those values
+        ↓
+Responses return to the app
+        ↓
+Customization data becomes complete
+```
+
+**Requests.** The app generates a request for the missing values and sends it to the relevant attendees by email through Resend, each carrying the attendee's own link. The attendee receives a form containing the fields required for the selected product. Their submitted values return to the app and attach to their attendee record. The app records per attendee which questions were sent and when, and it sends a follow-up to every attendee whose request still has an unanswered question. In development the link is logged in place of the email.
+
+Once the required data has been collected, the app holds a complete set of values for each unit. For example:
+
+```
+Attendee 1
+name: Maya
+location: Toronto
+time: 9:00 PM
+Attendee 2
+name: Jordan
+location: Vancouver
+time: 10:30 PM
+```
+
+**Completion.** The records grid marks each cell answered or missing. The manifest resolves every field per attendee from its source and grades each row ready or incomplete, naming the missing field. Approval is available when every row is ready.
+
+**Approval.** Approval locks the answers the gift reads, so a later edit from the invite link returns the lock and the organizer's contact. Tokuchu then fills the cart (Section 10).
+
+## 10. Filling the cart and the handoff
+
+For each attendee the app maps the relevant values into the selected product's customization fields and adds the configured item to the merchant's cart through the merchant's tool. On approval Tokuchu runs a job inside the app. The job opens the store's product page in a headless browser with the WebMCP polyfill, waits for the merchant tools to register, builds one item per ready manifest row, and calls `add_customized_to_cart` once with every item and an idempotency key derived from the gift and its approval time. The tool returns the line keys and the cart's `checkoutUrl`. Tokuchu stores both on the gift and shows the link on the Attendees tab.
+
+The organizer opens the link, reviews one line per attendee with the values as line properties, enters the delivery address, and pays at Shopify's checkout. Tokuchu polls the Admin API for the order and its fulfillment state and shows them beside the link.
+
+The job posts its progress into the change log, so the dashboard's poll shows the step it is on and any item the store refused, with the field and the reason.
+
+## 11. Product discovery and ranking
+
+Discovery searches the Global Catalog and each configured store's UCP endpoint for the organizer's sentence and ranks the results.
+
+**Eligibility.** A product passes when the store ships to the delivery target, the delivery window plus a buffer of three days falls on or before the needed-by date, the unit price falls at or under the budget, and at least one variant is available. The delivery window comes from a `create_checkout` probe that is never completed. The first failing rule is the reason the results screen gives.
+
+**Scoring.** Each eligible product receives a weighted score: coverage (30), lead-time margin capped at 14 days (25), price fit rewarding a price between 60% and 100% of the budget (20), delivery confidence (15), cancellation terms (10), seller signal (5). For a personalized request, coverage is 1 only when the store answers `get_customization` for the product with at least one field. The weights live in a configuration row.
+
+**The demo store in the ranking.** A search for a personalized star map crewneck ranks the demo store's crewneck within the first page of results from the Global Catalog and the store's own endpoint.
+
+## 12. Deployment and accounts
+
+- **Host.** A Render Web Service built from a Dockerfile that bundles Node and Chromium, because the approval job drives the store page with Playwright.
+- **Database.** Render Postgres. Each event is one row holding its records as a JSON document, plus the sign-in tables. A request loads its event's document, runs the domain code, and writes the document back.
+- **Sign-in.** Auth.js with a magic-link provider and Resend as the sender. An allowlist of organizer emails in the environment decides who may sign in. Organizer routes require a session and check the event's owner. Invite links stay public.
+- **Environment.** `DATABASE_URL`, `AUTH_SECRET`, `RESEND_API_KEY`, `ORGANIZER_EMAILS`, `OPENAI_API_KEY`, `CUSTOMILY_SHOP_URL`, and the four Shopify Admin keys. Secrets live in Render's environment and in a local `.env` that stays out of the repository.
+
+## 13. Tests and the recorded demo
+
+Vitest covers the domain, the operations, the tool list, the comparison, and the request tracking. Playwright covers the draft, the invite, the dashboard tabs, and the tools through the polyfill. The live suites, gated by `LIVE_CUSTOMILY=1`, run against the demo store.
+
+The recorded demo runs in this order: sign in and create the event; describe the item and watch the search rank the store's crewneck; pick it and watch `get_customization` return the fields; request the size and the name from attendees; load the attendee responses; watch the grid complete; approve; open the checkout link in a fresh browser and see one line per attendee. The responses in the recording are loaded through the RSVP API in place of email replies.
+
+## 14. Decisions taken
+
+1. **The store states its own fields.** `get_customization` is the source of every question a product adds.
+2. **Values travel as line item properties.** `add_customized_to_cart` adds each unit through Shopify's cart endpoint with the values as properties, because neither the UCP cart nor the page cart tool carries text.
+3. **The organizer pays at the store.** Tokuchu hands over the cart's checkout URL and the organizer completes Shopify's checkout. Shopify's checkout holds the card.
+4. **The Admin API reads orders.** Order and fulfillment state come from the GraphQL Admin API after the organizer pays.
+5. **One event per document.** Persistence stores each event's records as one JSON document in Postgres, so the domain code stays the same in memory and on disk.
+6. **Magic-link sign-in with an allowlist.** Organizers sign in by email, and an attendee's link opens without a session.
+
+## 15. The hackathon submission
+
+Tokuchu is a submission to The WebMCP Challenge (webmcp.devpost.com), due 2026-09-03 at 1:00 pm PDT. The submission requirements and how the project meets each:
+
+- **A working live URL** that judges open in ChatGPT's in-app browser or in Google Chrome with WebMCP enabled. The Render deployment (Section 12) serves the dashboard, where the event's records register as tools on the page's model context, and the demo store serves the merchant tools.
+- **Actual tool registration** with functional schemas and execute functions. Tokuchu's tools are defined as data with JSON Schema inputs (`src/webmcp/tools.ts`) and registered with `registerTool`; the store's two merchant tools register the same way in the theme.
+- **A text description** of why WebMCP fits the use case, how it improves the experience, what people and agents accomplish together, and the implementation. Sections 1, 3, and 6 of this document carry that content.
+- **A public video under three minutes** with audio, showing the build and the WebMCP use. Section 13 gives the recording order.
+- **A public repository** with the source, the assets, the instructions, and an open-source license file.
+
+The judging criteria are WebMCP leverage, execution, potential impact, and creativity and ambition. The project answers the first with tools on both ends and an agent bridging them, and the second with a flow that runs end to end on the live store.

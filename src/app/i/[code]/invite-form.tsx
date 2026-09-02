@@ -15,6 +15,8 @@ function Question({ def, value, onChange, disabled }: { def: AttributeDefinition
   const control = controlFor(def);
   const id = `q-${def.id}`;
   const options = def.constraints.options ?? [];
+  // A choice question with no options cannot be answered, so it stays off the form until it has some.
+  if ((control === "checkboxes" || control === "radio" || control === "select") && options.length === 0) return null;
   if (control === "checkboxes") {
     const chosen = Array.isArray(value) ? (value as string[]) : [];
     return (

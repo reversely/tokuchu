@@ -1,6 +1,7 @@
 /**
  * The vendor execution agent for a Customily-personalized gift (#121, #124): holds a token for one
- * gift, reads the personalized manifest from Tokuchu's MCP endpoint, and produces the whole batch on
+ * gift, reads the personalized manifest over Tokuchu's WebMCP handoff surface (document.modelContext,
+ * /handoff), and produces the whole batch on
  * the live storefront through the Customily adapter's three batch WebMCP tools
  * (integrations/customily/webmcp-customily.js). It carts every ready row through
  * `create_personalized_batch`, one item per product-page load and reloading between items so each
@@ -20,7 +21,6 @@ import { chromium, type Page } from "@playwright/test";
 import { deliveryTarget } from "../src/lib/delivery";
 import type { Venue } from "../src/domain/types";
 
-const PROFILE = "https://shopify.dev/ucp/agent-profiles/2026-04-08/valid-with-capabilities.json";
 const DEFAULT_PRODUCT_URL = "https://springbuilt.myshopify.com/products/1566-comfort-colors-garment-dyed-adult-crewneck-sweatshirt";
 const POLYFILL = fileURLToPath(new URL("../src/webmcp/polyfill.js", import.meta.url));
 const ADAPTER = fileURLToPath(new URL("../integrations/customily/webmcp-customily.js", import.meta.url));
@@ -79,30 +79,6 @@ export type RunOptions = {
 
 type GatherReply = { payload: Record<string, unknown>; isError: boolean };
 
-/** One JSON-RPC tools/call against Tokuchu's tokenized endpoint, logged like vendor-agent.mts. */
-async function callGather(opts: RunOptions, name: string, args: Record<string, unknown>, attempt = 0): Promise<GatherReply> {
-  let res: Response;
-  try {
-    res = await fetch(`${opts.base}/api/events/${opts.eventId}/mcp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: { ...args, meta: { "ucp-agent": { profile: PROFILE } } } } })
-    });
-  } catch (error) {
-    // One retry covers a transient failure of the fetch itself before it counts as an error.
-    if (attempt === 0) {
-      await new Promise((r) => setTimeout(r, 3_000));
-      return callGather(opts, name, args, 1);
-    }
-    return { payload: { error: String(error) }, isError: true };
-  }
-  const body = (await res.json()) as { result?: { content: { text: string }[]; isError?: boolean }; error?: { message: string } };
-  if (body.error) return { payload: { error: body.error.message }, isError: true };
-  const text = body.result?.content?.[0]?.text ?? "null";
-  console.log(`> tokuchu ${name} ${JSON.stringify(args).slice(0, 200)}\n< ${text.slice(0, 300)}${text.length > 300 ? "..." : ""}`);
-  return { payload: JSON.parse(text) as Record<string, unknown>, isError: body.result?.isError === true };
-}
-
 /** One WebMCP tool call on the storefront page through the polyfill's model context. */
 async function callPage(page: Page, name: string, args: Record<string, unknown>): Promise<GatherReply> {
   type Ctx = { getTools(): Promise<{ name: string }[]>; executeTool(tool: unknown, args: unknown): Promise<{ content: { text: string }[]; isError?: boolean }> };
@@ -124,6 +100,17 @@ async function callPage(page: Page, name: string, args: Record<string, unknown>)
   }
   console.log(`> page ${name} ${JSON.stringify(args).slice(0, 200)}\n< ${raw.text.slice(0, 300)}${raw.text.length > 300 ? "..." : ""}`);
   return { payload: JSON.parse(raw.text) as Record<string, unknown>, isError: raw.isError };
+}
+
+/** A WebMCP call on Tokuchu's handoff page, retried while the tool is momentarily unregistered: the
+ * page re-registers its tools when React re-runs the mount effect (dev strict mode), a brief window. */
+async function callHandoff(page: Page, name: string, args: Record<string, unknown>): Promise<GatherReply> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const reply = await callPage(page, name, args);
+    if (!(reply.isError && JSON.stringify(reply.payload).includes("is not registered"))) return reply;
+    await page.waitForTimeout(800);
+  }
+  return callPage(page, name, args);
 }
 
 /** Waits for the adapter's three batch tools; the Customily embed keeps loading its controls after this. */
@@ -393,32 +380,44 @@ async function readCart(page: Page): Promise<CartLine[]> {
  */
 export async function runPersonalization(opts: RunOptions): Promise<RunResult> {
   const productUrl = opts.productUrl ?? DEFAULT_PRODUCT_URL;
-  const manifest = await callGather(opts, "get_manifest", { gift_id: opts.giftId });
-  if (manifest.isError) throw new Error(`get_manifest failed: ${JSON.stringify(manifest.payload)}`);
-  const rows = (manifest.payload.rows as ManifestRow[] | undefined) ?? [];
-  const ready = rows.filter((r) => r.personalization_status === "ready");
-  console.log(`${rows.length} manifest rows and ${ready.length} ready to personalize`);
-  if (ready.length === 0) throw new Error("no manifest row is ready to personalize");
-
-  const productId = String(ready[0].product_id);
-  const target = deliveryTarget({ venue: opts.event.venue, delivery: opts.event.delivery ?? { destination: "venue", address: null, needed_by: null } });
-  const delivery = { type: "single_address", address_ref: target.label };
-  const batchId = `batch-${opts.eventId}-${opts.giftId}`;
-  // The key is stable per event and gift, so a re-run replays the cart lines instead of doubling
-  // them; a fresh event id per run keeps runs from colliding. No plan revision is on the token path.
-  const idempotencyKey = `${opts.eventId}:${opts.giftId}`;
-  const batchArgs = { batch_id: batchId, product_id: productId, delivery, idempotency_key: idempotencyKey };
 
   const browser = await chromium.launch({ headless: opts.headless ?? true });
   let batch: BatchResponse;
   let order: PlacedOrder | null = null;
   let cart: CartLine[] = [];
   let video: ReturnType<Page["video"]> = null;
+  let rows: ManifestRow[] = [];
+  let ready: ManifestRow[] = [];
   try {
     // One context so the storefront cart cookie holds every line and the checkout binds to it.
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...(opts.videoDir ? { recordVideo: { dir: opts.videoDir, size: { width: 1440, height: 900 } } } : {}) });
     await context.addInitScript({ path: POLYFILL });
     await context.addInitScript({ path: ADAPTER });
+
+    // Tokuchu's vendor WebMCP surface: read the manifest and post status over document.modelContext,
+    // the same way this agent drives the store's WebMCP tools. Both sides of the handoff use WebMCP.
+    const handoff = await context.newPage();
+    await handoff.goto(`${opts.base}/handoff?event=${encodeURIComponent(opts.eventId)}&token=${encodeURIComponent(opts.token)}&webmcp=polyfill`, { waitUntil: "domcontentloaded" });
+    await handoff.waitForFunction(() => {
+      const c = (document as unknown as { modelContext?: { getTools(): Promise<{ name: string }[]> } }).modelContext;
+      return c ? c.getTools().then((ts) => ts.some((t) => t.name === "get_manifest")) : false;
+    }, undefined, { timeout: 30_000 });
+
+    const manifest = await callHandoff(handoff, "get_manifest", { gift_id: opts.giftId });
+    if (manifest.isError) throw new Error(`get_manifest failed: ${JSON.stringify(manifest.payload)}`);
+    rows = (manifest.payload.rows as ManifestRow[] | undefined) ?? [];
+    ready = rows.filter((r) => r.personalization_status === "ready");
+    console.log(`${rows.length} manifest rows and ${ready.length} ready to personalize`);
+    if (ready.length === 0) throw new Error("no manifest row is ready to personalize");
+
+    const productId = String(ready[0].product_id);
+    const target = deliveryTarget({ venue: opts.event.venue, delivery: opts.event.delivery ?? { destination: "venue", address: null, needed_by: null } });
+    const delivery = { type: "single_address", address_ref: target.label };
+    const batchId = `batch-${opts.eventId}-${opts.giftId}`;
+    // The key is stable per event and gift, so a re-run replays the cart lines instead of doubling them.
+    const idempotencyKey = `${opts.eventId}:${opts.giftId}`;
+    const batchArgs = { batch_id: batchId, product_id: productId, delivery, idempotency_key: idempotencyKey };
+
     const page = await context.newPage();
     await page.goto(productUrl, { waitUntil: "domcontentloaded" });
     await waitForTools(page);
@@ -449,7 +448,7 @@ export async function runPersonalization(opts: RunOptions): Promise<RunResult> {
     console.log(`batch ${batch.batch_id}: ${batch.ready.length} ready, ${batch.blocked.length} blocked, subtotal ${batch.subtotal} ${batch.currency}`);
 
     // One update carrying the checkout URL and the per-recipient preview URLs.
-    await callGather(opts, "post_update", {
+    await callHandoff(handoff, "post_update", {
       gift_id: opts.giftId,
       kind: "in_production",
       text: JSON.stringify({ batch_id: batch.batch_id, checkout_url: batch.checkout_url, preview_urls: batch.preview_urls }),
@@ -461,7 +460,7 @@ export async function runPersonalization(opts: RunOptions): Promise<RunResult> {
     if (opts.placeOrder ?? true) {
       order = await placeTestOrder(page, batch.checkout_url, opts.event);
       if (order) {
-        await callGather(opts, "post_update", {
+        await callHandoff(handoff, "post_update", {
           gift_id: opts.giftId,
           kind: "in_production",
           text: JSON.stringify({ order_name: order.name, checkout_url: batch.checkout_url }),

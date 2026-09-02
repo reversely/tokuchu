@@ -1,8 +1,8 @@
 {
-  "_note": "Demo-only fake attendee dataset. The flow demo (tests/flow-demo.spec.ts) injects it through the existing RSVP API to stand in for collected survey responses, bypassing the survey UI as if the results were hand-loaded into the backend. No app module reads this file, and nothing in the real wiring branches on it.",
+  "_note": "Demo-only fake attendee dataset. The flow demo (tests/flow-demo.spec.ts) injects it through the existing RSVP API to stand in for collected survey responses, bypassing the survey UI as if the results were hand-loaded into the backend. printed_name fills the Name for printing text question; size fills the Size choice the organizer requests from the shirt's variants. No app module reads this file, and nothing in the real wiring branches on it.",
   "attendees": [
-    { "display_name": "Avery Chen", "printed_name": "AVERY" },
-    { "display_name": "Blake Rivera", "printed_name": "BLAKE" },
-    { "display_name": "Carmen Diaz", "printed_name": "CARMEN" }
+    { "display_name": "Avery Chen", "printed_name": "AVERY", "size": "M" },
+    { "display_name": "Blake Rivera", "printed_name": "BLAKE", "size": "L" },
+    { "display_name": "Carmen Diaz", "printed_name": "CARMEN", "size": "XL" }
   ]
 }

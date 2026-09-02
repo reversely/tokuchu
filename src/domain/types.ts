@@ -209,7 +209,7 @@ export type PersonalizationMapping = z.infer<typeof PersonalizationMapping>;
 export const FilterClauseSchema = z.object({ field: z.string(), op: z.enum(OPS), value: z.unknown().optional() });
 export const FilterSchema = z.array(FilterClauseSchema);
 
-export const Variant = z.object({ id: z.string(), title: z.string(), price_cents: z.number().int(), currency: z.string() });
+export const Variant = z.object({ id: z.string(), title: z.string(), price_cents: z.number().int(), currency: z.string(), available: z.boolean().optional(), options: z.array(z.object({ name: z.string(), label: z.string() })).optional() });
 export type Variant = z.infer<typeof Variant>;
 
 /** One value of one definition sends the guest to one variant; the organizer's rows are the source of truth. */

@@ -1,10 +1,8 @@
 /**
- * The scripted demo (PRD Section 14), one path per scene, live: the catalog, a real shop's cart,
- * and the scripted vendor agent through the endpoint. Two browser contexts: the organizer and a
+ * The scripted demo (PRD Section 14), one path per scene, live: the catalog, a real shop's cart. Two browser contexts: the organizer and a
  * guest. A caption at the foot of each page names the scene. Videos land in tests/videos.
  * Needs the dev server on 3113 and network; no key. Never completes a checkout.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
@@ -195,22 +193,4 @@ test("Scene 6: a guest cancels; the quantity and the cart follow", async () => {
   await caption(`Scene 6: ${GUESTS.length - 1} units and the cart updated`);
   await expect(organizer.getByTestId("gift")).toContainText(`${GUESTS.length - 1} units`, { timeout: 20_000 });
   await rest(organizer, 3000);
-});
-
-test("Scene 7: approve sets the lock date; the vendor's agent confirms into the thread", async () => {
-  test.setTimeout(LIVE_MS);
-  await caption("Scene 7: approved with a lock date");
-  await organizer.getByTestId("approve-gift").click();
-  await expect(organizer.getByTestId("gift")).toContainText(/locks /, { timeout: 30_000 });
-  await rest(organizer, 2000);
-  const snap = await (await organizer.request.get(`/api/events/${eventId}`)).json() as { gifts: { id: string }[] };
-  const giftId = snap.gifts[0].id;
-  const token = (await (await organizer.request.post(`/api/events/${eventId}/tokens`, { data: { holder: "the vendor's agent", gift_ids: [giftId], callable_tools: ["get_manifest", "get_changes", "post_update", "get_updates"] } })).json()) as { id: string };
-  await caption("Scene 7: the vendor's agent confirms through the endpoint");
-  const base = new URL(organizer.url()).origin;
-  execFileSync("npx", ["tsx", "scripts/vendor-agent.mts", base, eventId, token.id, giftId, "confirm"], { encoding: "utf8" });
-  await organizer.getByTestId("thread-gift").click();
-  await expect(organizer.getByTestId("thread")).toContainText("confirmed", { timeout: 10_000 });
-  await caption("Scene 7: the confirmation on the dashboard");
-  await rest(organizer, 4000);
 });
