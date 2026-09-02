@@ -188,3 +188,8 @@ only; LLM paths off unless needed.
 - #19 landed as 7417ebd (+ 32983e4 fixing the curate test's cookie read). GET /demo mints a signed
   demo cookie, seeds and publishes the symposium event for that owner, and redirects to its dashboard
   with snapshot.demo = true; sweep after 24 h. Gate: 178 vitest, 20 Playwright.
+- #20 landed as ceda487 (route conflict with the redirect fix resolved: public origin + autoplay
+  forwarding). Nine steps as data in src/demo/steps.ts drive the real controls; spotlight mask +
+  callout with first-person narration, Back/Next/Autoplay. Gate: 183 vitest, 21 Playwright, live
+  tour 1/1 from main (1.2 min to the checkout link).
+- fix(demo) c7c43e6: /demo on Render redirected to https://0.0.0.0:10000; redirects now use APP_URL.
