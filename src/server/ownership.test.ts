@@ -1,40 +1,59 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEvent, resetState, type EventInput } from "../domain/store";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
-import { assertOwner, callerFor, currentCaller, LOCAL_ORGANIZER_ID, setSessionReader, withEventOwnedBy } from "./ownership";
+import { assertOwner, callerFor, currentCaller, LOCAL_ORGANIZER_ID, setDemoIdReader, setSessionReader, withEventOwnedBy } from "./ownership";
 import { listOwnedEvents } from "./persistence";
 
 const INPUT: EventInput = { type: "party", title: "Owned event", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" }, spots: null, cost_per_person_cents: null, rsvp_deadline: null, description: "", invite_extras: [], response_options: ["going", "cant_go"], settings: { guest_approval: false, reminders: false, reask_on_change: false, order_approval: true }, delivery: { destination: "venue", address: null, needed_by: null }, segments: [] };
 
 const DEV = { has_database: false, is_production: false };
 const DEPLOYED = { has_database: true, is_production: true };
-const owner = { id: "user_a", is_local: false };
-const other = { id: "user_b", is_local: false };
+const owner = { id: "user_a", is_local: false, is_demo: false };
+const other = { id: "user_b", is_local: false, is_demo: false };
+const demo = { id: "demo_abc", is_local: false, is_demo: true };
 
 beforeEach(resetState);
 
 describe("callerFor", () => {
   it("names the session user wherever one is signed in", () => {
-    expect(callerFor("user_a", DEV)).toEqual(owner);
-    expect(callerFor("user_a", DEPLOYED)).toEqual(owner);
+    expect(callerFor("user_a", null, DEV)).toEqual(owner);
+    expect(callerFor("user_a", null, DEPLOYED)).toEqual(owner);
   });
 
   it("runs a request without a session as the local organizer only without a database outside production", () => {
-    expect(callerFor(undefined, DEV)).toEqual({ id: LOCAL_ORGANIZER_ID, is_local: true });
-    expect(callerFor(undefined, { has_database: true, is_production: false })).toBeNull();
-    expect(callerFor(undefined, { has_database: false, is_production: true })).toBeNull();
-    expect(callerFor(undefined, DEPLOYED)).toBeNull();
+    expect(callerFor(undefined, null, DEV)).toEqual({ id: LOCAL_ORGANIZER_ID, is_local: true, is_demo: false });
+    expect(callerFor(undefined, null, { has_database: true, is_production: false })).toBeNull();
+    expect(callerFor(undefined, null, { has_database: false, is_production: true })).toBeNull();
+    expect(callerFor(undefined, null, DEPLOYED)).toBeNull();
+  });
+
+  it("runs a request with a demo id as the demo organizer in every mode and lets a session win", () => {
+    expect(callerFor(undefined, "demo_abc", DEV)).toEqual(demo);
+    expect(callerFor(undefined, "demo_abc", DEPLOYED)).toEqual(demo);
+    expect(callerFor("user_a", "demo_abc", DEPLOYED)).toEqual(owner);
   });
 });
 
 describe("currentCaller", () => {
-  afterAll(() => setSessionReader(null));
+  afterAll(() => {
+    setSessionReader(null);
+    setDemoIdReader(null);
+  });
 
   it("reads the session user and falls back to the local organizer without a session or a database", async () => {
+    setDemoIdReader(async () => null);
     setSessionReader(async () => "user_a");
     expect(await currentCaller()).toEqual(owner);
     setSessionReader(async () => null);
-    expect(await currentCaller()).toEqual({ id: LOCAL_ORGANIZER_ID, is_local: true });
+    expect(await currentCaller()).toEqual({ id: LOCAL_ORGANIZER_ID, is_local: true, is_demo: false });
+  });
+
+  it("reads the demo cookie before the local fallback and never past a session", async () => {
+    setDemoIdReader(async () => demo.id);
+    setSessionReader(async () => null);
+    expect(await currentCaller()).toEqual(demo);
+    setSessionReader(async () => "user_a");
+    expect(await currentCaller()).toEqual(owner);
   });
 });
 
@@ -49,12 +68,18 @@ describe("assertOwner", () => {
     expect(() => assertOwner(event(), other)).toThrow(ForbiddenError);
   });
 
+  it("lets the demo organizer into its own event and denies it another organizer's with 403", () => {
+    expect(() => assertOwner(createEvent(INPUT, "evt_demo", demo.id), demo)).not.toThrow();
+    expect(() => assertOwner(event(), demo)).toThrow(ForbiddenError);
+    expect(() => assertOwner(createEvent(INPUT, "evt_local", LOCAL_ORGANIZER_ID), demo)).toThrow(ForbiddenError);
+  });
+
   it("denies a request with no session with 401", () => {
     expect(() => assertOwner(event(), null)).toThrow(UnauthorizedError);
   });
 
   it("lets the local organizer into its own events and sends it to sign in for an account's event", () => {
-    const local = callerFor(undefined, DEV);
+    const local = callerFor(undefined, null, DEV);
     expect(() => assertOwner(createEvent(INPUT, "evt_local", LOCAL_ORGANIZER_ID), local)).not.toThrow();
     expect(() => assertOwner(event(), local)).toThrow(UnauthorizedError);
   });

@@ -101,7 +101,7 @@ export default async function Page() {
               <p className="sub">Tokuchu reads a product's requirements from a WebMCP store and asks each attendee only for the values that product needs. The finished cart returns to the organizer with one line per attendee.</p>
               <div className="cta">
                 <a className="btn primary big" href={start} data-testid="start-hero">Create an event</a>
-                <a className="btn ghost big" href="#story">See the walkthrough</a>
+                <a className="btn ghost big" href="/demo" data-testid="demo">See the walkthrough</a>
               </div>
               <p className="note"><b>Works with</b> Shopify stores over WebMCP and the GraphQL Admin API.</p>
             </div>
@@ -173,7 +173,7 @@ export default async function Page() {
               <p>Create an event and describe the item. The app reads the store's requirements and collects the values from each attendee. Approve the records and open the cart.</p>
               <div className="cta">
                 <a className="btn light big" href={start}>Create an event</a>
-                <a className="btn outline-light big" href="#story">See the walkthrough</a>
+                <a className="btn outline-light big" href="/demo">See the walkthrough</a>
               </div>
             </div>
           </div>

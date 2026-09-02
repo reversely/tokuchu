@@ -1,0 +1,31 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { errorResponse } from "../../server/api";
+import { hasDatabase } from "../../server/db";
+import { demoEventFor, sweepDemoState } from "../../server/demo";
+import { DEMO_COOKIE, demoCookieOptions, demoCookieValue, demoIdFromCookie, newDemoId } from "../../server/demo-session";
+import { currentCaller } from "../../server/ownership";
+
+/** Only the in-memory store sweeps here; the database sweeps from `npm run sweep-demo`. */
+function usesMemory(): boolean {
+  return !hasDatabase() && process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Starts or resumes a guest session: the cookie's demo organizer keeps its event, and a visitor
+ * without one gets a fresh id, a published event from the seed, and the cookie. A signed-in
+ * organizer already runs the real flow, so that request goes to the event list instead.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const caller = await currentCaller();
+    if (caller && !caller.is_demo && !caller.is_local) return NextResponse.redirect(new URL("/events", request.url));
+    if (usesMemory()) sweepDemoState();
+    const demoId = demoIdFromCookie(request.cookies.get(DEMO_COOKIE)?.value) ?? newDemoId();
+    const eventId = await demoEventFor(demoId);
+    const response = NextResponse.redirect(new URL(`/events/${eventId}?demo=1`, request.url));
+    response.cookies.set(DEMO_COOKIE, demoCookieValue(demoId), demoCookieOptions());
+    return response;
+  } catch (e) {
+    return errorResponse(e);
+  }
+}

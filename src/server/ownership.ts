@@ -1,20 +1,22 @@
 /**
  * Who may read and change an event: the organizer whose user id the event's `owner_id` names. A
- * request with no session runs as the local organizer when `DATABASE_URL` is unset outside
- * production, so the dev server and the browser suites need no sign-in. An event a signed-in
+ * request with no session but a signed demo cookie runs as the demo organizer the cookie names, in
+ * every mode. A request with neither runs as the local organizer when `DATABASE_URL` is unset
+ * outside production, so the dev server and the browser suites need no sign-in. An event a signed-in
  * account owns answers such a request the way it answers a stranger, so the browser goes to sign in.
  */
 import { state } from "../domain/store";
 import type { Event } from "../domain/types";
 import { hasDatabase } from "./db";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
+import { DEMO_COOKIE, demoIdFromCookie } from "./demo-session";
 import { withPersistedEvent } from "./persistence";
 
 /** The user id every request without a session runs as in development. */
 export const LOCAL_ORGANIZER_ID = "local-organizer";
 
-/** The organizer a request runs as: a signed-in user, or the local organizer in development. */
-export type Caller = { id: string; is_local: boolean };
+/** The organizer a request runs as: a signed-in user, the demo organizer a cookie names, or the local organizer in development. */
+export type Caller = { id: string; is_local: boolean; is_demo: boolean };
 
 type Mode = { has_database: boolean; is_production: boolean };
 
@@ -36,12 +38,13 @@ function warnLocalOrganizer(): void {
   console.warn("No session and no DATABASE_URL; requests without a session run as the local organizer.");
 }
 
-/** The caller for a session's user id, or null when nobody is signed in and the mode allows no local organizer. */
-export function callerFor(userId: string | null | undefined, mode: Mode = currentMode()): Caller | null {
-  if (userId) return { id: userId, is_local: false };
+/** The caller for a session's user id, else for a demo cookie's id, else null when the mode allows no local organizer. */
+export function callerFor(userId: string | null | undefined, demoId: string | null | undefined, mode: Mode = currentMode()): Caller | null {
+  if (userId) return { id: userId, is_local: false, is_demo: false };
+  if (demoId) return { id: demoId, is_local: false, is_demo: true };
   if (mode.has_database || mode.is_production) return null;
   warnLocalOrganizer();
-  return { id: LOCAL_ORGANIZER_ID, is_local: true };
+  return { id: LOCAL_ORGANIZER_ID, is_local: true, is_demo: false };
 }
 
 /**
@@ -49,7 +52,7 @@ export function callerFor(userId: string | null | undefined, mode: Mode = curren
  *
  * Raises:
  *   UnauthorizedError: with no caller, or when the local organizer reaches an event an account owns.
- *   ForbiddenError: when a signed-in caller does not own the event.
+ *   ForbiddenError: when a signed-in or demo caller does not own the event.
  */
 export function assertOwner(event: Event, caller: Caller | null): void {
   if (!caller) throw new UnauthorizedError("Sign in to open this event.");
@@ -58,13 +61,19 @@ export function assertOwner(event: Event, caller: Caller | null): void {
   throw new ForbiddenError("This event belongs to another organizer.");
 }
 
-type SessionReader = () => Promise<string | null | undefined>;
+type Reader = () => Promise<string | null | undefined>;
 
-let sessionReader: SessionReader | undefined;
+let sessionReader: Reader | undefined;
+let demoIdReader: Reader | undefined;
 
 /** Test hook: the session user id reader used instead of Auth.js; null restores the default. */
-export function setSessionReader(reader: SessionReader | null): void {
+export function setSessionReader(reader: Reader | null): void {
   sessionReader = reader ?? undefined;
+}
+
+/** Test hook: the demo id reader used instead of the request's cookie; null restores the default. */
+export function setDemoIdReader(reader: Reader | null): void {
+  demoIdReader = reader ?? undefined;
 }
 
 /** Auth.js loads on first use so a module that only checks ownership never pays for it. */
@@ -73,9 +82,17 @@ async function sessionUserId(): Promise<string | undefined> {
   return (await currentSession())?.user?.id;
 }
 
+/** `next/headers` loads on first use for the same reason; the demo id is null outside a request. */
+async function cookieDemoId(): Promise<string | null> {
+  const { cookies } = await import("next/headers");
+  return demoIdFromCookie((await cookies()).get(DEMO_COOKIE)?.value);
+}
+
 /** The caller behind the current request. */
 export async function currentCaller(): Promise<Caller | null> {
-  return callerFor(await (sessionReader ?? sessionUserId)());
+  const userId = await (sessionReader ?? sessionUserId)();
+  const demoId = userId ? null : await (demoIdReader ?? cookieDemoId)();
+  return callerFor(userId, demoId);
 }
 
 /**

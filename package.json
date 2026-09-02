@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "setup": "bash scripts/setup.sh",
     "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "sweep-demo": "tsx scripts/sweep-demo.ts"
   },
   "dependencies": {
     "@auth/pg-adapter": "1.11.3",

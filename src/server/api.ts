@@ -47,6 +47,7 @@ import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGi
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { llmEnabled } from "./flags";
+import { isDemoId } from "./demo-session";
 import { afterRsvpWrite } from "./hooks";
 import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
 
@@ -172,13 +173,14 @@ export function followUps(eventId: string): FollowUp[] {
   return out;
 }
 
+/** The dashboard's whole view; `demo` says a demo organizer owns the event, so the page can mount the tour. */
 export function snapshot(eventId: string) {
   const event = requireEvent(eventId);
   const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g) }));
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled() };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: isDemoId(event.owner_id) };
 }
 
 /* ---- Gifts ---- */

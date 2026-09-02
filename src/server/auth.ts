@@ -6,6 +6,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Resend from "next-auth/providers/resend";
 import PostgresAdapter from "@auth/pg-adapter";
+import { authSecret } from "./auth-secret";
 import { adapterPool, authDatabase, logMagicLink } from "./auth-store";
 import { hasDatabase } from "./db";
 import { allowOrganizer } from "./organizers";
@@ -13,14 +14,8 @@ import { allowOrganizer } from "./organizers";
 const isProduction = process.env.NODE_ENV === "production";
 const sendsEmail = isProduction && !!process.env.RESEND_API_KEY;
 
-function secret(): string | undefined {
-  if (process.env.AUTH_SECRET || isProduction) return process.env.AUTH_SECRET;
-  console.warn("AUTH_SECRET is not set; sessions sign with a development secret.");
-  return "tokuchu-development-secret";
-}
-
 export const authConfig: NextAuthConfig = {
-  secret: secret(),
+  secret: authSecret(),
   adapter: PostgresAdapter(adapterPool(authDatabase)),
   // A signed cookie outlives the in-process database, so a dev session survives a restart.
   session: { strategy: hasDatabase() || isProduction ? "database" : "jwt" },

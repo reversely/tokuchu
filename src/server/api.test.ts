@@ -8,7 +8,7 @@ import { PUT as putOverride } from "../app/api/events/[id]/gifts/[giftId]/overri
 import { DELETE as deleteGiftRoute } from "../app/api/events/[id]/gifts/[giftId]/route";
 import { publishEvent } from "../domain/store";
 import { lockGift } from "../domain/gifts";
-import { LOCAL_ORGANIZER_ID, setSessionReader } from "./ownership";
+import { LOCAL_ORGANIZER_ID, setDemoIdReader, setSessionReader } from "./ownership";
 
 const BODY = {
   title: "Test event",
@@ -42,8 +42,12 @@ describe("the API operations", () => {
   beforeEach(() => {
     resetState();
     setSessionReader(async () => null);
+    setDemoIdReader(async () => null);
   });
-  afterAll(() => setSessionReader(null));
+  afterAll(() => {
+    setSessionReader(null);
+    setDemoIdReader(null);
+  });
 
   it("creates a draft with defaults, publishes it, and serves the invite by code", () => {
     const event = createEventFromBody(BODY);

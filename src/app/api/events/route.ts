@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createEventFromBody, errorResponse } from "../../../server/api";
-import { UnauthorizedError } from "../../../server/errors";
+import { ForbiddenError, UnauthorizedError } from "../../../server/errors";
 import { currentCaller } from "../../../server/ownership";
 import { createPersistedEvent, listOwnedEvents } from "../../../server/persistence";
 
@@ -15,11 +15,12 @@ export async function GET() {
   }
 }
 
-/** Creates a draft event the caller owns with no questions; the organizer's list arrives through PUT /definitions (PRD Section 8, Draft). */
+/** Creates a draft event the caller owns with no questions; the organizer's list arrives through PUT /definitions (PRD Section 8, Draft). A demo caller holds one event at a time. */
 export async function POST(request: Request) {
   try {
     const caller = await currentCaller();
     if (!caller) throw new UnauthorizedError("Sign in to create an event.");
+    if (caller.is_demo && (await listOwnedEvents(caller.id)).length) throw new ForbiddenError("The demo holds one event.");
     const body = await request.json();
     return await createPersistedEvent(() => NextResponse.json(createEventFromBody(body, caller.id), { status: 201 }));
   } catch (e) {
