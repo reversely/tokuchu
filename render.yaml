@@ -1,0 +1,57 @@
+# Render Blueprint: the web service built from the Dockerfile and the Postgres behind it.
+# Every value marked `sync: false` is filled in the Render dashboard; no secret lives here.
+services:
+  - type: web
+    name: tokuchu
+    runtime: docker
+    plan: 1c-2g
+    region: ohio
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    # The compiled migration runs against the database before each deploy's server starts.
+    preDeployCommand: node /app/migrate.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tokuchu-db
+          property: connectionString
+      - key: AUTH_URL
+        fromService:
+          name: tokuchu
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: APP_URL
+        fromService:
+          name: tokuchu
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ORGANIZER_EMAILS
+        sync: false
+      - key: AUTH_EMAIL_FROM
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CUSTOMILY_SHOP_URL
+        sync: false
+      - key: SHOPIFY_STORE_DOMAIN
+        sync: false
+      - key: SHOPIFY_API_KEY
+        sync: false
+      - key: SHOPIFY_API_SECRET
+        sync: false
+      - key: SHOPIFY_ADMIN_API_VERSION
+        sync: false
+
+databases:
+  - name: tokuchu-db
+    plan: 0.1c-256mb
+    region: ohio
+    databaseName: tokuchu
+    user: tokuchu
