@@ -196,3 +196,8 @@ only; LLM paths off unless needed.
 - Guest tour verified on production: /demo?autoplay=1 reached the checkout link in 108 s; a fresh
   browser opened it with Avery, Blake, and Carmen on the lines. Note for checks: the tour root is a
   zero-size container, so wait for it attached rather than visible.
+- fix(demo) ffb1f96: typing /demo in Chrome prefetches it; two cookie-less requests minted two demo
+  ids and the browser kept the wrong one, so the page loaded and every action answered 403. A
+  prefetch now gets 204 without a cookie; a demo caller on an event it does not own is sent to
+  /demo from the page and from the dashboard poll. Verified on production: prefetch 204, wrong
+  event redirects to /demo.
