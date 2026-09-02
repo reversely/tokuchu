@@ -168,3 +168,8 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   (Docker on 1c-2g) waits for a payment method.
 - #14: the theme write was blocked by the session's permission classifier; scripts/install-theme-adapter.ts
   does it from the owner's terminal (dry-run verified against the live Tinker theme).
+- #2 closed: https://tokuchu.onrender.com live on the free native service + free Postgres (30-day
+  expiry), configured through the API. First live run found the standalone trace dropped
+  playwright-core/browsers.json (fixed in 5cad7d2). Verified on production: sign-in via the logged
+  magic link, event, get_customization through Chromium in 24 s, request, RSVP, approval job 32 s,
+  checkout URL opens in a fresh browser with both names. Blueprint (Docker, paid) waits for a card.
