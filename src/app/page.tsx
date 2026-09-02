@@ -154,6 +154,7 @@ export default async function Page() {
                 <span className="eyebrow">Shopify WebMCP</span>
                 <h3>Every store's commerce tools</h3>
                 <p>Every Shopify storefront registers the same tools on its pages and answers the same calls at its UCP endpoint. Tokuchu uses them to find products and read variants.</p>
+                <span className="shot"><img src="/media/shopify-search.webp" alt="The demo's search step calling search_catalog at Shopify's Global Catalog and at the store's endpoint" loading="lazy" /></span>
                 <pre className="toolist" aria-label="Shopify's storefront WebMCP tools">{["search_catalog", "get_product", "show_variant", "browse_store", "get_cart", "update_cart", "cancel_cart", "proceed_to_checkout", "manage_orders", "search_shop_policies_and_faqs"].join("\n")}</pre>
               </div>
               <div className="card">
