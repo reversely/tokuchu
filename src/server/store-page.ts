@@ -1,9 +1,9 @@
 /**
  * A headless page of the store with the merchant tools registered, for the server paths that call
- * `get_customization` and `add_customized_to_cart`. The page loads the WebMCP polyfill and the
- * Customily adapter as init scripts until the theme carries them, waits for the merchant tools to
- * register on `document.modelContext`, and exposes one `call` that runs `executeTool` in the page
- * and parses the text payload it returns.
+ * `get_customization` and `add_customized_to_cart`. The page loads the WebMCP polyfill as an init
+ * script so the store's own theme asset registers the merchant tools on `document.modelContext`,
+ * waits for them, and exposes one `call` that runs `executeTool` in the page and parses the text
+ * payload it returns.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -12,7 +12,7 @@ export type StoreCall = { payload: Record<string, unknown>; isError: boolean };
 export type StorePage = { call(name: string, args: Record<string, unknown>): Promise<StoreCall> };
 
 export const MERCHANT_TOOLS = ["get_customization", "add_customized_to_cart"];
-const INIT_SCRIPTS = ["src/webmcp/polyfill.js", "integrations/customily/webmcp-customily.js"];
+const INIT_SCRIPTS = ["src/webmcp/polyfill.js"];
 const TOOLS_TIMEOUT_MS = 60_000;
 
 type PageContext = { getTools(): Promise<{ name: string }[]>; executeTool(tool: unknown, args: unknown): Promise<{ content: { text: string }[]; isError?: boolean }> };

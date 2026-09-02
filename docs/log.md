@@ -173,3 +173,7 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   playwright-core/browsers.json (fixed in 5cad7d2). Verified on production: sign-in via the logged
   magic link, event, get_customization through Chromium in 24 s, request, RSVP, approval job 32 s,
   checkout URL opens in a fresh browser with both names. Blueprint (Docker, paid) waits for a card.
+- #14 closed: the user allowed the theme write; scripts/install-theme-adapter.ts upserted the asset and
+  the layout tag into the live Tinker theme (previous layout saved locally). Verified with the polyfill
+  alone: get_customization and add_customized_to_cart register from the theme with three fields and six
+  variants. The app now injects only the polyfill. Live tools spec and flow demo green.

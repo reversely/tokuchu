@@ -14,7 +14,7 @@
 
 4. The page needs `document.modelContext`. A browser with native WebMCP support provides it; a headless driver injects `src/webmcp/polyfill.js` before the page scripts run. Shopify's own storefront WebMCP script registers its search, product, and cart tools under the same condition.
 
-Until the theme carries the asset, Tokuchu's server injects this file beside the polyfill into the headless store page it opens (`src/server/store-page.ts`), so the tools answer from the app before the install.
+The demo store's published theme carries this asset, so the tools answer on every page of the store with the polyfill alone; Tokuchu's server injects only the polyfill into the headless store page it opens (`src/server/store-page.ts`).
 
 ## Field definitions
 

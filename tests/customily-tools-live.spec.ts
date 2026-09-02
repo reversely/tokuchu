@@ -11,7 +11,6 @@ import { fileURLToPath } from "node:url";
 const CREWNECK_URL = "https://springbuilt.myshopify.com/products/1566-comfort-colors-garment-dyed-adult-crewneck-sweatshirt";
 const CREWNECK_ID = "10242071789817";
 const POLYFILL = fileURLToPath(new URL("../src/webmcp/polyfill.js", import.meta.url));
-const ADAPTER = fileURLToPath(new URL("../integrations/customily/webmcp-customily.js", import.meta.url));
 
 test.skip(!process.env.LIVE_CUSTOMILY, "Set LIVE_CUSTOMILY=1 to run against the live Customily storefront.");
 
@@ -55,7 +54,6 @@ async function cartLineCount(page: Page) {
 test("the crewneck page answers its customization, adds two customized lines with a shareable checkout, and replays nothing", async ({ page, browser }) => {
   test.setTimeout(240_000);
   await page.addInitScript({ path: POLYFILL });
-  await page.addInitScript({ path: ADAPTER });
   await page.goto(CREWNECK_URL, { waitUntil: "domcontentloaded" });
   await expect
     .poll(async () => page.evaluate(async () => (await document.modelContext!.getTools()).map((t) => t.name)), { timeout: 30_000 })

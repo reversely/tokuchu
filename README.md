@@ -34,7 +34,7 @@ The demo store sells a customizable crewneck. Its product page carries Shopify's
 
 The landing page's walkthrough clips in `public/media/` come from the same flow. With the dev server up and ffmpeg on PATH, `LIVE_CUSTOMILY=1 npx tsx scripts/capture-home-media.ts` runs the five steps against the live store and writes one GIF per step under the 1000 KB limit the pre-commit hook enforces; `APP_URL` points it at a server on another port.
 
-To install the merchant tools in the store's live theme through the Admin API (the app injects them at runtime until then), run `node --env-file=.env --import tsx scripts/install-theme-adapter.ts`; `--dry-run` prints the change without writing, and the previous layout is saved beside the script's output.
+The demo store's theme carries the merchant tools. To install or refresh them through the Admin API, run `node --env-file=.env --import tsx scripts/install-theme-adapter.ts`; `--dry-run` prints the change without writing, and the previous layout is saved beside the script's output.
 
 ## Deployment
 
