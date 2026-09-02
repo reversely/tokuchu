@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { snapshot } from "../../../server/api";
 import { Overview } from "./overview";
 import { Experience, type SearchReply } from "./experience";
@@ -9,8 +9,8 @@ import { WebMcpProvider } from "../../webmcp-provider";
 export type Snapshot = ReturnType<typeof snapshot>;
 type Tab = "overview" | "experience" | "attendees";
 
-/** The published event's page (PRD Section 5): the band with the tabs, the status, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. */
-export function Dashboard({ initial }: { initial: Snapshot }) {
+/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. */
+export function Dashboard({ initial, account }: { initial: Snapshot; account: ReactNode }) {
   const [snap, setSnap] = useState(initial);
   const [tab, setTab] = useState<Tab>("overview");
   const [copied, setCopied] = useState(false);
@@ -57,6 +57,7 @@ export function Dashboard({ initial }: { initial: Snapshot }) {
               {copied ? "Copied" : "Copy invite link"}
             </button>
           )}
+          {account}
         </div>
       </header>
       <main className="sheet">

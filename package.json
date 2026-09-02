@@ -20,9 +20,11 @@
     "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@auth/pg-adapter": "1.11.3",
     "@openai/agents": "^0.17.0",
     "@webmcp/shopify-ucp": "*",
     "next": "^16.3.3",
+    "next-auth": "5.0.0-beta.32",
     "pg": "8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Library, LibraryQuestion } from "../domain/store";
 import type { GuestStatus, ValueType } from "../domain/types";
 import { dateTime, money } from "../lib/format";
@@ -40,7 +40,7 @@ function slug(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
 }
 
-export function DraftPage({ library }: { library: Library }) {
+export function DraftPage({ library, account }: { library: Library; account: ReactNode }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>({
     title: "",
@@ -143,6 +143,7 @@ export function DraftPage({ library }: { library: Library }) {
           <button className="btn primary" type="button" onClick={publish} disabled={!canPublish || publishing} data-testid="publish">
             {publishing ? "Publishing" : "Publish"}
           </button>
+          {account}
         </div>
       </header>
       <main className="sheet">

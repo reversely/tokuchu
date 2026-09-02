@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { snapshot } from "../../../server/api";
 import { withPersistedEvent } from "../../../server/persistence";
 import { Dashboard } from "./dashboard";
+import { SessionPill } from "../../session-pill";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,5 +15,5 @@ export default async function Page({ params }: Params) {
   } catch {
     notFound();
   }
-  return <Dashboard initial={initial} />;
+  return <Dashboard initial={initial} account={<SessionPill />} />;
 }
