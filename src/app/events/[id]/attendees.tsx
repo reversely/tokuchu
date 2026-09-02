@@ -4,6 +4,7 @@ import type { Snapshot } from "./dashboard";
 import type { Requirement } from "../../../server/api";
 import { executeThroughApi } from "../../../webmcp/register";
 import { TOOLS } from "../../../webmcp/tools";
+import { DEMO_STORE } from "../../../demo/seed";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -200,10 +201,12 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
         <section className="block" aria-labelledby="routing" data-testid="webmcp-routing">
           <div className="labelrow"><h2 id="routing">How this reaches the vendor</h2><span className="eyebrow">WebMCP</span></div>
           <div className="list">
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store agent surface</span><span className="type"><code>https://{vendor}/api/ucp/mcp</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Fills the cart on approval</span><span className="type"><code>add_customized_to_cart</code></span></div>
+            {vendor === DEMO_STORE.shop_domain && <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-demo-store"><span>The demo store built for this project</span><span className="type"><code>{vendor}</code> trading as {DEMO_STORE.shop_name}</span></div>}
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store UCP endpoint</span><span className="type"><code>https://{vendor}/api/ucp/mcp</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Shopify page tools on the store's pages</span><span className="type"><code>search_catalog</code> <code>get_product</code> <code>get_cart</code> <code>update_cart</code> and the rest</span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Tokuchu page tool that requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that fills the cart on approval</span><span className="type"><code>add_customized_to_cart</code></span></div>
           </div>
         </section>
       )}

@@ -2,20 +2,47 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
 import { DEMO_ATTENDEES, DEMO_STORE } from "../../demo/seed";
-import { STEPS, startIndex, type TourAction, type TourStep, type TourTarget } from "../../demo/steps";
+import { STEPS, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
 
 /** The pause between a step settling and autoplay moving on, so the result reads before the next callout. */
 const READ_MS = 3000;
 const POLL_MS = 250;
+/** How often the wire re-reads the gift's updates thread while a step that lists it runs. */
+const THREAD_MS = 3000;
 const KEY_MS = 18;
 const STORE_MS = 240_000;
 const PAGE_MS = 15_000;
-const CALLOUT_WIDTH = 420;
+const CALLOUT_WIDTH = 580;
 
-type Phase = "entering" | "ready" | "running" | "failed";
+type Phase = TourPhase;
 type Rect = { top: number; left: number; width: number; height: number };
 type Viewport = { width: number; height: number };
 type Note = (text: string | null) => void;
+
+const EMPTY_PAGE: WirePage = { funnelRows: [], rankedCount: 0, askedLabels: [], attendeeRows: 0 };
+
+const text = (el: Element) => (el.textContent || "").replace(/\s+/g, " ").trim();
+const texts = (selector: string) => Array.from(document.querySelectorAll(selector)).map(text);
+
+/** What the wire reads off the page, the same reads the recorded flow demo's overlay made; a funnel row's cells join with a gap. */
+function readPage(): WirePage {
+  return {
+    funnelRows: Array.from(document.querySelectorAll('[data-testid="funnel"] .row')).map((row) => Array.from(row.children).map(text).join("  ")),
+    rankedCount: document.querySelectorAll('[data-testid="result"]').length,
+    askedLabels: texts('[data-testid="requested-field"]:not([data-source="guest"]):not([data-source="event"]):not([data-source="literal"]) strong'),
+    attendeeRows: document.querySelectorAll('[data-testid="attendee-row"]').length
+  };
+}
+
+function samePage(a: WirePage, b: WirePage): boolean {
+  return a.rankedCount === b.rankedCount && a.attendeeRows === b.attendeeRows && a.funnelRows.join("\n") === b.funnelRows.join("\n") && a.askedLabels.join("\n") === b.askedLabels.join("\n");
+}
+
+/** The wire marks the call in flight; a running step with no marked line shows the indicator on its last line. */
+function markWorking(lines: WireLine[], phase: Phase): WireLine[] {
+  if (phase !== "running" || lines.length === 0 || lines.some((l) => l.state === "working")) return lines;
+  return lines.map((l, i) => (i === lines.length - 1 ? { ...l, state: "working" } : l));
+}
 
 function selector({ testId, shop }: TourTarget): string {
   return `[data-testid="${testId}"]${shop ? `[data-shop="${shop}"]` : ""}`;
@@ -153,6 +180,8 @@ export function Tour({ snap }: { snap: Snapshot }) {
   const [error, setError] = useState<string | null>(null);
   const [autoplay, setAutoplay] = useState(false);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [page, setPage] = useState<WirePage>(EMPTY_PAGE);
+  const [updates, setUpdates] = useState<WireUpdate[]>([]);
   const [completed, setCompleted] = useState<Set<string>>(() => new Set());
   const [height, setHeight] = useState(0);
   // The viewport is read after mount so the server and the first client render agree on the callout's place.
@@ -196,15 +225,26 @@ export function Tour({ snap }: { snap: Snapshot }) {
     };
   }, [step]);
 
-  // The spotlight follows the target: the rect is read on a short interval so a re-render or a scroll moves it.
+  // The spotlight follows the target, or the wait region while the action runs and that region is on the page. The
+  // rect and the page reads the wire lists come from one short interval, so a re-render or a scroll moves both.
   useEffect(() => {
     let previous: Rect | null = null;
+    let previousPage = EMPTY_PAGE;
+    let anchored: HTMLElement | null = null;
     const read = () => {
-      const el = find<HTMLElement>(step.target);
+      const waiting = phase === "running" && step.waitTarget ? find<HTMLElement>({ testId: step.waitTarget }) : null;
+      const el = waiting ?? find<HTMLElement>(step.target);
+      if (waiting && waiting !== anchored) waiting.scrollIntoView({ block: "center" });
+      anchored = waiting;
       const next = el ? (({ top, left, width, height }) => ({ top, left, width, height }))(el.getBoundingClientRect()) : null;
       if (!sameRect(previous, next)) {
         previous = next;
         setRect(next);
+      }
+      const nextPage = readPage();
+      if (!samePage(previousPage, nextPage)) {
+        previousPage = nextPage;
+        setPage(nextPage);
       }
     };
     read();
@@ -216,7 +256,28 @@ export function Tour({ snap }: { snap: Snapshot }) {
       window.removeEventListener("resize", read);
       window.removeEventListener("scroll", read, true);
     };
-  }, [step]);
+  }, [step, phase]);
+
+  // The gift's updates thread feeds the wire while a step that lists it runs; the cart job posts each step there.
+  const giftId = snap.gifts[0]?.id ?? null;
+  useEffect(() => {
+    if (!step.readsThread || phase !== "running" || !giftId) return;
+    let stop = false;
+    const read = async () => {
+      try {
+        const res = await fetch(`/api/events/${snap.event.id}/gifts/${giftId}/updates`, { cache: "no-store" });
+        if (res.ok && !stop) setUpdates(((await res.json()) as { updates: WireUpdate[] }).updates.map(({ text, reference }) => ({ text, reference })));
+      } catch {
+        // The next tick reads again.
+      }
+    };
+    void read();
+    const timer = setInterval(() => void read(), THREAD_MS);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [step.readsThread, phase, giftId, snap.event.id]);
 
   /** Runs the step's action once, then moves on; a step already shown finished moves on at once. */
   const advance = useCallback(async () => {
@@ -259,6 +320,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
   const checkout = last ? (snap.gifts[0]?.checkout_url ?? null) : null;
   const box = viewport ? calloutPosition(rect, height, viewport) : { top: 0, left: 0, visibility: "hidden" as const };
+  const wire = markWorking(step.wire?.({ snap, gift: snap.gifts[0] ?? null, page, updates, phase }) ?? [], phase);
 
   return (
     <div className="tour" data-testid="tour" data-step={step.id} data-phase={phase}>
@@ -267,6 +329,11 @@ export function Tour({ snap }: { snap: Snapshot }) {
         <div className="tour-count">Step {index + 1} of {STEPS.length}</div>
         <h2 id="tour-title">{step.title}</h2>
         <p data-testid="tour-narration">{step.narration}</p>
+        {wire.length > 0 && (
+          <ol className="tour-wire" data-testid="tour-wire" aria-label="The WebMCP calls this step makes">
+            {wire.map((l, i) => <li key={i} data-state={l.state}>{l.text}</li>)}
+          </ol>
+        )}
         {note && <p className="tour-note" data-testid="tour-note">{note}</p>}
         {error && <p className="error" role="alert" data-testid="tour-error">{error}</p>}
         <div className="tour-acts">

@@ -16,9 +16,10 @@ export const DEMO_EVENT = {
   delivery: { destination: "venue", address: null, needed_by: "2027-03-08" }
 };
 
-/** The store whose crewneck the tour picks and the sentence the tour searches with. */
+/** The demo store built for this project, whose crewneck the tour picks, and the sentence the tour searches with. */
 export const DEMO_STORE = {
   shop_domain: "springbuilt.myshopify.com",
+  shop_name: "Customworks",
   search: "personalized star map crewnecks with each attendee's name"
 };
 

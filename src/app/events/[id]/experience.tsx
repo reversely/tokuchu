@@ -381,59 +381,62 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
           </section>
         )}
 
-        {step === "results" && searching && (
-          <section aria-labelledby="gx-results" aria-busy="true" data-testid="results-skeleton">
-            <h1 className="title" id="gx-results">Results for {searchedFor}</h1>
-            <p className="lead">Searching the catalog and checking delivery</p>
-            <div className="list" style={{ marginBottom: 24 }}>
-              {[0, 1, 2, 3, 4].map((i) => <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span className="skel-line" style={{ width: `${40 + i * 8}%` }} /><span className="skel-line" style={{ width: 90 }} /></div>)}
-            </div>
-            <div className="results">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div className="prod skel-card" key={i}>
-                  <span className="ph" />
-                  <span className="body"><span className="skel-line" style={{ width: "80%" }} /><span className="skel-line" style={{ width: "50%" }} /><span className="skel-line" style={{ width: "60%" }} /></span>
-                  <span className="act"><span className="skel-line" style={{ width: 48 }} /><span className="skel-line" style={{ width: 64 }} /></span>
+        {step === "results" && (
+          <div data-testid="search-results">
+            {searching && (
+              <section aria-labelledby="gx-results" aria-busy="true" data-testid="results-skeleton">
+                <h1 className="title" id="gx-results">Results for {searchedFor}</h1>
+                <p className="lead">Searching the catalog and checking delivery</p>
+                <div className="list" style={{ marginBottom: 24 }}>
+                  {[0, 1, 2, 3, 4].map((i) => <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span className="skel-line" style={{ width: `${40 + i * 8}%` }} /><span className="skel-line" style={{ width: 90 }} /></div>)}
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {step === "results" && !searching && reply && (
-          <section aria-labelledby="gx-results">
-            <h1 className="title" id="gx-results">Results for {searchedFor}</h1>
-            <p className="lead">{Math.min(shown, reply.ranked.length)} of {reply.funnel?.ranked ?? reply.ranked.length} shown</p>
-            {reply.funnel && (
-              <div className="list" style={{ marginBottom: 24 }} data-testid="funnel">
-                {reply.funnel.searches.map((s, i) => (
-                  <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span>"{s.query}"{s.categories?.length ? ` in ${s.categories.join(" and ")}` : ""}</span><span className="type">{s.returned} of {s.total ?? "?"} in the catalog</span></div>
-                ))}
-                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Distinct products</span><span className="type">{reply.funnel.merged}</span></div>
-                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Checked for delivery to the venue</span><span className="type">{reply.funnel.probed}</span></div>
-                {Object.entries(reply.funnel.excluded).map(([rule, n]) => (
-                  <div className="row" key={rule} style={{ gridTemplateColumns: "1fr auto" }}><span>Excluded by {rule.replace(/_/g, " ")}</span><span className="type">{n}</span></div>
-                ))}
-              </div>
+                <div className="results">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div className="prod skel-card" key={i}>
+                      <span className="ph" />
+                      <span className="body"><span className="skel-line" style={{ width: "80%" }} /><span className="skel-line" style={{ width: "50%" }} /><span className="skel-line" style={{ width: "60%" }} /></span>
+                      <span className="act"><span className="skel-line" style={{ width: 48 }} /><span className="skel-line" style={{ width: 64 }} /></span>
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
-            <div className="results" data-testid="results">
-              {reply.ranked.slice(0, shown).map((p) => (
-                <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result" data-shop={p.shop_domain}>
-                  {p.image_url ? <img className="ph" src={p.image_url} alt="" /> : <span className="ph" />}
-                  <span className="body">
-                    <span className="name">{p.title}</span>
-                    <span className="meta">{p.shop_name}</span>
-                    <span className="meta">{p.delivery?.window ? `Arrives by ${dateOnly(p.delivery.window.latest)}` : p.delivery?.text ? p.delivery.text : "Delivery not stated"}</span>
-                    {p.option_names.length > 0 && <span className="pers">Choices: {p.option_names.join(", ")}</span>}
-                  </span>
-                  <span className="act"><span className="price">{p.price_cents !== null ? money(p.price_cents, p.currency ?? "CAD") : ""}</span><span className="add">Choose</span></span>
-                </button>
-              ))}
-              {shown < reply.ranked.length && <button type="button" className="more" onClick={() => setShown(shown + 5)} data-testid="show-more">Show 5 more</button>}
-            </div>
-            {reply.ranked.length === 0 && <p className="lead">Nothing fits and {reply.excluded.length} excluded</p>}
-            <div style={{ display: "flex", gap: 10, marginTop: 24 }}><button type="button" className="btn ghost" onClick={() => setStep("pick")}>Back</button></div>
-          </section>
+            {!searching && reply && (
+              <section aria-labelledby="gx-results">
+                <h1 className="title" id="gx-results">Results for {searchedFor}</h1>
+                <p className="lead">{Math.min(shown, reply.ranked.length)} of {reply.funnel?.ranked ?? reply.ranked.length} shown</p>
+                {reply.funnel && (
+                  <div className="list" style={{ marginBottom: 24 }} data-testid="funnel">
+                    {reply.funnel.searches.map((s, i) => (
+                      <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span>"{s.query}"{s.categories?.length ? ` in ${s.categories.join(" and ")}` : ""}</span><span className="type">{s.returned} of {s.total ?? "?"} in the catalog</span></div>
+                    ))}
+                    <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Distinct products</span><span className="type">{reply.funnel.merged}</span></div>
+                    <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Checked for delivery to the venue</span><span className="type">{reply.funnel.probed}</span></div>
+                    {Object.entries(reply.funnel.excluded).map(([rule, n]) => (
+                      <div className="row" key={rule} style={{ gridTemplateColumns: "1fr auto" }}><span>Excluded by {rule.replace(/_/g, " ")}</span><span className="type">{n}</span></div>
+                    ))}
+                  </div>
+                )}
+                <div className="results" data-testid="results">
+                  {reply.ranked.slice(0, shown).map((p) => (
+                    <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result" data-shop={p.shop_domain}>
+                      {p.image_url ? <img className="ph" src={p.image_url} alt="" /> : <span className="ph" />}
+                      <span className="body">
+                        <span className="name">{p.title}</span>
+                        <span className="meta">{p.shop_name}</span>
+                        <span className="meta">{p.delivery?.window ? `Arrives by ${dateOnly(p.delivery.window.latest)}` : p.delivery?.text ? p.delivery.text : "Delivery not stated"}</span>
+                        {p.option_names.length > 0 && <span className="pers">Choices: {p.option_names.join(", ")}</span>}
+                      </span>
+                      <span className="act"><span className="price">{p.price_cents !== null ? money(p.price_cents, p.currency ?? "CAD") : ""}</span><span className="add">Choose</span></span>
+                    </button>
+                  ))}
+                  {shown < reply.ranked.length && <button type="button" className="more" onClick={() => setShown(shown + 5)} data-testid="show-more">Show 5 more</button>}
+                </div>
+                {reply.ranked.length === 0 && <p className="lead">Nothing fits and {reply.excluded.length} excluded</p>}
+                <div style={{ display: "flex", gap: 10, marginTop: 24 }}><button type="button" className="btn ghost" onClick={() => setStep("pick")}>Back</button></div>
+              </section>
+            )}
+          </div>
         )}
 
         {step === "recipients" && chosen && (

@@ -1,9 +1,11 @@
 /**
  * The guest session through the browser: `/demo` sets the signed cookie, creates the seeded event,
  * and lands on its dashboard; a second visit lands on the same event; the demo organizer lists only
- * its event, cannot create a second one, and gets 403 on an event another organizer owns. The
- * server runs without DATABASE_URL, so a request with no cookie is the local organizer. The tour
- * mounts on the demo event with its first step and stays off an ordinary event.
+ * its event, cannot create a second one, gets 403 from the API on an event another organizer owns,
+ * and lands back on its own event when it opens that event's page. The server runs without
+ * DATABASE_URL, so a request with no cookie is the local organizer. The tour mounts on the demo
+ * event with its first step, lists search_catalog in its second step's wire, and stays off an
+ * ordinary event.
  */
 import { expect, test } from "@playwright/test";
 import { STEPS } from "../src/demo/steps";
@@ -22,6 +24,11 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   await expect(page.getByTestId("tour-narration")).toHaveText(STEPS[0].narration);
   await expect(page.getByTestId("tour-step")).toHaveAttribute("data-step", "1");
   await expect(page.getByTestId("tour-autoplay")).not.toBeChecked();
+  await page.getByTestId("tour-next").click();
+  await expect(page.getByTestId("tour-step")).toHaveAttribute("data-step", "2");
+  await expect(page.getByTestId("tour-wire")).toContainText("search_catalog");
+  await page.getByTestId("tour-back").click();
+  await expect(page.getByTestId("tour-step")).toHaveAttribute("data-step", "1");
 
   const cookie = (await page.context().cookies()).find((c) => c.name === "tokuchu_demo");
   expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Lax" });
@@ -45,7 +52,7 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   const theirs = (await (await request.post("/api/events", { data: BODY })).json()) as { id: string };
   expect((await page.request.get(`/api/events/${theirs.id}`)).status()).toBe(403);
   await page.goto(`/events/${theirs.id}`);
-  await expect(page.getByTestId("not-found-title")).toBeVisible();
+  await expect(page).toHaveURL(`/events/${id}?demo=1`);
 });
 
 test("the tour stays off an event that is not the demo's", async ({ page }) => {
