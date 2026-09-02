@@ -26,6 +26,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
     const tick = async () => {
       try {
         const res = await fetch(`/api/events/${event.id}`, { cache: "no-store" });
+        if (res.status === 403 && snap.demo) window.location.assign("/demo");
         if (res.ok && !stop) setSnap((await res.json()) as Snapshot);
       } catch {
         // The next tick reads again.

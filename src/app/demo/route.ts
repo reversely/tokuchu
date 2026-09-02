@@ -18,6 +18,9 @@ function usesMemory(): boolean {
  * organizer already runs the real flow, so that request goes to the event list instead.
  */
 export async function GET(request: NextRequest) {
+  // A browser prefetching the typed address would mint a second demo id and overwrite the cookie the
+  // real navigation sets, so a prefetch gets an empty answer and no cookie.
+  if (isPrefetch(request)) return new NextResponse(null, { status: 204 });
   try {
     const caller = await currentCaller();
     if (caller && !caller.is_demo && !caller.is_local) return NextResponse.redirect(new URL("/events", publicOrigin(request)));
@@ -37,4 +40,10 @@ export async function GET(request: NextRequest) {
 /** The origin a redirect should carry: the configured public URL, since the standalone server reports its bind address in request.url. */
 function publicOrigin(request: Request): string {
   return process.env.APP_URL || process.env.AUTH_URL ? appOrigin() : new URL(request.url).origin;
+}
+
+/** Chrome and Safari mark a speculative fetch with Sec-Purpose or Purpose. */
+function isPrefetch(request: NextRequest): boolean {
+  const purpose = `${request.headers.get("sec-purpose") ?? ""} ${request.headers.get("purpose") ?? ""}`.toLowerCase();
+  return purpose.includes("prefetch") || purpose.includes("prerender");
 }
