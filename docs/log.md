@@ -193,3 +193,6 @@ only; LLM paths off unless needed.
   callout with first-person narration, Back/Next/Autoplay. Gate: 183 vitest, 21 Playwright, live
   tour 1/1 from main (1.2 min to the checkout link).
 - fix(demo) c7c43e6: /demo on Render redirected to https://0.0.0.0:10000; redirects now use APP_URL.
+- Guest tour verified on production: /demo?autoplay=1 reached the checkout link in 108 s; a fresh
+  browser opened it with Avery, Blake, and Carmen on the lines. Note for checks: the tour root is a
+  zero-size container, so wait for it attached rather than visible.
