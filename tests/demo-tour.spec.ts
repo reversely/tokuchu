@@ -19,7 +19,7 @@ test("the tour runs the flow to the checkout link and the store's cart names eve
   try {
     const page = await organizer.newPage();
     await page.goto("/demo?autoplay=1");
-    await expect(page).toHaveURL(/\/events\/[^/?]+\?demo=1&autoplay=1$/);
+    await expect(page).toHaveURL(/\/events\/[^/?]+\?demo=1&t=demo_[^&]+&autoplay=1$/);
     await expect(page.getByTestId("tour-autoplay")).toBeChecked();
     await expect(page.getByTestId("tour-narration")).toHaveText(STEPS[0].narration);
     await expect(page.getByTestId("tour")).toHaveAttribute("data-step", "checkout", { timeout: TOUR_MS });

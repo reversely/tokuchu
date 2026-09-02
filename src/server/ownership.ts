@@ -1,7 +1,8 @@
 /**
  * Who may read and change an event: the organizer whose user id the event's `owner_id` names. A
- * request with no session but a signed demo cookie runs as the demo organizer the cookie names, in
- * every mode. A request with neither runs as the local organizer when `DATABASE_URL` is unset
+ * request with no session but a signed demo cookie, or the same signed value in the demo header,
+ * runs as the demo organizer that value names, in every mode. A request with none of those runs as
+ * the local organizer when `DATABASE_URL` is unset
  * outside production, so the dev server and the browser suites need no sign-in. An event a signed-in
  * account owns answers such a request the way it answers a stranger, so the browser goes to sign in.
  */
@@ -9,6 +10,7 @@ import { state } from "../domain/store";
 import type { Event } from "../domain/types";
 import { hasDatabase } from "./db";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
+import { DEMO_HEADER } from "../demo/token";
 import { DEMO_COOKIE, demoIdFromCookie } from "./demo-session";
 import { withPersistedEvent } from "./persistence";
 
@@ -71,7 +73,7 @@ export function setSessionReader(reader: Reader | null): void {
   sessionReader = reader ?? undefined;
 }
 
-/** Test hook: the demo id reader used instead of the request's cookie; null restores the default. */
+/** Test hook: the demo id reader used instead of the request's cookie and header; null restores the default. */
 export function setDemoIdReader(reader: Reader | null): void {
   demoIdReader = reader ?? undefined;
 }
@@ -82,16 +84,22 @@ async function sessionUserId(): Promise<string | undefined> {
   return (await currentSession())?.user?.id;
 }
 
-/** `next/headers` loads on first use for the same reason; the demo id is null outside a request. */
-async function cookieDemoId(): Promise<string | null> {
-  const { cookies } = await import("next/headers");
-  return demoIdFromCookie((await cookies()).get(DEMO_COOKIE)?.value);
+/** `next/headers` loads on first use for the same reason; the demo id comes from the cookie, else the header, and is null outside a request. */
+async function requestDemoId(): Promise<string | null> {
+  const { cookies, headers } = await import("next/headers");
+  return demoIdFromCookie((await cookies()).get(DEMO_COOKIE)?.value) ?? demoIdFromCookie((await headers()).get(DEMO_HEADER));
 }
 
-/** The caller behind the current request. */
-export async function currentCaller(): Promise<Caller | null> {
+/**
+ * The caller behind the current request.
+ *
+ * Args:
+ *   demoToken: a signed demo token the request carried outside the cookie and the header, such as
+ *     the event page's `t` search param; it counts after those and before the local organizer.
+ */
+export async function currentCaller(demoToken?: string | null): Promise<Caller | null> {
   const userId = await (sessionReader ?? sessionUserId)();
-  const demoId = userId ? null : await (demoIdReader ?? cookieDemoId)();
+  const demoId = userId ? null : ((await (demoIdReader ?? requestDemoId)()) ?? demoIdFromCookie(demoToken));
   return callerFor(userId, demoId);
 }
 

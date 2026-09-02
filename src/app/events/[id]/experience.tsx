@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Snapshot } from "./dashboard";
+import { withDemoHeaders } from "../../../demo/token";
 import type { Scored } from "../../../agent/search";
 import cards from "../../../agent/cards.json";
 import type { AttributeDefinition, Batch, GuestStatus } from "../../../domain/types";
@@ -92,7 +93,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
   const [neededBy, setNeededBy] = useState("");
   async function saveNeededBy() {
     if (!neededBy) return;
-    const res = await fetch(`/api/events/${snap.event.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delivery: { ...(snap.event.delivery ?? { destination: "venue", address: null }), needed_by: neededBy } }) });
+    const res = await fetch(`/api/events/${snap.event.id}`, withDemoHeaders({ method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ delivery: { ...(snap.event.delivery ?? { destination: "venue", address: null }), needed_by: neededBy } }) }));
     if (res.ok) onChanged();
   }
 
@@ -103,7 +104,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setStep("results");
     setError(null);
     try {
-      const res = await fetch(`/api/events/${snap.event.id}/search`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(`/api/events/${snap.event.id}/search`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       setReply((await res.json()) as SearchReply);
       setShown(5);
@@ -146,7 +147,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
       const rows = Object.entries(mapping).filter(([, variantId]) => variantId).map(([key, variantId]) => { const [definition_id, value] = key.split("|"); return { definition_id, value, variant_id: variantId! }; });
       const recipientsFilter = RECIPIENT_FILTERS[recipients];
       const body = { product_id: editing ? editing.product_id : chosen!.product_id, shop_domain: editing ? editing.shop_domain : chosen!.shop_domain, product_title: editing ? editing.product_title : chosen!.title, recipients: recipientsFilter, rules: [{ filter: recipientsFilter, product_id: editing ? editing.product_id : chosen!.product_id }], mapping: rows, default_variant_id: defaultVariant, variants, missing_value_fallback: fallback, post_lock_cancellation: postLock, delivery_window: editing ? (editing.delivery_window ?? null) : (chosen!.delivery?.window ?? null), personalization: editing ? (editing.personalization ?? null) : (chosen!.personalization ?? null), product_url: editing ? (editing.product_url ?? null) : (chosen!.url ?? null) };
-      const res = await fetch(editing ? `/api/events/${snap.event.id}/gifts/${editing.id}` : `/api/events/${snap.event.id}/gifts`, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await fetch(editing ? `/api/events/${snap.event.id}/gifts/${editing.id}` : `/api/events/${snap.event.id}/gifts`, withDemoHeaders({ method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       setEditing(null);
       setChosen(null);
@@ -163,7 +164,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setBusy(action === "remove" ? "Removing the gift" : action === "send" ? "Pricing the cart at the shop" : "Approving");
     setError(null);
     try {
-      const res = await fetch(action === "remove" ? `/api/events/${snap.event.id}/gifts/${gift.id}` : `/api/events/${snap.event.id}/gifts/${gift.id}/${action}`, { method: action === "remove" ? "DELETE" : "POST" });
+      const res = await fetch(action === "remove" ? `/api/events/${snap.event.id}/gifts/${gift.id}` : `/api/events/${snap.event.id}/gifts/${gift.id}/${action}`, withDemoHeaders({ method: action === "remove" ? "DELETE" : "POST" }));
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       onChanged();
     } catch (e) {
@@ -203,7 +204,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setCurateError(null);
     setCuration(null);
     try {
-      const res = await fetch(`/api/events/${snap.event.id}/curate?stream=1`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) });
+      const res = await fetch(`/api/events/${snap.event.id}/curate?stream=1`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) }));
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       if (!res.body) throw new Error("The run returned nothing");
       const reader = res.body.getReader();

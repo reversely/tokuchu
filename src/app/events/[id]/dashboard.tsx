@@ -6,6 +6,7 @@ import { Experience, type SearchReply } from "./experience";
 import { Attendees } from "./attendees";
 import { WebMcpProvider } from "../../webmcp-provider";
 import { Tour } from "../../demo/tour";
+import { withDemoHeaders, withDemoToken } from "../../../demo/token";
 
 export type Snapshot = ReturnType<typeof snapshot>;
 type Tab = "overview" | "experience" | "attendees";
@@ -25,8 +26,8 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
     let stop = false;
     const tick = async () => {
       try {
-        const res = await fetch(`/api/events/${event.id}`, { cache: "no-store" });
-        if (res.status === 403 && snap.demo) window.location.assign("/demo");
+        const res = await fetch(`/api/events/${event.id}`, withDemoHeaders({ cache: "no-store" }));
+        if (res.status === 403 && snap.demo) window.location.assign(withDemoToken("/demo"));
         if (res.ok && !stop) setSnap((await res.json()) as Snapshot);
       } catch {
         // The next tick reads again.

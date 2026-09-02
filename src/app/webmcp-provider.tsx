@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type DependencyList } from "react";
 import { registerTokuchuTools, type RegisterResult } from "../webmcp/register";
+import { withDemoHeaders } from "../demo/token";
 
 type Status = "pending" | "ready" | "unavailable";
 const LABEL: Record<Status, string> = { pending: "Agent tools loading", ready: "Agent tools ready", unavailable: "Agent tools unavailable in this browser" };
@@ -11,9 +12,9 @@ function wantsPolyfill(): boolean {
   return new URLSearchParams(window.location.search).get("webmcp") === "polyfill";
 }
 
-/** A write through a tool changes the event; the dashboard listens for this event and re-reads the snapshot. */
+/** A write through a tool changes the event; the dashboard listens for this event and re-reads the snapshot. A demo page's token goes out as the demo header. */
 function notifyingFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  return fetch(input, init).then((response) => {
+  return fetch(input, withDemoHeaders(init)).then((response) => {
     if (response.ok && init?.method && init.method !== "GET") window.dispatchEvent(new Event("event:changed"));
     return response;
   });

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEvent, resetState, type EventInput } from "../domain/store";
+import { demoCookieValue } from "./demo-session";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { assertOwner, callerFor, currentCaller, LOCAL_ORGANIZER_ID, setDemoIdReader, setSessionReader, withEventOwnedBy } from "./ownership";
 import { listOwnedEvents } from "./persistence";
@@ -54,6 +55,15 @@ describe("currentCaller", () => {
     expect(await currentCaller()).toEqual(demo);
     setSessionReader(async () => "user_a");
     expect(await currentCaller()).toEqual(owner);
+  });
+
+  it("reads a signed token given outside the request after the cookie and header and before the local fallback", async () => {
+    setDemoIdReader(async () => null);
+    setSessionReader(async () => null);
+    expect(await currentCaller(demoCookieValue(demo.id))).toEqual(demo);
+    expect(await currentCaller(`${demo.id}.${"0".repeat(64)}`)).toEqual({ id: LOCAL_ORGANIZER_ID, is_local: true, is_demo: false });
+    setDemoIdReader(async () => "demo_from_cookie");
+    expect(await currentCaller(demoCookieValue(demo.id))).toEqual({ id: "demo_from_cookie", is_local: false, is_demo: true });
   });
 });
 

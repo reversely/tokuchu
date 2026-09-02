@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
 import { DEMO_ATTENDEES, DEMO_STORE } from "../../demo/seed";
 import { STEPS, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
+import { withDemoHeaders } from "../../demo/token";
 
 /** The pause between a step settling and autoplay moving on, so the result reads before the next callout. */
 const READ_MS = 3000;
@@ -127,7 +128,7 @@ async function request(setNote: Note): Promise<void> {
 
 /** Loads the three replies through the RSVP route with the store's size choice and the star map answers. */
 async function answer(eventId: string, setNote: Note): Promise<void> {
-  const snap = (await (await fetch(`/api/events/${eventId}`, { cache: "no-store" })).json()) as Snapshot;
+  const snap = (await (await fetch(`/api/events/${eventId}`, withDemoHeaders({ cache: "no-store" }))).json()) as Snapshot;
   const def = (key: string) => snap.definitions.find((d) => d.key === key);
   const size = def("variant_size");
   const location = def("star_map_location");
@@ -135,7 +136,7 @@ async function answer(eventId: string, setNote: Note): Promise<void> {
   if (!size || !location || !time) throw new Error("The requested questions are not on the event yet");
   const sizeValue = (label: string) => size.constraints.options?.find((o) => o.label.toLowerCase() === label.toLowerCase())?.value ?? size.constraints.options?.[0]?.value;
   const guests = DEMO_ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: { [size.id]: sizeValue(a.size), [location.id]: a.location, [time.id]: a.time } }));
-  const res = await fetch(`/api/events/${eventId}/rsvp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests }) });
+  const res = await fetch(`/api/events/${eventId}/rsvp`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests }) }));
   if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "The replies did not load");
   changed();
   await waitFor(() => document.querySelectorAll('[data-testid="attendee-row"]').length >= DEMO_ATTENDEES.length && document.querySelector('[data-state="missing"]') === null, "Filling the records grid", PAGE_MS, setNote);
@@ -265,7 +266,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
     let stop = false;
     const read = async () => {
       try {
-        const res = await fetch(`/api/events/${snap.event.id}/gifts/${giftId}/updates`, { cache: "no-store" });
+        const res = await fetch(`/api/events/${snap.event.id}/gifts/${giftId}/updates`, withDemoHeaders({ cache: "no-store" }));
         if (res.ok && !stop) setUpdates(((await res.json()) as { updates: WireUpdate[] }).updates.map(({ text, reference }) => ({ text, reference })));
       } catch {
         // The next tick reads again.

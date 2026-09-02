@@ -1,7 +1,8 @@
 /**
- * The guest session behind `/demo`: a demo organizer id in a cookie signed with the auth secret. The
- * id carries a fixed prefix so the owner of an event says whether the event is a demo, and the
- * signature keeps a visitor from naming another visitor's id.
+ * The guest session behind `/demo`: a demo organizer id signed with the auth secret. The signed
+ * value travels in a cookie and, for a browser that drops the cookie, in the event URL and the demo
+ * header (`src/demo/token.ts`). The id carries a fixed prefix so the owner of an event says whether
+ * the event is a demo, and the signature keeps a visitor from naming another visitor's id.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { authSecret } from "./auth-secret";
@@ -24,12 +25,12 @@ function sign(id: string, secret: string): string {
   return createHmac("sha256", secret).update(id).digest("hex");
 }
 
-/** The cookie value: the id and its hex HMAC joined with a dot. */
+/** The signed value the cookie, the URL token, and the header carry: the id and its hex HMAC joined with a dot. */
 export function demoCookieValue(id: string, secret = authSecret() ?? ""): string {
   return `${id}.${sign(id, secret)}`;
 }
 
-/** The demo id a cookie value names, or null when the value is absent or the signature does not match. */
+/** The demo id a signed value names, or null when the value is absent or the signature does not match. */
 export function demoIdFromCookie(value: string | null | undefined, secret = authSecret() ?? ""): string | null {
   if (!value) return null;
   const dot = value.lastIndexOf(".");

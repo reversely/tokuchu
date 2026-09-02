@@ -5,6 +5,7 @@ import { hasDatabase } from "../../server/db";
 import { demoEventFor, sweepDemoState } from "../../server/demo";
 import { DEMO_COOKIE, demoCookieOptions, demoCookieValue, demoIdFromCookie, newDemoId } from "../../server/demo-session";
 import { currentCaller } from "../../server/ownership";
+import { DEMO_HEADER, DEMO_TOKEN_PARAM } from "../../demo/token";
 
 /** Only the in-memory store sweeps here; the database sweeps from `npm run sweep-demo`. */
 function usesMemory(): boolean {
@@ -12,10 +13,12 @@ function usesMemory(): boolean {
 }
 
 /**
- * Starts or resumes a guest session: the cookie's demo organizer keeps its event, and a visitor
- * without one gets a fresh id, a published event from the seed, and the cookie. `?autoplay=1`
- * carries through to the dashboard so the tour runs on its own. A signed-in
- * organizer already runs the real flow, so that request goes to the event list instead.
+ * Starts or resumes a guest session: the demo organizer the cookie, the demo header, or the `t`
+ * token names keeps its event, and a visitor without one gets a fresh id, a published event from
+ * the seed, and the cookie. The redirect repeats the signed value as `t` so a browser that drops
+ * the cookie still reaches its event, and `?autoplay=1` carries through so the tour runs on its
+ * own. A signed-in organizer already runs the real flow, so that request goes to the event list
+ * instead.
  */
 export async function GET(request: NextRequest) {
   // A browser prefetching the typed address would mint a second demo id and overwrite the cookie the
@@ -25,16 +28,23 @@ export async function GET(request: NextRequest) {
     const caller = await currentCaller();
     if (caller && !caller.is_demo && !caller.is_local) return NextResponse.redirect(new URL("/events", publicOrigin(request)));
     if (usesMemory()) sweepDemoState();
-    const demoId = demoIdFromCookie(request.cookies.get(DEMO_COOKIE)?.value) ?? newDemoId();
+    const demoId = carriedDemoId(request) ?? newDemoId();
     const eventId = await demoEventFor(demoId);
+    const token = demoCookieValue(demoId);
     const target = new URL(`/events/${eventId}?demo=1`, publicOrigin(request));
+    target.searchParams.set(DEMO_TOKEN_PARAM, token);
     if (request.nextUrl.searchParams.get("autoplay") === "1") target.searchParams.set("autoplay", "1");
     const response = NextResponse.redirect(target);
-    response.cookies.set(DEMO_COOKIE, demoCookieValue(demoId), demoCookieOptions());
+    response.cookies.set(DEMO_COOKIE, token, demoCookieOptions());
     return response;
   } catch (e) {
     return errorResponse(e);
   }
+}
+
+/** The demo id the request already holds, from the cookie, the demo header, or the `t` token in that order. */
+function carriedDemoId(request: NextRequest): string | null {
+  return demoIdFromCookie(request.cookies.get(DEMO_COOKIE)?.value) ?? demoIdFromCookie(request.headers.get(DEMO_HEADER)) ?? demoIdFromCookie(request.nextUrl.searchParams.get(DEMO_TOKEN_PARAM));
 }
 
 /** The origin a redirect should carry: the configured public URL, since the standalone server reports its bind address in request.url. */

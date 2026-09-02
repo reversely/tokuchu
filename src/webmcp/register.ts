@@ -6,6 +6,7 @@
 import type { AttributeDefinition, GuestStatus } from "../domain/types";
 import { sendRsvp } from "../app/i/[code]/send-rsvp";
 import { buildRequest, rsvpAnswers, rsvpInputSchema, TOOLS, type ToolArgs, type ToolDefinition } from "./tools";
+import { withDemoHeaders } from "../demo/token";
 
 export interface ToolResult {
   content: [{ type: "text"; text: string }];
@@ -23,7 +24,7 @@ function textResult(payload: unknown, isError: boolean): ToolResult {
 export async function executeThroughApi(tool: ToolDefinition, eventId: string, args: ToolArgs, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<ToolResult> {
   const { url, init } = buildRequest(tool, eventId, args ?? {});
   try {
-    const response = await fetchImpl(url, { ...init, signal });
+    const response = await fetchImpl(url, withDemoHeaders({ ...init, signal }));
     const text = await response.text();
     let body: unknown = null;
     try {

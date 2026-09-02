@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Snapshot } from "./dashboard";
+import { withDemoHeaders } from "../../../demo/token";
 import type { GuestStatus } from "../../../domain/types";
 import { dateOnly, dateTime, money } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
@@ -28,7 +29,7 @@ export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: 
   const [moreGuests, setMoreGuests] = useState("");
   async function addGuests() {
     if (!moreGuests.trim()) return;
-    const res = await fetch(`/api/events/${event.id}/guests/import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: moreGuests }) });
+    const res = await fetch(`/api/events/${event.id}/guests/import`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: moreGuests }) }));
     if (res.ok) { setMoreGuests(""); onChanged(); }
   }
   const shown = only ? guests.filter((g) => only.includes(g.id)) : guests;
@@ -163,7 +164,7 @@ function SetupForm({ snap, onDone }: { snap: Snapshot; onDone: () => void }) {
   const [form, setForm] = useState({ title: e.title, host: e.host, starts_at: e.starts_at.slice(0, 16), spots: e.spots?.toString() ?? "", cost: e.cost_per_person_cents !== null ? (e.cost_per_person_cents / 100).toString() : "", rsvp_deadline: e.rsvp_deadline ?? "", description: e.description, venue: e.venue, needed_by: e.delivery?.needed_by ?? "", destination: e.delivery?.destination ?? "venue" });
   const [error, setError] = useState<string | null>(null);
   async function save() {
-    const res = await fetch(`/api/events/${e.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, host: form.host, starts_at: new Date(form.starts_at).toISOString(), spots: form.spots ? Number(form.spots) : null, cost_per_person_cents: form.cost ? Math.round(Number(form.cost) * 100) : null, rsvp_deadline: form.rsvp_deadline || null, description: form.description, venue: form.venue, delivery: { destination: form.destination, address: e.delivery?.address ?? null, needed_by: form.needed_by || null } }) });
+    const res = await fetch(`/api/events/${e.id}`, withDemoHeaders({ method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, host: form.host, starts_at: new Date(form.starts_at).toISOString(), spots: form.spots ? Number(form.spots) : null, cost_per_person_cents: form.cost ? Math.round(Number(form.cost) * 100) : null, rsvp_deadline: form.rsvp_deadline || null, description: form.description, venue: form.venue, delivery: { destination: form.destination, address: e.delivery?.address ?? null, needed_by: form.needed_by || null } }) }));
     if (!res.ok) { setError(((await res.json()) as { error: string }).error); return; }
     onDone();
   }

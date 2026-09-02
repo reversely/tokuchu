@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Snapshot } from "./dashboard";
 import type { Requirement } from "../../../server/api";
+import { withDemoHeaders } from "../../../demo/token";
 import { executeThroughApi } from "../../../webmcp/register";
 import { TOOLS } from "../../../webmcp/tools";
 import { DEMO_STORE } from "../../../demo/seed";
@@ -82,7 +83,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const loadRequirements = useCallback(async () => {
     if (!gift) return setRequirements([]);
     try {
-      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/request-fields`, { cache: "no-store" });
+      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/request-fields`, withDemoHeaders({ cache: "no-store" }));
       setRequirements(res.ok ? ((await res.json()) as { requirements: Requirement[] }).requirements : []);
     } catch {
       setRequirements([]);
@@ -92,7 +93,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const loadUpdates = useCallback(async () => {
     if (!gift || !approved) return setUpdates([]);
     try {
-      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/updates`, { cache: "no-store" });
+      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/updates`, withDemoHeaders({ cache: "no-store" }));
       setUpdates(res.ok ? ((await res.json()) as { updates: VendorUpdate[] }).updates : []);
     } catch {
       setUpdates([]);
