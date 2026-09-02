@@ -140,9 +140,16 @@ export default async function Page() {
           <div className="wrap">
             <div className="sec-head">
               <span className="eyebrow">The three parties</span>
-              <h2>Shopify carries the common surface. Customworks adds the product's rules. Tokuchu runs the event.</h2>
+              <h2>Tokuchu starts from the RSVP list. Shopify carries the common commerce surface. Customworks adds the product's rules.</h2>
             </div>
             <div className="parties" data-testid="parties">
+              <div className="card">
+                <span className="eyebrow">Tokuchu</span>
+                <h3>The organizer's app</h3>
+                <p>Tokuchu holds the RSVP list and drives both stores' tools from a headless page. It resolves each requirement against the RSVP and collects the rest from attendees and approves the batch.</p>
+                <span className="shot"><img src="/media/tokuchu-attendees.webp" alt="Tokuchu's Attendees tab during the cart fill with the tour callout naming the calls" loading="lazy" /></span>
+                <pre className="toolist" aria-label="Tokuchu's page tools">{["request_from_attendees", "approve_specs", "submit_rsvp"].join("\n")}</pre>
+              </div>
               <div className="card">
                 <span className="eyebrow">Shopify WebMCP</span>
                 <h3>Every store's commerce tools</h3>
@@ -155,13 +162,6 @@ export default async function Page() {
                 <p>Customworks is a Shopify store set up for the 2026 WebMCP Challenge. Its theme registers two tools of its own beside Shopify's: one returns what a product needs to be made and one fills the cart with configured items.</p>
                 <a className="shot" href="https://springbuilt.myshopify.com" target="_blank" rel="noreferrer"><img src="/media/customworks-store.webp" alt="The Customworks storefront with its banner and product offerings" loading="lazy" /></a>
                 <pre className="toolist" aria-label="Customworks' merchant WebMCP tools">{["get_customization", "add_customized_to_cart"].join("\n")}</pre>
-              </div>
-              <div className="card">
-                <span className="eyebrow">Tokuchu</span>
-                <h3>The organizer's app</h3>
-                <p>Tokuchu holds the RSVP list and drives both stores' tools from a headless page. It resolves each requirement against the RSVP and collects the rest from attendees and approves the batch.</p>
-                <span className="shot"><img src="/media/tokuchu-attendees.webp" alt="Tokuchu's Attendees tab during the cart fill with the tour callout naming the calls" loading="lazy" /></span>
-                <pre className="toolist" aria-label="Tokuchu's page tools">{["request_from_attendees", "approve_specs", "submit_rsvp"].join("\n")}</pre>
               </div>
             </div>
           </div>
