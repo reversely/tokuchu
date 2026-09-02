@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift } from "./gifts";
-import { createEvent, createGuest, createParty, definitionsFor, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, state, transactionally, upsertRequest, writeValue, type EventInput, type State } from "./store";
+import { createEvent, createGuest, createParty, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, state, transactionally, upsertDefinition, upsertRequest, writeValue, type EventInput, type State } from "./store";
 import type { CallerToken, VendorUpdate } from "./types";
 
 const EVENT: EventInput = {
@@ -24,7 +24,7 @@ const EVENT: EventInput = {
 function populate(): void {
   const s = state();
   const event = createEvent(EVENT);
-  const [name] = definitionsFor(event.id);
+  const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const party = createParty(event.id, { contact: { email: "one@example.com" } });
   const guest = createGuest(event.id, party.id, { display_name: "Guest One", status: "going" });
   writeValue("guest", guest.id, name.id, "Ana", "guest");

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift, updateGift } from "../domain/gifts";
 import { publishEvent, resetState, upsertDefinition } from "../domain/store";
-import { createEventFromBody, snapshot, submitRsvp } from "./api";
+import { createEventFromBody, submitRsvp } from "./api";
 import { createToken, handleRpc, tokenFrom, type RpcRequest } from "./mcp";
 import { TOOLS } from "../webmcp/tools";
 import { cartOperations } from "./registry";
@@ -10,8 +10,7 @@ const BODY = { title: "Test event", starts_at: "2030-01-10T19:00:00Z", venue: { 
 
 function seed() {
   const event = publishEvent(createEventFromBody(BODY).id);
-  const snap = snapshot(event.id);
-  const name = snap.definitions.find((d) => d.key === "printed_name")!;
+  const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const choice = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const reply = submitRsvp(event.id, { guests: [{ display_name: "Guest One", status: "going", answers: { [name.id]: "One", [choice.id]: ["a"] } }, { display_name: "Guest Two", status: "going", answers: { [choice.id]: ["none"] } }] });
   const going = [{ field: "status", op: "eq", value: "going" }] as const;

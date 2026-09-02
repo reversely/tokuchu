@@ -6,8 +6,8 @@
 import { Usage, type Model, type ModelRequest, type ModelResponse } from "@openai/agents";
 import { beforeEach, describe, expect, it } from "vitest";
 import { giftsFor } from "../domain/gifts";
-import { publishEvent, resetState } from "../domain/store";
-import { createEventFromBody, snapshot, submitRsvp } from "../server/api";
+import { publishEvent, resetState, upsertDefinition } from "../domain/store";
+import { createEventFromBody, submitRsvp } from "../server/api";
 import { runCurationAgent, type SearchFn } from "./curation-agent";
 import type { Candidate } from "./search";
 
@@ -82,7 +82,7 @@ const fakeSearch: SearchFn = async () => ({ ranked: [SWEATSHIRT], excluded: [{ p
 /** A published event with a printed-name answer for one going guest and none for the other. */
 function seed() {
   const event = publishEvent(createEventFromBody(BODY).id);
-  const name = snapshot(event.id).definitions.find((d) => d.key === "printed_name")!;
+  const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   submitRsvp(event.id, {
     party: {},
     guests: [

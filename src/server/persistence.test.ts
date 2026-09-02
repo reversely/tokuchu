@@ -93,6 +93,6 @@ describe("event ids", () => {
     const [a, b] = await Promise.all([create(), create()]);
     expect(a.id).toMatch(/^evt_[0-9a-f-]{36}$/);
     expect(a.id).not.toBe(b.id);
-    expect(a.definition_ids[0]).toMatch(/^def_\d+$/);
+    expect(a.definition_ids).toEqual([]);
   });
 });

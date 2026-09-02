@@ -18,12 +18,9 @@ async function execute(page: Page, args: Record<string, unknown>) {
 test("the invite registers submit_rsvp with the requested questions; a call records the answers and an answer over the limit is an error", async ({ page, request }) => {
   const created = await request.post("/api/events", { data: { title: "Test event", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" } } });
   const { id } = (await created.json()) as { id: string };
-  const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { key: string }[] };
-  const kept = snap.definitions.filter((d) => d.key !== "printed_name");
   await request.put(`/api/events/${id}/definitions`, {
     data: {
       definitions: [
-        ...kept,
         { key: "name_on_map", label: "Name on the map", scope: "guest", value_type: "text", constraints: { max_length: 20 }, required_rule: "going" },
         { key: "variant_size", label: "Size", scope: "guest", value_type: "enum", constraints: { options: [{ value: "s", label: "S" }, { value: "m", label: "M" }, { value: "l", label: "L" }] }, required_rule: "going" }
       ]

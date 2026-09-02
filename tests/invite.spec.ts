@@ -4,8 +4,7 @@ import { expect, test } from "@playwright/test";
 async function publishedEvent(request: import("@playwright/test").APIRequestContext) {
   const created = await request.post("/api/events", { data: { title: "Test event", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" }, cost_per_person_cents: 1000, rsvp_deadline: "2030-01-03" } });
   const { id } = (await created.json()) as { id: string };
-  const snap = (await (await request.get(`/api/events/${id}`)).json()) as { definitions: { key: string }[] };
-  await request.put(`/api/events/${id}/definitions`, { data: { definitions: [...snap.definitions, { key: "dietary", label: "Allergies and dietary restrictions", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, required_rule: "going" }] } });
+  await request.put(`/api/events/${id}/definitions`, { data: { definitions: [{ key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, required_rule: "going" }, { key: "dietary", label: "Allergies and dietary restrictions", scope: "guest", value_type: "multi_enum", constraints: { options: [{ value: "a", label: "Choice A" }, { value: "none", label: "None" }] }, required_rule: "going" }] } });
   const published = (await (await request.post(`/api/events/${id}/publish`)).json()) as { event: { invite_code: string } };
   return { id, code: published.event.invite_code };
 }

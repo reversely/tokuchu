@@ -32,7 +32,7 @@ test("a draft becomes a published event with the organizer's questions", async (
   // A question in the organizer's words joins the list.
   await page.getByLabel("A question in your words").fill("Anything else we should know?");
   await page.getByLabel("A question in your words").press("Enter");
-  await expect(questions.getByRole("textbox", { name: "Question 3" })).toHaveValue("Anything else we should know?");
+  await expect(questions.getByRole("textbox", { name: "Question 2" })).toHaveValue("Anything else we should know?");
 
   await page.getByTestId("publish").click();
   await page.waitForURL(/\/events\/evt_/);

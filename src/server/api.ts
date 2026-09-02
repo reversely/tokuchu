@@ -302,8 +302,8 @@ function resolveField(field: PersonalizationField, mapping: PersonalizationMappi
   if (mapping && mapping.source.type !== "definition") return { ...base, source: mapping.source.type, already: true };
   if (mapping?.source.type === "definition" && byId.has(mapping.source.definition_id)) return { ...base, source: "definition", definition_id: mapping.source.definition_id, already: true };
   if (field.kind === "name") {
-    // The library seeds a printed_name question on every event; only one the organizer added stands in for the guest's display name.
-    const printed = defs.find((d) => d.key === "printed_name" && d.creator === "organizer");
+    // A printed_name question the organizer added from the library stands in for the guest's display name.
+    const printed = defs.find((d) => d.key === "printed_name");
     if (printed) return { ...base, source: "definition", definition_id: printed.id, already: true, mapping: { vendor_field_key: field.key, source: { type: "definition", definition_id: printed.id, subject_scope: printed.scope } } };
     return { ...base, source: "guest", already: true, mapping: { vendor_field_key: field.key, source: { type: "guest", key: "display_name" } } };
   }

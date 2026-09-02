@@ -22,7 +22,7 @@ const OPTIONS = [{ value: "a", label: "Option A" }, { value: "b", label: "Option
 
 function seed() {
   const event = createEvent(EVENT);
-  const [name] = definitionsFor(event.id);
+  const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const party = createParty(event.id, { contact: { email: "one@example.com" } });
   const ana = createGuest(event.id, party.id, { display_name: "Guest One", status: "going" });
@@ -34,9 +34,10 @@ function seed() {
 describe("the store", () => {
   beforeEach(resetState);
 
-  it("seeds the library's flagged question, keeps the organizer's beside it, and publishes with a six-character code", () => {
+  it("starts with no questions, keeps the organizer's in order, and publishes with a six-character code", () => {
+    expect(definitionsFor(createEvent(EVENT).id)).toEqual([]);
     const { event, name, dietary } = seed();
-    expect(name).toMatchObject({ key: "printed_name", value_type: "text", required_rule: "going", creator: "library" });
+    expect(name).toMatchObject({ key: "printed_name", value_type: "text", required_rule: "going", creator: "organizer" });
     expect(definitionsFor(event.id).map((d) => d.key)).toEqual(["printed_name", "dietary"]);
     expect(dietary.constraints.options).toEqual(OPTIONS);
     const published = publishEvent(event.id);

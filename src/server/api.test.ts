@@ -22,8 +22,7 @@ const OPTIONS = [{ value: "a", label: "Option A" }, { value: "none", label: "Non
 
 function seed() {
   const event = publishEvent(createEventFromBody(BODY).id);
-  const snap = snapshot(event.id);
-  const name = snap.definitions.find((d) => d.key === "printed_name")!;
+  const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const reply = submitRsvp(event.id, {
     party: { contact: { email: "one@example.com" } },
@@ -47,7 +46,7 @@ describe("the API operations", () => {
     const published = publishEvent(event.id);
     const invite = inviteView(published.invite_code!);
     expect(invite.event.title).toBe(BODY.title);
-    expect(invite.questions.map((q) => q.key)).toEqual(["printed_name"]);
+    expect(invite.questions).toEqual([]);
   });
 
   it("rejects a non-ISO schedule field, a negative spots, and a negative cost", () => {
@@ -234,7 +233,7 @@ describe("the API operations", () => {
 
   it("rolls back the whole RSVP when a later guest carries an invalid answer", () => {
     const event = publishEvent(createEventFromBody(BODY).id);
-    const name = snapshot(event.id).definitions.find((d) => d.key === "printed_name")!;
+    const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
     expect(() =>
       submitRsvp(event.id, {
         guests: [
