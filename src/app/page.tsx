@@ -98,7 +98,13 @@ export default async function Page() {
           <div className="wrap">
             <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
             <h1 className="sr-only">Turn an RSVP list into one personalized order per attendee.</h1>
-            <p className="sub">Tokuchu reads a product's requirements from a WebMCP store and asks each attendee only for the values that product needs. The finished cart returns to the organizer with one line per attendee.</p>
+            <p className="sub">Tokuchu runs on WebMCP tools at both ends. Four calls carry an event from a guest list to a filled cart.</p>
+            <ul className="hero-tools" data-testid="hero-tools">
+              <li><code>search_catalog</code><span>Shopify's storefront tool finds the product</span></li>
+              <li><code>get_customization</code><span>the store's own tool states what the product needs</span></li>
+              <li><code>request_from_attendees</code><span>Tokuchu's page tool collects each attendee's values</span></li>
+              <li><code>add_customized_to_cart</code><span>the store's cart tool fills one line per attendee</span></li>
+            </ul>
             <div className="cta">
               <a className="btn primary big" href={start} data-testid="start-hero">Create an event</a>
               <a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a>

@@ -260,13 +260,17 @@ table.records .quiet { color: var(--muted); }
 .home .hero { padding: 8px 0 36px; }
 .home .banner { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 22px; }
 /* The hero banner shares the field's cream, so it carries no frame and its edges fade into the page. */
-.home .hero-banner { max-width: 640px; margin: -24px auto -8px; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, #000 62%, transparent 100%); }
-.home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; position: relative; }
+.home .hero-banner { max-width: 600px; margin: -20px auto 0; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
+.home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; }
+.home .hero-tools { list-style: none; margin: 18px auto 0; padding: 0; max-width: 720px; display: grid; gap: 8px; }
+.home .hero-tools li { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: baseline; text-align: left; font-size: 16px; color: var(--ink-2); }
+.home .hero-tools code { font-family: var(--mono); font-size: 13.5px; color: var(--navy); background: var(--card); padding: 3px 8px; border-radius: 6px; justify-self: end; }
+@media (max-width: 640px) { .home .hero-tools li { grid-template-columns: 1fr; gap: 4px; } .home .hero-tools code { justify-self: start; } }
 .home .hero .cta { justify-content: center; }
 .home .hero .note { text-align: center; }
 .home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .home .hero h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.04; }
-.home .hero .sub { margin-top: 8px; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
+.home .hero .sub { margin-top: 0; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
 .home .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
 .home .hero .note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
 .home .hero .note b { color: var(--ink-2); font-weight: 600; }
