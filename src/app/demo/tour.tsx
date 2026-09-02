@@ -356,9 +356,10 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
 /** The callout sits below its target when there is room and above it otherwise; with no target it centers. */
 function calloutPosition(rect: Rect | null, height: number, viewport: Viewport): { top: number; left: number } {
+  const width = Math.min(CALLOUT_WIDTH, viewport.width - 2 * 16);
   const margin = 16;
-  const maxLeft = viewport.width - CALLOUT_WIDTH - margin;
-  if (!rect) return { top: Math.max(margin, (viewport.height - height) / 2), left: Math.max(margin, (viewport.width - CALLOUT_WIDTH) / 2) };
+  const maxLeft = viewport.width - width - margin;
+  if (!rect) return { top: Math.max(margin, (viewport.height - height) / 2), left: Math.max(margin, (viewport.width - width) / 2) };
   const below = rect.top + rect.height + 14;
   const top = below + height + margin <= viewport.height ? below : Math.max(margin, rect.top - 14 - height);
   return { top, left: Math.min(Math.max(margin, rect.left), maxLeft) };
