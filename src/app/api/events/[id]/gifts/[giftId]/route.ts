@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteGift, errorResponse, giftView, updateGiftFromBody } from "../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -7,7 +8,9 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(giftView(id, giftId));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(giftView(id, giftId));
+    });
   } catch (e) {
     return errorResponse(e);
   }
@@ -16,7 +19,9 @@ export async function GET(_: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(updateGiftFromBody(id, giftId, await request.json()));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(updateGiftFromBody(id, giftId, await request.json()));
+    });
   } catch (e) {
     return errorResponse(e);
   }
@@ -25,7 +30,9 @@ export async function PATCH(request: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(deleteGift(id, giftId));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(deleteGift(id, giftId));
+    });
   } catch (e) {
     return errorResponse(e);
   }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "../../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../../server/persistence";
 import { cartView } from "../../../../../../../server/cart-api";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
@@ -8,7 +9,9 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(await cartView(id, giftId));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(await cartView(id, giftId));
+    });
   } catch (e) {
     return errorResponse(e);
   }

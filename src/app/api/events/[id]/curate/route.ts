@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runCurationAgent } from "../../../../../agent/curation-agent";
 import { BadRequestError, errorResponse, requireEvent } from "../../../../../server/api";
+import { withPersistedEvent } from "../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,23 +13,27 @@ type Params = { params: Promise<{ id: string }> };
  */
 export async function POST(request: Request, { params }: Params) {
   try {
-    const event = requireEvent((await params).id);
+    const { id } = await params;
     const body = (await request.json()) as { message?: string };
     const message = body.message?.trim();
     if (!message) throw new BadRequestError("Send a message.");
-    if (new URL(request.url).searchParams.get("stream") === "1") return streamRun(event.id, message);
-    return NextResponse.json(await runCurationAgent({ eventId: event.id }, message));
+    if (new URL(request.url).searchParams.get("stream") === "1") {
+      await withPersistedEvent(id, () => requireEvent(id));
+      return streamRun(id, message);
+    }
+    return await withPersistedEvent(id, async () => NextResponse.json(await runCurationAgent({ eventId: requireEvent(id).id }, message)));
   } catch (e) {
     return errorResponse(e);
   }
 }
 
+/** The agent runs in its own persisted scope, which writes the event before the final line goes out. */
 function streamRun(eventId: string, message: string): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
       const send = (line: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
-      runCurationAgent({ eventId }, message, { onTool: (call) => send({ kind: "tool", ...call }) })
+      withPersistedEvent(eventId, () => runCurationAgent({ eventId }, message, { onTool: (call) => send({ kind: "tool", ...call }) }))
         .then((result) => send({ kind: "done", ...result }))
         .catch((e) => send({ kind: "error", error: e instanceof Error ? e.message : String(e) }))
         .finally(() => controller.close());

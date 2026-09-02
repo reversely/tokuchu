@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, followUp } from "../../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -7,7 +8,9 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function POST(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(followUp(id, giftId));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(followUp(id, giftId));
+    });
   } catch (e) {
     return errorResponse(e);
   }

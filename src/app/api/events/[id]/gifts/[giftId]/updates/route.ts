@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, postUpdate, updatesFor } from "../../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -7,8 +8,10 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    const since = Number(new URL(request.url).searchParams.get("since") ?? "0");
-    return NextResponse.json({ updates: updatesFor(id, giftId, Number.isNaN(since) ? 0 : since) });
+    return await withPersistedEvent(id, async () => {
+      const since = Number(new URL(request.url).searchParams.get("since") ?? "0");
+      return NextResponse.json({ updates: updatesFor(id, giftId, Number.isNaN(since) ? 0 : since) });
+    });
   } catch (e) {
     return errorResponse(e);
   }
@@ -18,8 +21,10 @@ export async function GET(request: Request, { params }: Params) {
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    const body = (await request.json()) as { caller?: string };
-    return NextResponse.json(postUpdate(id, giftId, body.caller ?? "organizer", body), { status: 201 });
+    return await withPersistedEvent(id, async () => {
+      const body = (await request.json()) as { caller?: string };
+      return NextResponse.json(postUpdate(id, giftId, body.caller ?? "organizer", body), { status: 201 });
+    });
   } catch (e) {
     return errorResponse(e);
   }

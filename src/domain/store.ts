@@ -159,9 +159,13 @@ export function seedDefinitions(eventId: string): AttributeDefinition[] {
 
 export type EventInput = Omit<Event, "id" | "definition_ids" | "status" | "invite_code" | "created_at" | "contact"> & { contact?: Event["contact"] };
 
-export function createEvent(input: EventInput): Event {
+/** An event id unique across every stored document, unlike the per-document `newId` counter. */
+export function newEventId(): string {
+  return `evt_${crypto.randomUUID()}`;
+}
+
+export function createEvent(input: EventInput, id: string = newId("evt")): Event {
   const s = state();
-  const id = newId("evt");
   const defs = seedDefinitions(id);
   for (const d of defs) s.definitions.set(d.id, d);
   const event: Event = { ...input, contact: input.contact ?? { email: null, phone: null }, id, definition_ids: defs.map((d) => d.id), status: "draft", invite_code: null, created_at: now() };

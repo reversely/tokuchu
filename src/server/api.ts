@@ -24,6 +24,7 @@ import {
   listGuests,
   listMissing,
   LockedValueError,
+  newEventId,
   newId,
   publishEvent,
   recordFollowUp,
@@ -44,10 +45,10 @@ import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
+import { BadRequestError, NotFoundError } from "./errors";
 import { afterRsvpWrite } from "./hooks";
 
-export class NotFoundError extends Error {}
-export class BadRequestError extends Error {}
+export { BadRequestError, NotFoundError };
 
 /* ---- Events ---- */
 
@@ -84,7 +85,7 @@ export const EventBody = z.object({
 export function createEventFromBody(body: unknown) {
   const parsed = EventBody.safeParse(body);
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-  return createEvent(parsed.data as EventInput);
+  return createEvent(parsed.data as EventInput, newEventId());
 }
 
 export function updateEventFromBody(eventId: string, body: unknown) {

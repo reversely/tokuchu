@@ -16,21 +16,26 @@
     "test:e2e": "playwright test",
     "test:customily-demo": "playwright test tests/customily-demo.spec.ts",
     "setup": "bash scripts/setup.sh",
-    "test:flow-demo": "playwright test tests/flow-demo.spec.ts"
+    "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
+    "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@openai/agents": "^0.17.0",
     "@webmcp/shopify-ucp": "*",
     "next": "^16.3.3",
+    "pg": "8.23.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "tsx": "4.23.13",
     "typescript": "^5.9.0",
     "vitest": "^4.1.11",
     "webmcp-types": "^0.1.5"

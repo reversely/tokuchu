@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { snapshot } from "../../../server/api";
+import { withPersistedEvent } from "../../../server/persistence";
 import { Dashboard } from "./dashboard";
 
 type Params = { params: Promise<{ id: string }> };
@@ -9,7 +10,7 @@ export default async function Page({ params }: Params) {
   const { id } = await params;
   let initial;
   try {
-    initial = snapshot(id);
+    initial = await withPersistedEvent(id, () => snapshot(id));
   } catch {
     notFound();
   }

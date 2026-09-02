@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { NotFoundError } from "../../../../../server/errors";
 import { handleRpc, tokenFrom, type RpcRequest } from "../../../../../server/mcp";
+import { withPersistedEvent } from "../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,7 +14,13 @@ export async function POST(request: Request, { params }: Params) {
   } catch {
     return NextResponse.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "The body is not JSON." } }, { status: 400 });
   }
-  return NextResponse.json(await handleRpc(id, tokenFrom(id, request), rpc));
+  try {
+    return await withPersistedEvent(id, async () => NextResponse.json(await handleRpc(id, tokenFrom(id, request), rpc)));
+  } catch (e) {
+    // A missing row answers the same way handleRpc answers a missing event, so a caller sees one shape.
+    if (e instanceof NotFoundError) return NextResponse.json({ jsonrpc: "2.0", id: rpc?.id ?? null, error: { code: -32004, message: `No event ${id}.` } });
+    throw e;
+  }
 }
 
 /** A GET names the endpoint for a person who opens the address in a browser. */

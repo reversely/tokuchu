@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, patchRsvp } from "../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string; guestId: string }> };
 
@@ -7,7 +8,9 @@ type Params = { params: Promise<{ id: string; guestId: string }> };
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { id, guestId } = await params;
-    return NextResponse.json(patchRsvp(id, guestId, await request.json()));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(patchRsvp(id, guestId, await request.json()));
+    });
   } catch (e) {
     return errorResponse(e);
   }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { giftRequirements, requestFromAttendees, errorResponse } from "../../../../../../../server/api";
+import { withPersistedEvent } from "../../../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -7,7 +8,9 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json({ requirements: giftRequirements(id, giftId) });
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json({ requirements: giftRequirements(id, giftId) });
+    });
   } catch (e) {
     return errorResponse(e);
   }
@@ -17,7 +20,9 @@ export async function GET(_request: Request, { params }: Params) {
 export async function POST(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json(requestFromAttendees(id, giftId));
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(requestFromAttendees(id, giftId));
+    });
   } catch (e) {
     return errorResponse(e);
   }

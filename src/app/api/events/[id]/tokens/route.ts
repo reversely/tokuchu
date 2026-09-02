@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "../../../../../server/api";
+import { withPersistedEvent } from "../../../../../server/persistence";
 import { createToken, tokensFor } from "../../../../../server/mcp";
 
 type Params = { params: Promise<{ id: string }> };
@@ -7,7 +8,10 @@ type Params = { params: Promise<{ id: string }> };
 /** The organizer issues a token: holder, gifts, readable definitions, callable tools, expiry. The id is the secret. */
 export async function POST(request: Request, { params }: Params) {
   try {
-    return NextResponse.json(createToken((await params).id, await request.json()), { status: 201 });
+    const { id } = await params;
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json(createToken(id, await request.json()), { status: 201 });
+    });
   } catch (e) {
     return errorResponse(e);
   }
@@ -15,7 +19,10 @@ export async function POST(request: Request, { params }: Params) {
 
 export async function GET(_: Request, { params }: Params) {
   try {
-    return NextResponse.json({ tokens: tokensFor((await params).id).map(({ id, ...rest }) => ({ ...rest, id: `${id.slice(0, 6)}...` })) });
+    const { id } = await params;
+    return await withPersistedEvent(id, async () => {
+      return NextResponse.json({ tokens: tokensFor(id).map(({ id, ...rest }) => ({ ...rest, id: `${id.slice(0, 6)}...` })) });
+    });
   } catch (e) {
     return errorResponse(e);
   }

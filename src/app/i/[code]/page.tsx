@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { inviteView } from "../../../server/api";
+import { withPersistedEventByInviteCode } from "../../../server/persistence";
 import { InviteForm } from "./invite-form";
 
 type Props = { params: Promise<{ code: string }>; searchParams: Promise<{ guest?: string }> };
@@ -10,7 +11,7 @@ export default async function Page({ params, searchParams }: Props) {
   const { guest } = await searchParams;
   let invite;
   try {
-    invite = inviteView(code);
+    invite = await withPersistedEventByInviteCode(code, () => inviteView(code));
   } catch {
     notFound();
   }
