@@ -14,3 +14,4 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-02-home-usecase.png`: the Customworks use-case section with the store's banner and the paragraph on its callable customization tool.
 - `2026-09-02-home-contract.png`: the merchant's contract section: what Customworks returns, the source Tokuchu resolves per field, and the attendee form generated from it.
 - `2026-09-02-home-problem.png`: the problem section with the scale cards, three attendees in the demo against 1,500 values at a real event.
+- `2026-09-02-home-parties.png`: the three-parties section: Shopify WebMCP with its ten page tools, Customworks with the store screenshot and its two tools, Tokuchu with the Attendees tab and its page tools.

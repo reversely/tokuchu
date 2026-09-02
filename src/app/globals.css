@@ -289,6 +289,14 @@ table.records .quiet { color: var(--muted); }
 .home .formmock label.chips { grid-template-columns: 1fr; }
 .home .formmock label.chips span { display: flex; gap: 6px; }
 .home .formmock b { display: inline-grid; place-items: center; width: 40px; height: 30px; margin-right: 6px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 13px; color: var(--ink); background: var(--ground); }
+.home .parties { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 36px; }
+.home .parties .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: grid; gap: 12px; align-content: start; }
+.home .parties h3 { font-size: 20px; line-height: 1.2; }
+.home .parties p { font-size: 15px; color: var(--ink-2); }
+.home .parties .shot { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.home .parties .shot img { display: block; width: 100%; height: auto; }
+.home .toolist { margin: 0; padding: 12px 14px; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink); white-space: pre; overflow-x: auto; }
+@media (max-width: 900px) { .home .parties { grid-template-columns: 1fr; } }
 .home .why .by { display: block; font-size: 12.5px; font-weight: 600; color: var(--sky-dark); margin-top: 6px; }
 @media (max-width: 900px) { .home .chain { grid-template-columns: 1fr; } .home .chain li + li::before { display: none; } .home .contract { grid-template-columns: 1fr; } .home .contract-arrow { transform: rotate(90deg); justify-self: center; } .home .scale { grid-template-columns: 1fr; } }
 .home .hero .cta { justify-content: center; }

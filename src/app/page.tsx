@@ -98,6 +98,7 @@ export default async function Page() {
           <a className="brand" href="/">Tokuchu<span className="dot">.</span></a>
           <div className="navlinks">
             <ul>
+              <li><a href="#parties">Who is involved</a></li>
               <li><a href="#problem">The problem</a></li>
               <li><a href="#contract">The contract</a></li>
               <li><a href="#story">Walkthrough</a></li>
@@ -132,6 +133,40 @@ export default async function Page() {
               <a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a>
             </div>
             <p className="note"><b>Works with</b> Shopify stores over WebMCP and the GraphQL Admin API.</p>
+          </div>
+        </section>
+
+        <section id="parties">
+          <div className="wrap">
+            <div className="sec-head">
+              <span className="eyebrow">The three parties</span>
+              <h2>Shopify carries the common surface. Customworks adds the product's rules. Tokuchu runs the event.</h2>
+            </div>
+            <div className="parties" data-testid="parties">
+              <div className="card">
+                <span className="eyebrow">Shopify WebMCP</span>
+                <h3>Every store's commerce tools</h3>
+                <p>Every Shopify storefront registers the same tools on its pages and answers the same calls at its UCP endpoint. Tokuchu uses them to find products and read variants.</p>
+                <pre className="toolist" aria-label="Shopify's storefront WebMCP tools">{["search_catalog", "get_product", "show_variant", "browse_store", "get_cart", "update_cart", "cancel_cart", "proceed_to_checkout", "manage_orders", "search_shop_policies_and_faqs"].join("
+")}</pre>
+              </div>
+              <div className="card">
+                <span className="eyebrow">Customworks WebMCP</span>
+                <h3>The trial store built for this project</h3>
+                <p>Customworks is a Shopify store set up for the 2026 WebMCP Challenge. Its theme registers two tools of its own beside Shopify's: one returns what a product needs to be made and one fills the cart with configured items.</p>
+                <a className="shot" href="https://springbuilt.myshopify.com" target="_blank" rel="noreferrer"><img src="/media/customworks-store.webp" alt="The Customworks storefront with its banner and product offerings" loading="lazy" /></a>
+                <pre className="toolist" aria-label="Customworks' merchant WebMCP tools">{["get_customization", "add_customized_to_cart"].join("
+")}</pre>
+              </div>
+              <div className="card">
+                <span className="eyebrow">Tokuchu</span>
+                <h3>The organizer's app</h3>
+                <p>Tokuchu holds the RSVP list and drives both stores' tools from a headless page. It resolves each requirement against the RSVP and collects the rest from attendees and approves the batch.</p>
+                <span className="shot"><img src="/media/tokuchu-attendees.webp" alt="Tokuchu's Attendees tab during the cart fill with the tour callout naming the calls" loading="lazy" /></span>
+                <pre className="toolist" aria-label="Tokuchu's page tools">{["request_from_attendees", "approve_specs", "submit_rsvp"].join("
+")}</pre>
+              </div>
+            </div>
           </div>
         </section>
 
