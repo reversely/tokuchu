@@ -260,11 +260,11 @@ table.records .quiet { color: var(--muted); }
 .home .hero { padding: 8px 0 36px; }
 .home .banner { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 22px; }
 /* The hero banner shares the field's cream, so it carries no frame and its edges fade into the page. */
-.home .hero-banner { max-width: 600px; margin: -20px auto 0; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
+.home .hero-banner { max-width: 600px; margin: -20px auto -56px; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
 .home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; }
-.home .hero h1 { text-align: center; font-size: clamp(28px, 3.1vw, 40px); line-height: 1.1; margin: 8px auto 0; max-width: 34ch; }
-.home .chain { list-style: none; margin: 26px auto 0; padding: 0; max-width: 1040px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: stage; }
-.home .chain li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 14px; display: grid; gap: 6px; text-align: left; }
+.home .hero h1 { text-align: center; font-size: clamp(28px, 3.1vw, 40px); line-height: 1.1; margin: 0 auto; max-width: 34ch; position: relative; }
+.home .chain { list-style: none; margin: 30px auto 0; padding: 0; max-width: 1040px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: stage; }
+.home .chain li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 14px; display: grid; gap: 6px; align-content: start; text-align: left; }
 .home .chain li + li::before { content: "→"; position: absolute; left: -14px; top: 18px; color: var(--ink-3); font-size: 16px; }
 .home .chain .stage { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--navy); }
 .home .chain code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
@@ -303,7 +303,7 @@ table.records .quiet { color: var(--muted); }
 .home .hero .note { text-align: center; }
 .home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .home .hero h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.04; }
-.home .hero .sub { margin-top: 0; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
+.home .hero .sub { margin-top: 16px; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
 .home .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
 .home .hero .note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
 .home .hero .note b { color: var(--ink-2); font-weight: 600; }
