@@ -115,7 +115,7 @@ export default async function Page() {
         <section className="hero">
           <div className="wrap">
             <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
-            <h1>Turn an RSVP list into one personalized order per attendee.</h1>
+            <h1>Agents tailor a product to every attendee straight from the RSVP list.</h1>
             <p className="sub">Choose a product once. Tokuchu reads the merchant's WebMCP requirements and collects the missing values from every attendee and prepares the completed order for review.</p>
             <ol className="chain" data-testid="chain">
               {CHAIN.map((c) => (
