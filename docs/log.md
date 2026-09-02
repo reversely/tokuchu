@@ -134,3 +134,12 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   constraints in its schema; the form and the tool share send-rsvp.ts. Gate: 137 vitest, 16 Playwright.
 - #18 landed as 0b1d8ee (clean cherry-pick of 48bed91). A fresh event starts with no questions; the
   name rule maps a store name field to any printed_name question present. Gate: 137 vitest, 16 Playwright.
+- #5 landed as a176951 (clean cherry-pick of ec52cef). next-auth 5.0.0-beta.32 + @auth/pg-adapter; the
+  Resend provider logs the link in dev; ORGANIZER_EMAILS allowlist; no-database mode runs the adapter on
+  PGlite with jwt sessions (an Email provider needs an adapter). Gate: 143 vitest, 17 Playwright.
+- #12 landed as 23693c5 (cherry-pick of 7e426bd; register.ts and routing conflicts resolved: keep
+  submit_rsvp, drop registerVendorTools, hop 5 says the approve is HTTP for now). A stale .next
+  validator referenced the deleted handoff page; rm -rf .next cleared the typecheck. The demo's
+  printed_name answer collided with #18 and was dropped (test commit). Live flow demo from main:
+  4/4, checkout page names every attendee. Left from #12's checklist: approve through a page tool
+  (next), and the curation agent's prepare_handoff tool name.
