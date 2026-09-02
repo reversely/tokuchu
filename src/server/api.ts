@@ -47,6 +47,7 @@ import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGi
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { BadRequestError, NotFoundError } from "./errors";
 import { afterRsvpWrite } from "./hooks";
+import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
 
 export { BadRequestError, NotFoundError };
 
@@ -359,20 +360,15 @@ function missingDefinitionIds(guest: Guest, definitionIds: string[]): string[] {
   return definitionIds.filter((id) => isBlank(values[id]));
 }
 
-/** The attendee's own link, for the log in place of the email. */
-function attendeeLink(event: Event, guest: Guest): string {
-  return event.invite_code ? `/i/${event.invite_code}?guest=${guest.id}` : `(unpublished event) guest ${guest.id}`;
-}
-
 /**
  * Creates the questions the gift's requirements need, stores the mapping and the variant wiring on the
- * gift, and records a request to every going attendee who lacks an answer. The send is the request row
- * and the attendee's link in the log.
+ * gift, records a request to every going attendee who lacks an answer, and emails each one. The rows
+ * commit before any email goes out, and the send writes each email's outcome to its row.
  */
-export function requestFromAttendees(eventId: string, giftId: string) {
+export async function requestFromAttendees(eventId: string, giftId: string) {
   const event = requireEvent(eventId);
   const gift = requireGift(eventId, giftId);
-  return transactionally(() => {
+  const outgoing = transactionally(() => {
     const variantRows = [...gift.mapping];
     const fieldRows = [...(gift.personalization_mappings ?? [])];
     const resolved = giftRequirements(eventId, giftId).map((r) => {
@@ -392,48 +388,56 @@ export function requestFromAttendees(eventId: string, giftId: string) {
     }
     updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows, requested_at: gift.requested_at ?? new Date().toISOString() } as Partial<GiftInput>);
     const asked = askedDefinitionIds(resolved, definitionsFor(eventId));
-    for (const guest of listGuests(eventId, GOING)) {
-      const missing = missingDefinitionIds(guest, asked);
-      if (!missing.length) continue;
-      upsertRequest(eventId, guest.id, giftId, missing);
-      console.info(`Request to ${guest.display_name}: ${attendeeLink(event, guest)}`);
-    }
-    return snapshot(eventId);
+    return recordRequests(eventId, giftId, asked, new Set());
   });
+  await deliverAll(event, outgoing);
+  return snapshot(eventId);
+}
+
+/** Records a request row for every going attendee not yet asked who lacks one of the asked answers, and returns the emails to make. */
+function recordRequests(eventId: string, giftId: string, asked: string[], requested: Set<string>): Outgoing[] {
+  const outgoing: Outgoing[] = [];
+  for (const guest of listGuests(eventId, GOING)) {
+    if (requested.has(guest.id)) continue;
+    const missing = missingDefinitionIds(guest, asked);
+    if (!missing.length) continue;
+    upsertRequest(eventId, guest.id, giftId, missing);
+    outgoing.push({ guest, gift_id: giftId, definition_ids: missing, kind: "request" });
+  }
+  return outgoing;
 }
 
 /** Sends the request again to every attendee whose request still has an unanswered question. */
-export function followUp(eventId: string, giftId: string) {
+export async function followUp(eventId: string, giftId: string) {
   const event = requireEvent(eventId);
   requireGift(eventId, giftId);
+  const outgoing: Outgoing[] = [];
   for (const request of requestsFor(eventId, giftId)) {
     const guest = getGuest(request.guest_id);
-    if (!missingDefinitionIds(guest, request.definition_ids).length) continue;
+    const missing = missingDefinitionIds(guest, request.definition_ids);
+    if (!missing.length) continue;
     recordFollowUp(request);
-    console.info(`Follow-up to ${guest.display_name}: ${attendeeLink(event, guest)}`);
+    outgoing.push({ guest, gift_id: giftId, definition_ids: missing, kind: "follow_up" });
   }
+  await deliverAll(event, outgoing);
   return snapshot(eventId);
 }
 
 /**
  * Issues a gift's request to every going attendee who has no request row and lacks an answer. It runs
- * after each RSVP write for every gift whose request has gone out (`requested_at`), so an attendee who replies
- * after the organizer's request still receives one.
+ * inside each RSVP write for every gift whose request has gone out (`requested_at`), so an attendee who
+ * replies after the organizer's request still receives one; the emails go out once the write commits.
  */
 export function requestFromLateAttendees(eventId: string): void {
-  const event = requireEvent(eventId);
+  requireEvent(eventId);
+  const outgoing: Outgoing[] = [];
   for (const gift of giftsFor(eventId)) {
     if (!gift.requested_at) continue;
     const requested = new Set(requestsFor(eventId, gift.id).map((r) => r.guest_id));
     const asked = askedDefinitionIds(giftRequirements(eventId, gift.id), definitionsFor(eventId));
-    for (const guest of listGuests(eventId, GOING)) {
-      if (requested.has(guest.id)) continue;
-      const missing = missingDefinitionIds(guest, asked);
-      if (!missing.length) continue;
-      upsertRequest(eventId, guest.id, gift.id, missing);
-      console.info(`Request to ${guest.display_name}: ${attendeeLink(event, guest)}`);
-    }
+    outgoing.push(...recordRequests(eventId, gift.id, asked, requested));
   }
+  deliverAfterCommit(eventId, outgoing);
 }
 
 /** Every request on the event with, per question, whether the attendee has answered it. */
@@ -441,7 +445,7 @@ function requestViews(eventId: string) {
   return requestsFor(eventId).map((r) => {
     const values = valuesFor(getGuest(r.guest_id));
     const answered = Object.fromEntries(r.definition_ids.map((id) => [id, !isBlank(values[id])]));
-    return { guest_id: r.guest_id, gift_id: r.gift_id, definition_ids: r.definition_ids, sent_at: r.sent_at, follow_ups: r.followed_up_at.length, answered, complete: Object.values(answered).every(Boolean) };
+    return { guest_id: r.guest_id, gift_id: r.gift_id, definition_ids: r.definition_ids, sent_at: r.sent_at, follow_ups: r.followed_up_at.length, delivery: r.delivery ?? null, last_error: r.last_error, answered, complete: Object.values(answered).every(Boolean) };
   });
 }
 

@@ -19,6 +19,13 @@ function questionKind(def: Definition): string {
   return "short text";
 }
 
+/** An incomplete request's state: how its email left when that stopped it and otherwise how long it has waited. */
+function requestState(request: Snapshot["requests"][number]): string {
+  if (request.delivery === "no_address") return "no email address";
+  if (request.delivery === "failed") return "email failed";
+  return request.follow_ups > 0 ? `waiting after ${request.follow_ups} follow-up${request.follow_ups === 1 ? "" : "s"}` : "waiting";
+}
+
 /** Where a requirement's value comes from, in the organizer's words. */
 function sourceLabel(r: Requirement, defs: Map<string, Definition>): string {
   if (r.source === "guest") return "from the RSVP name";
@@ -179,7 +186,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                       {requests.size > 0 && (
                         <td>
                           {request ? (
-                            request.complete ? <span className="answered">complete</span> : <span className="missing">{request.follow_ups > 0 ? `waiting after ${request.follow_ups} follow-up${request.follow_ups === 1 ? "" : "s"}` : "waiting"}</span>
+                            request.complete ? <span className="answered">complete</span> : <span className="missing">{requestState(request)}</span>
                           ) : (
                             <span className="quiet">nothing to ask</span>
                           )}

@@ -319,7 +319,11 @@ export type Batch = z.infer<typeof Batch>;
 
 /* ---- Requests ---- */
 
-/** The questions sent to one attendee for one gift: when they went out and each follow-up since. */
+/** How the latest email for a request left: through the provider, into the dev log, skipped for want of an address, or rejected. */
+export const RequestDelivery = z.enum(["sent", "logged", "no_address", "failed"]);
+export type RequestDelivery = z.infer<typeof RequestDelivery>;
+
+/** The questions sent to one attendee for one gift: when they went out, each follow-up since, and how the latest email left. Delivery is absent until the send settles. */
 export const Request = z.object({
   id: z.string(),
   event_id: z.string(),
@@ -327,7 +331,9 @@ export const Request = z.object({
   gift_id: z.string(),
   definition_ids: z.array(z.string()),
   sent_at: z.string(),
-  followed_up_at: z.array(z.string())
+  followed_up_at: z.array(z.string()),
+  delivery: RequestDelivery.optional(),
+  last_error: z.string().nullable().default(null)
 });
 export type Request = z.infer<typeof Request>;
 

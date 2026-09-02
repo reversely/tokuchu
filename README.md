@@ -32,4 +32,4 @@ The demo store sells a customizable crewneck. Its product page carries Shopify's
 
 ## Deployment
 
-The app deploys on Render as a Web Service built from the Dockerfile, with Render Postgres holding one JSON document per event and the sign-in tables. Sign-in uses a magic link sent through Resend to an address on the `ORGANIZER_EMAILS` allowlist; a dev server without `RESEND_API_KEY` logs the link to its console instead. The environment names are listed in `.env.example`.
+The app deploys on Render as a Web Service built from the Dockerfile, with Render Postgres holding one JSON document per event and the sign-in tables. Sign-in uses a magic link sent through Resend to an address on the `ORGANIZER_EMAILS` allowlist; a dev server without `RESEND_API_KEY` logs the link to its console instead. Attendee requests and follow-ups go out through the same Resend key in production or with `MAIL_LIVE=1`, and the links in them point at `APP_URL`; any other server logs one line per message. The environment names are listed in `.env.example`.

@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { matches, type Filter, type Subject } from "./filter";
 import * as T from "./types";
-import type { AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, Event, Guest, GuestStatus, Party, Request, VendorUpdate } from "./types";
+import type { AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, Event, Guest, GuestStatus, Party, Request, RequestDelivery, VendorUpdate } from "./types";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
 
@@ -355,7 +355,7 @@ export function upsertRequest(eventId: string, guestId: string, giftId: string, 
   const s = state();
   const key = requestKey(guestId, giftId);
   const existing = s.requests.get(key);
-  const row: Request = existing ? { ...existing, definition_ids: definitionIds } : { id: newId("req"), event_id: eventId, guest_id: guestId, gift_id: giftId, definition_ids: definitionIds, sent_at: now(), followed_up_at: [] };
+  const row: Request = existing ? { ...existing, definition_ids: definitionIds } : { id: newId("req"), event_id: eventId, guest_id: guestId, gift_id: giftId, definition_ids: definitionIds, sent_at: now(), followed_up_at: [], last_error: null };
   s.requests.set(key, row);
   return row;
 }
@@ -364,6 +364,17 @@ export function recordFollowUp(request: Request): Request {
   const s = state();
   const row = { ...request, followed_up_at: [...request.followed_up_at, now()] };
   s.requests.set(requestKey(row.guest_id, row.gift_id), row);
+  return row;
+}
+
+/** Records how a request's latest email left. A request the transaction rolled back has no row and takes no write. */
+export function setRequestDelivery(guestId: string, giftId: string, delivery: RequestDelivery, error: string | null = null): Request | undefined {
+  const s = state();
+  const key = requestKey(guestId, giftId);
+  const existing = s.requests.get(key);
+  if (!existing) return undefined;
+  const row: Request = { ...existing, delivery, last_error: error };
+  s.requests.set(key, row);
   return row;
 }
 

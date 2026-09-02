@@ -148,7 +148,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "request_from_attendees",
-    description: "Creates the questions a gift's product still needs and records a request to every going attendee who lacks an answer, with each attendee's own link. Returns the event snapshot with the requests.",
+    description: "Creates the questions a gift's product still needs and records a request to every going attendee who lacks an answer and emails each one their own link. Returns the event snapshot with the requests.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
     scopes: ["organizer"],
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/request-fields" }

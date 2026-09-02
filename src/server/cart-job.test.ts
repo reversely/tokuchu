@@ -65,7 +65,7 @@ function fakeStore(reply: (args: Record<string, unknown>) => StoreCall) {
   return { calls, deps };
 }
 
-function seed() {
+async function seed() {
   const event = publishEvent(createEventFromBody(BODY).id);
   const gift = createGiftFromBody(event.id, {
     product_id: "gid://shopify/Product/1",
@@ -79,7 +79,7 @@ function seed() {
     personalization: { fields: FIELDS },
     default_variant_id: "101"
   });
-  requestFromAttendees(event.id, gift.id);
+  await requestFromAttendees(event.id, gift.id);
   const defs = snapshot(event.id).definitions;
   const id = (key: string) => defs.find((d) => d.key === key)!.id;
   submitRsvp(event.id, {
@@ -99,7 +99,7 @@ describe("the cart job after approval", () => {
   });
 
   it("calls add_customized_to_cart once on the product page with every ready row and records the checkout link and lines", async () => {
-    const { event, gift } = seed();
+    const { event, gift } = await seed();
     approveSpecs(event.id, gift.id, new Date("2030-01-01T10:00:00Z"));
     const store = fakeStore((args) => {
       const items = args.items as { recipient_ref: string; variant_id: string }[];
@@ -132,7 +132,7 @@ describe("the cart job after approval", () => {
   });
 
   it("records a refusal as a failed fill with the store's reason", async () => {
-    const { event, gift } = seed();
+    const { event, gift } = await seed();
     approveSpecs(event.id, gift.id);
     const store = fakeStore((args) => ({ isError: true, payload: { error: "one or more items are invalid and nothing was added", items: (args.items as { recipient_ref: string }[]).map((i) => ({ recipient_ref: i.recipient_ref, issues: [{ field_key: "caption", message: "value exceeds 20 characters" }] })) } }));
     await runCartFill(event.id, gift.id, store.deps);
@@ -143,7 +143,7 @@ describe("the cart job after approval", () => {
   });
 
   it("keeps one job per gift in flight", async () => {
-    const { event, gift } = seed();
+    const { event, gift } = await seed();
     approveSpecs(event.id, gift.id);
     const store = fakeStore(() => ({ isError: false, payload: { ready: [], blocked: [], checkout_url: null } }));
     const first = startCartFill(event.id, gift.id, store.deps);

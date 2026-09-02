@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift } from "./gifts";
-import { createEvent, createGuest, createParty, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, state, transactionally, upsertDefinition, upsertRequest, writeValue, type EventInput, type State } from "./store";
+import { createEvent, createGuest, createParty, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, setRequestDelivery, state, transactionally, upsertDefinition, upsertRequest, writeValue, type EventInput, type State } from "./store";
 import type { CallerToken, VendorUpdate } from "./types";
 
 const EVENT: EventInput = {
@@ -37,6 +37,7 @@ function populate(): void {
   const token: CallerToken = { id: newId("tok"), event_id: event.id, holder: "vendor", gift_ids: [gift.id], readable_definition_ids: [name.id], callable_tools: ["list_guests"], expires_at: null, last_profile_url: null };
   s.tokens.set(token.id, token);
   recordFollowUp(upsertRequest(event.id, guest.id, gift.id, [name.id]));
+  setRequestDelivery(guest.id, gift.id, "failed", "Resend answered 422.");
 }
 
 describe("state scoping", () => {

@@ -9,7 +9,7 @@ export async function POST(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
     return await withPersistedEvent(id, async () => {
-      return NextResponse.json(followUp(id, giftId));
+      return NextResponse.json(await followUp(id, giftId));
     });
   } catch (e) {
     return errorResponse(e);

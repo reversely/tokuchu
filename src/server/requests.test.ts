@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetState, publishEvent } from "../domain/store";
 import type { PersonalizationField } from "../domain/types";
 import { approveSpecs, createEventFromBody, createGiftFromBody, followUp, giftRequirements, giftView, requestFromAttendees, setPersonalizationMappings, snapshot, submitRsvp } from "./api";
+import { setMailer, type MailMessage } from "./mail";
 
 const BODY = {
   title: "Astronomy Symposium",
@@ -35,6 +36,19 @@ function seedGift(eventId: string, fields: PersonalizationField[] = CREWNECK_FIE
   });
 }
 
+/** A mailer that keeps every message; `failWith` makes each send reject with that text. */
+function fakeMailer(failWith?: string) {
+  const sent: MailMessage[] = [];
+  setMailer({
+    async send(message) {
+      if (failWith) throw new Error(failWith);
+      sent.push(message);
+      return "sent";
+    }
+  });
+  return sent;
+}
+
 function seedAttendees(eventId: string, answers: Record<string, unknown> = {}) {
   return submitRsvp(eventId, {
     party: { contact: { email: "a@b.co" } },
@@ -48,8 +62,9 @@ function seedAttendees(eventId: string, answers: Record<string, unknown> = {}) {
 describe("comparing the store's fields with what the event holds", () => {
   beforeEach(() => {
     resetState();
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    fakeMailer();
   });
+  afterEach(() => setMailer(null));
 
   it("asks for the size, the location, and the time; the name comes from the RSVP", () => {
     const event = publishEvent(createEventFromBody(BODY).id);
@@ -70,10 +85,10 @@ describe("comparing the store's fields with what the event holds", () => {
     expect(location).toMatchObject({ source: "event", already: true });
   });
 
-  it("carries the store's max_length onto the question it creates", () => {
+  it("carries the store's max_length onto the question it creates", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id, [{ key: "motto", label: "Motto", kind: "text", required: true, constraints: { max_length: 20 } }]);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
     const motto = snapshot(event.id).definitions.find((d) => d.key === "motto")!;
     expect(motto).toMatchObject({ scope: "guest", value_type: "text", constraints: { max_length: 20 }, required_rule: "going", creator: "organizer", vendor_field: { key: "motto", kind: "text" } });
     expect(giftView(event.id, gift.id).personalization_mappings).toContainEqual({ vendor_field_key: "motto", source: { type: "definition", definition_id: motto.id, subject_scope: "guest" } });
@@ -81,16 +96,18 @@ describe("comparing the store's fields with what the event holds", () => {
 });
 
 describe("requesting the missing values from attendees", () => {
+  let sent: MailMessage[];
   beforeEach(() => {
     resetState();
-    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    sent = fakeMailer();
   });
+  afterEach(() => setMailer(null));
 
-  it("creates the questions, wires the size to the variants, and records a request per attendee with the missing questions", () => {
+  it("creates the questions, wires the size to the variants, and records a request per attendee with the missing questions", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
     seedAttendees(event.id);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
 
     const snap = snapshot(event.id);
     const size = snap.definitions.find((d) => d.key === "variant_size")!;
@@ -104,17 +121,50 @@ describe("requesting the missing values from attendees", () => {
     for (const r of snap.requests) {
       expect(r.definition_ids.sort()).toEqual([size.id, location.id, time.id].sort());
       expect(r.answered).toEqual({ [size.id]: false, [location.id]: false, [time.id]: false });
-      expect(r).toMatchObject({ gift_id: gift.id, follow_ups: 0, complete: false });
+      expect(r).toMatchObject({ gift_id: gift.id, follow_ups: 0, complete: false, delivery: "sent", last_error: null });
     }
-    expect(console.info).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(console.info).mock.calls[0][0]).toContain(`/i/${event.invite_code}?guest=`);
   });
 
-  it("flips each answered flag as the attendee replies and sends a follow-up only to the incomplete", () => {
+  it("emails each incomplete attendee the question labels and their own link", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
     seedAttendees(event.id);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
+    expect(sent).toHaveLength(2);
+    const { guests } = snapshot(event.id);
+    for (const message of sent) {
+      expect(message.to).toBe("a@b.co");
+      expect(message.subject).toBe("Your details for Astronomy Symposium");
+      for (const label of ["Size", "Enter Location for Star Map 1", "Pick a time for Star Map 1"]) expect(message.text).toContain(`- ${label}`);
+    }
+    expect(sent.map((m) => m.text)).toEqual(expect.arrayContaining(guests.map((g) => expect.stringContaining(`http://localhost:3113/i/${event.invite_code}?guest=${g.id}`))));
+  });
+
+  it("records no_address on an attendee whose party has no email and keeps the request", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id);
+    submitRsvp(event.id, { party: {}, guests: [{ display_name: "Casey Park", status: "going" }] });
+    await requestFromAttendees(event.id, gift.id);
+    expect(sent).toHaveLength(0);
+    expect(snapshot(event.id).requests).toEqual([expect.objectContaining({ delivery: "no_address", last_error: null, complete: false })]);
+  });
+
+  it("records failed with the mailer's message and keeps the request", async () => {
+    fakeMailer("Resend answered 422.");
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id);
+    seedAttendees(event.id);
+    await expect(requestFromAttendees(event.id, gift.id)).resolves.toBeDefined();
+    const requests = snapshot(event.id).requests;
+    expect(requests).toHaveLength(2);
+    for (const r of requests) expect(r).toMatchObject({ delivery: "failed", last_error: "Resend answered 422." });
+  });
+
+  it("flips each answered flag as the attendee replies and sends a follow-up only to the incomplete", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id);
+    seedAttendees(event.id);
+    await requestFromAttendees(event.id, gift.id);
     const defs = snapshot(event.id).definitions;
     const size = defs.find((d) => d.key === "variant_size")!;
     const location = defs.find((d) => d.key === "star_map_location")!;
@@ -129,18 +179,22 @@ describe("requesting the missing values from attendees", () => {
     expect(before.requests.find((r) => r.guest_id === avery.id)).toMatchObject({ complete: true, answered: { [size.id]: true, [location.id]: true, [time.id]: true } });
     expect(before.requests.find((r) => r.guest_id === blake.id)).toMatchObject({ complete: false, answered: { [size.id]: true, [location.id]: false, [time.id]: false } });
 
-    vi.mocked(console.info).mockClear();
-    const after = followUp(event.id, gift.id);
+    sent.length = 0;
+    const after = await followUp(event.id, gift.id);
     expect(after.requests.find((r) => r.guest_id === avery.id)!.follow_ups).toBe(0);
     expect(after.requests.find((r) => r.guest_id === blake.id)!.follow_ups).toBe(1);
-    expect(console.info).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(console.info).mock.calls[0][0]).toContain(`guest=${blake.id}`);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].subject).toBe("Reminder: your details for Astronomy Symposium");
+    expect(sent[0].text).toContain("This is a reminder.");
+    expect(sent[0].text).toContain(`guest=${blake.id}`);
+    expect(sent[0].text).not.toContain("- Size");
+    expect(sent[0].text).toContain("- Enter Location for Star Map 1");
   });
 
-  it("issues the request to an attendee who replies after it was sent", () => {
+  it("issues the request to an attendee who replies after it was sent", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
     expect(snapshot(event.id).requests).toHaveLength(0);
     seedAttendees(event.id);
     expect(snapshot(event.id).requests).toHaveLength(2);
@@ -151,20 +205,24 @@ describe("requesting the missing values from attendees", () => {
     expect(row.definition_ids).not.toContain(sizeId);
     expect(row.complete).toBe(false);
     expect(snapshot(event.id).requests).toHaveLength(3);
+    // The late sends go out once the RSVP write commits, on the next turn of the event loop.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(sent.map((m) => m.to).sort()).toEqual(["a@b.co", "a@b.co", "c@d.co"]);
+    expect(snapshot(event.id).requests.every((r) => r.delivery === "sent")).toBe(true);
   });
 
-  it("refuses a time that is not HH:MM on the question the time field created", () => {
+  it("refuses a time that is not HH:MM on the question the time field created", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
     const time = snapshot(event.id).definitions.find((d) => d.key === "star_map_time")!;
     expect(() => submitRsvp(event.id, { party: {}, guests: [{ display_name: "Avery Chen", status: "going", answers: { [time.id]: "9pm" } }] })).toThrow(/required form/);
   });
 
-  it("locks the answers and keeps the first approval time so the cart job's key stays put", () => {
+  it("locks the answers and keeps the first approval time so the cart job's key stays put", async () => {
     const event = publishEvent(createEventFromBody(BODY).id);
     const gift = seedGift(event.id);
-    requestFromAttendees(event.id, gift.id);
+    await requestFromAttendees(event.id, gift.id);
     const size = snapshot(event.id).definitions.find((d) => d.key === "variant_size")!;
     submitRsvp(event.id, { party: { contact: { email: "a@b.co" } }, guests: [{ display_name: "Avery Chen", status: "going", answers: { [size.id]: "m" } }] });
     approveSpecs(event.id, gift.id, new Date("2030-01-01T10:00:00Z"));
