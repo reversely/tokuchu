@@ -149,3 +149,6 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   vitest, 18 Playwright, live flow demo 4/4. #8 closed as delivered by #12 + #6.
 - feat(attendees): approval runs through the page's approve_specs tool (the last #12 checklist item);
   the MCP endpoint dispatches it too. Live flow demo 4/4.
+- #9 landed as 3c37c46 (clean). Playwright v1.62.1-noble image, standalone output, esbuild-compiled
+  migrate.mjs as preDeployCommand, Blueprint plans 1c-2g and 0.1c-256mb in ohio. Build verified here;
+  the image build and the Blueprint apply wait for the Render workspace (#2 stays open for that).
