@@ -185,3 +185,6 @@ that session with spotlight callouts and a first-person organizer narration pane
 only; LLM paths off unless needed.
 - #21 landed as 0cab585 (clean). LLM_ENABLED off by default: curate route 501, panel hidden, SDK
   loaded dynamically only when on. Gate: 169 vitest, 19 Playwright.
+- #19 landed as 7417ebd (+ 32983e4 fixing the curate test's cookie read). GET /demo mints a signed
+  demo cookie, seeds and publishes the symposium event for that owner, and redirects to its dashboard
+  with snapshot.demo = true; sweep after 24 h. Gate: 178 vitest, 20 Playwright.
