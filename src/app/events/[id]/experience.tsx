@@ -374,7 +374,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
             </div>
             <div className="ask" style={{ marginBottom: 24 }}>
               <input aria-label="Describe the gift" placeholder="Or describe it" value={sentence} onChange={(e) => setSentence(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sentence.trim() && search({ sentence })} data-testid="sentence" />
-              <button type="button" className="btn primary small" onClick={() => sentence.trim() && search({ sentence })} disabled={!!busy || !sentence.trim() || !target.needed_by}>Search</button>
+              <button type="button" className="btn primary small" onClick={() => sentence.trim() && search({ sentence })} disabled={!!busy || !sentence.trim() || !target.needed_by} data-testid="search">Search</button>
             </div>
             {curateBlock}
             {gifts.length > 0 && <button type="button" className="btn ghost" onClick={() => setStep("list")}>Back to the gifts</button>}
@@ -418,7 +418,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
             )}
             <div className="results" data-testid="results">
               {reply.ranked.slice(0, shown).map((p) => (
-                <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result">
+                <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result" data-shop={p.shop_domain}>
                   {p.image_url ? <img className="ph" src={p.image_url} alt="" /> : <span className="ph" />}
                   <span className="body">
                     <span className="name">{p.title}</span>

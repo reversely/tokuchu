@@ -5,11 +5,12 @@ import { Overview } from "./overview";
 import { Experience, type SearchReply } from "./experience";
 import { Attendees } from "./attendees";
 import { WebMcpProvider } from "../../webmcp-provider";
+import { Tour } from "../../demo/tour";
 
 export type Snapshot = ReturnType<typeof snapshot>;
 type Tab = "overview" | "experience" | "attendees";
 
-/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. */
+/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. The tour mounts only on a demo organizer's event. */
 export function Dashboard({ initial, account }: { initial: Snapshot; account: ReactNode }) {
   const [snap, setSnap] = useState(initial);
   const [tab, setTab] = useState<Tab>("overview");
@@ -69,6 +70,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
           <Experience snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} lastSearch={lastSearch} setLastSearch={setLastSearch} />
         )}
       </main>
+      {snap.demo && <Tour snap={snap} />}
     </>
   );
 }

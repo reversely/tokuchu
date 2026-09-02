@@ -13,7 +13,8 @@ function usesMemory(): boolean {
 
 /**
  * Starts or resumes a guest session: the cookie's demo organizer keeps its event, and a visitor
- * without one gets a fresh id, a published event from the seed, and the cookie. A signed-in
+ * without one gets a fresh id, a published event from the seed, and the cookie. `?autoplay=1`
+ * carries through to the dashboard so the tour runs on its own. A signed-in
  * organizer already runs the real flow, so that request goes to the event list instead.
  */
 export async function GET(request: NextRequest) {
@@ -23,7 +24,9 @@ export async function GET(request: NextRequest) {
     if (usesMemory()) sweepDemoState();
     const demoId = demoIdFromCookie(request.cookies.get(DEMO_COOKIE)?.value) ?? newDemoId();
     const eventId = await demoEventFor(demoId);
-    const response = NextResponse.redirect(new URL(`/events/${eventId}?demo=1`, publicOrigin(request)));
+    const target = new URL(`/events/${eventId}?demo=1`, publicOrigin(request));
+    if (request.nextUrl.searchParams.get("autoplay") === "1") target.searchParams.set("autoplay", "1");
+    const response = NextResponse.redirect(target);
     response.cookies.set(DEMO_COOKIE, demoCookieValue(demoId), demoCookieOptions());
     return response;
   } catch (e) {
