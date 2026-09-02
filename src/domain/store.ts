@@ -1,10 +1,14 @@
 /**
- * The in-memory store (PRD Section 7) on `globalThis`, so the Next dev server's module reloads
- * keep it, with the same backfill pattern as the planner's src/server/state.ts. Every write to a
- * value, a guest's status, or a vendor thread appends one change-log entry with a rising
- * sequence number; readers poll `changesSince`.
+ * The in-memory store (PRD Section 7). A call under `runWithState` reads and writes the State it
+ * was given; every other caller reads the process-wide State on `globalThis`, which the Next dev
+ * server's module reloads keep, with the same backfill pattern as the planner's
+ * src/server/state.ts. Every write to a value, a guest's status, or a vendor thread appends one
+ * change-log entry with a rising sequence number; readers poll `changesSince`.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
+import { z } from "zod";
 import { matches, type Filter, type Subject } from "./filter";
+import * as T from "./types";
 import type { AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, Event, Guest, GuestStatus, Party, VendorUpdate } from "./types";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
@@ -29,11 +33,20 @@ declare global {
   var __gatherState: State | undefined;
 }
 
-function freshState(): State {
+export function freshState(): State {
   return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), changes: [], seq: 0, ids: 0 };
 }
 
+const scopedState = new AsyncLocalStorage<State>();
+
+/** Runs fn with `state()` bound to the given State for every call in fn's async context. */
+export function runWithState<T>(s: State, fn: () => T): T {
+  return scopedState.run(s, fn);
+}
+
 export function state(): State {
+  const scoped = scopedState.getStore();
+  if (scoped) return scoped;
   if (!globalThis.__gatherState) globalThis.__gatherState = freshState();
   const current = globalThis.__gatherState as unknown as Record<string, unknown>;
   const template = freshState() as unknown as Record<string, unknown>;
@@ -41,9 +54,46 @@ export function state(): State {
   return globalThis.__gatherState;
 }
 
-/** Test hook: an empty store. */
+/** Test hook: an empty store, in place of the scoped State when one is set and otherwise on `globalThis`. */
 export function resetState(): void {
-  globalThis.__gatherState = freshState();
+  const scoped = scopedState.getStore();
+  if (scoped) Object.assign(scoped, freshState());
+  else globalThis.__gatherState = freshState();
+}
+
+/* ---- Serialization ---- */
+
+const entries = <V extends z.ZodType>(value: V) => z.array(z.tuple([z.string(), value]));
+
+/** The JSON-safe form of a State: each Map as an array of [key, value] pairs. */
+const StateDocument = z.object({
+  events: entries(T.Event),
+  parties: entries(T.Party),
+  guests: entries(T.Guest),
+  definitions: entries(T.AttributeDefinition),
+  values: entries(T.AttributeValue),
+  updates: entries(T.VendorUpdate),
+  gifts: entries(T.Batch),
+  tokens: entries(T.CallerToken),
+  changes: z.array(T.ChangeEntry),
+  seq: z.number().int(),
+  ids: z.number().int()
+});
+export type StateDocument = z.infer<typeof StateDocument>;
+
+export function serializeState(s: State): StateDocument {
+  return { events: [...s.events], parties: [...s.parties], guests: [...s.guests], definitions: [...s.definitions], values: [...s.values], updates: [...s.updates], gifts: [...s.gifts], tokens: [...s.tokens], changes: s.changes, seq: s.seq, ids: s.ids };
+}
+
+/**
+ * Rebuilds a State from a document `serializeState` produced.
+ *
+ * Raises:
+ *   ZodError: when the document does not have the State shape.
+ */
+export function deserializeState(doc: unknown): State {
+  const d = StateDocument.parse(doc);
+  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), changes: d.changes, seq: d.seq, ids: d.ids };
 }
 
 /**
