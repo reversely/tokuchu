@@ -93,7 +93,7 @@ cart (gid://shopify/Cart/{token}) whose checkoutUrl opens in a fresh browser wit
 tokenless Storefront GraphQL from the store origin accepts cartCreate with per-line attributes; cart
 permalinks carry properties on the first line only. The repo's adapter is not installed in the theme.
 
-Rewritten: docs/prd.md (from scratch), docs/webmcp-routing.md, README.md, CLAUDE.md,
+Rewritten: docs/prd.md (from scratch), docs/webmcp-routing.md, README.md, the agent guidance file,
 integrations/customily/README.md (to the two-tool contract #11 implements), docs/home.html (tool names
 and step copy). Deleted docs/webmp-integration.md (the earlier task brief). Left untouched:
 docs/architecture.html (untracked, describes the vendor-agent design; superseded). Tickets #10–#16 carry

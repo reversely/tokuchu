@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Contributing to Tokuchu
 
-Guidance for Claude Code working in the Tokuchu repository.
+Guidance for anyone, person or coding agent, working in this repository. The Next.js version notes that `next dev` writes to `AGENTS.md` apply as well.
 
 Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled Shopify
 storefronts to coordinate personalized purchases for events. It is the agentic orchestration layer
@@ -51,5 +51,3 @@ hardcoded list.
 Work is organized as GitHub issues in `reversely/tokuchu`, one ticket per commit directly to `main`,
 no feature branches. The commit body ends with `closes #N`, and the subject follows Conventional
 Commits. Verify the fast suite is green first.
-
-@AGENTS.md

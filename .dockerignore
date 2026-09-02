@@ -1,5 +1,6 @@
 .git
-.claude
+.*
+!.env.example
 node_modules
 packages/*/node_modules
 .next
