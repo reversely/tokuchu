@@ -56,8 +56,9 @@ function Question({ def, value, onChange, disabled }: { def: AttributeDefinition
       {control === "textarea" ? (
         <textarea id={id} rows={3} value={(value as string) ?? ""} disabled={disabled} maxLength={def.constraints.max_length} onChange={(e) => onChange(e.target.value)} />
       ) : (
-        <input id={id} type={control === "number" ? "number" : control === "date" ? "date" : control === "file" ? "url" : "text"} value={(value as string | number) ?? ""} disabled={disabled} maxLength={def.constraints.max_length} min={def.constraints.min} max={def.constraints.max} onChange={(e) => onChange(control === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)} />
+        <input id={id} type={control === "number" ? "number" : control === "date" ? "date" : control === "file" ? "url" : def.vendor_field?.kind === "time" ? "time" : "text"} value={(value as string | number) ?? ""} disabled={disabled} maxLength={def.constraints.max_length} min={def.constraints.min} max={def.constraints.max} onChange={(e) => onChange(control === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value)} />
       )}
+      {def.value_type === "text" && def.constraints.max_length !== undefined && <span className="hint" data-testid={`limit-${def.key}`}>Up to {def.constraints.max_length} characters</span>}
     </div>
   );
 }

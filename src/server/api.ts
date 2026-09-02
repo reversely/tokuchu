@@ -15,6 +15,7 @@ import {
   currentSeq,
   definitionsFor,
   eventByCode,
+  getDefinition,
   getEvent,
   getGuest,
   guestsFor,
@@ -25,6 +26,8 @@ import {
   LockedValueError,
   newId,
   publishEvent,
+  recordFollowUp,
+  requestsFor,
   setGuestAttendance,
   setGuestStatus,
   state,
@@ -32,14 +35,15 @@ import {
   subjectFor,
   updateEvent,
   upsertDefinition,
+  upsertRequest,
   valuesFor,
   writeValue,
   type EventInput
 } from "../domain/store";
-import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
+import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type Event, type MappingSource, type PersonalizationKind, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
-import { validateMappings } from "../domain/personalization";
+import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { afterRsvpWrite } from "./hooks";
 
 export class NotFoundError extends Error {}
@@ -170,7 +174,7 @@ export function snapshot(eventId: string) {
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, library: library().questions, seq: currentSeq() };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq() };
 }
 
 /* ---- Gifts ---- */
@@ -254,53 +258,166 @@ function slugValue(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
 }
 
-export type Requestable = { key: string; label: string; value_type: ValueType; options?: { value: string; label: string }[]; already: boolean; source: "variant" | "personalization" };
+/** Where one requirement's value comes from; `question` means a guest question the request creates. */
+export type RequirementSource = MappingSource["type"] | "question";
 
 /**
- * The per-attendee questions a curated gift implies, derived from the product the search read so the
- * choices come from the store, not a fixed list: the product's variant option (Size) as a choice, and
- * a text field for the name the vendor prints. `already` marks the ones the event already asks.
+ * One requirement of the gift's product with the source that fills it. `already` is true when no
+ * request is needed for it; `question` carries the definition a request creates; `mapping` carries the
+ * row the request stores on the gift when the gift lacks one.
  */
-export function giftRequestables(eventId: string, giftId: string): Requestable[] {
-  const gift = requireGift(eventId, giftId);
-  const has = (key: string) => definitionsFor(eventId).some((d) => d.key === key);
-  const out: Requestable[] = [];
+export type Requirement = {
+  key: string;
+  label: string;
+  kind: PersonalizationKind | "variant";
+  source: RequirementSource;
+  definition_id?: string;
+  already: boolean;
+  question?: { value_type: ValueType; constraints: Constraints };
+  mapping?: PersonalizationMapping;
+};
+
+const isBlank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+/** The question a store field becomes: a date for a date kind, a choice for an allowed set, and text with the store's cap otherwise. */
+function questionFor(field: PersonalizationField): Requirement["question"] {
+  const { max_length, allowed } = fieldConstraints(field);
+  if (field.kind === "date") return { value_type: "date", constraints: {} };
+  if (allowed.length) return { value_type: "enum", constraints: { options: field.constraints?.options ?? allowed.map((value) => ({ value, label: value })) } };
+  const constraints: Constraints = {};
+  if (max_length !== undefined) constraints.max_length = max_length;
+  if (field.kind === "time") constraints.pattern = CLOCK_TIME.source;
+  return { value_type: "text", constraints };
+}
+
+/**
+ * Resolves one store field in order: a stored mapping to the event, a literal, or the guest row; a
+ * stored mapping to a definition; a name the guest row already holds; a definition an earlier request
+ * created for this field; and otherwise a new question.
+ */
+function resolveField(field: PersonalizationField, mapping: PersonalizationMapping | undefined, defs: AttributeDefinition[]): Requirement {
+  const base = { key: field.key, label: field.label, kind: field.kind };
+  const byId = new Map(defs.map((d) => [d.id, d]));
+  if (mapping && mapping.source.type !== "definition") return { ...base, source: mapping.source.type, already: true };
+  if (mapping?.source.type === "definition" && byId.has(mapping.source.definition_id)) return { ...base, source: "definition", definition_id: mapping.source.definition_id, already: true };
+  if (field.kind === "name") {
+    // The library seeds a printed_name question on every event; only one the organizer added stands in for the guest's display name.
+    const printed = defs.find((d) => d.key === "printed_name" && d.creator === "organizer");
+    if (printed) return { ...base, source: "definition", definition_id: printed.id, already: true, mapping: { vendor_field_key: field.key, source: { type: "definition", definition_id: printed.id, subject_scope: printed.scope } } };
+    return { ...base, source: "guest", already: true, mapping: { vendor_field_key: field.key, source: { type: "guest", key: "display_name" } } };
+  }
+  const earlier = defs.find((d) => d.vendor_field?.key === field.key);
+  if (earlier) return { ...base, source: "definition", definition_id: earlier.id, already: true, mapping: { vendor_field_key: field.key, source: { type: "definition", definition_id: earlier.id, subject_scope: earlier.scope } } };
+  return { ...base, source: "question", already: false, question: questionFor(field) };
+}
+
+/** The variant axis the store sells by (Size, or the first axis with a choice) as a choice requirement, when the product has one. */
+function variantRequirement(gift: Batch, defs: AttributeDefinition[]): Requirement | null {
   const byOption = new Map<string, Map<string, string>>();
   for (const v of gift.variants ?? []) for (const o of v.options ?? []) {
     if (!byOption.has(o.name)) byOption.set(o.name, new Map());
     byOption.get(o.name)!.set(slugValue(o.label), o.label);
   }
   const optionName = [...byOption.keys()].find((n) => /size/i.test(n)) ?? [...byOption.entries()].find(([, m]) => m.size > 1)?.[0];
-  if (optionName) {
-    const options = [...byOption.get(optionName)!].map(([value, label]) => ({ value, label }));
-    if (options.length > 1) out.push({ key: `variant_${slugValue(optionName)}`, label: optionName, value_type: "enum", options, already: has(`variant_${slugValue(optionName)}`), source: "variant" });
-  }
-  if ((gift.personalization?.fields ?? []).some((f) => f.kind === "text" || f.kind === "name" || f.kind === "monogram")) {
-    out.push({ key: "printed_name", label: "Name for printing", value_type: "text", already: has("printed_name"), source: "personalization" });
-  }
-  return out;
+  if (!optionName) return null;
+  const options = [...byOption.get(optionName)!].map(([value, label]) => ({ value, label }));
+  if (options.length < 2) return null;
+  const key = `variant_${slugValue(optionName)}`;
+  const existing = defs.find((d) => d.key === key);
+  const base = { key, label: optionName, kind: "variant" as const };
+  if (existing) return { ...base, source: "definition", definition_id: existing.id, already: true };
+  return { ...base, source: "question", already: false, question: { value_type: "enum", constraints: { options } } };
 }
 
 /**
- * Creates the guest questions a curated gift implies (giftRequestables) so attendees are asked them,
- * and wires each variant-choice option to its variant on the gift. The organizer actions this from the
- * Attendees tab; it persists on the event, and the invite form and the records grid pick it up.
+ * Compares the product's requirements with what the event already holds: each store field with the
+ * source that fills it, plus the variant axis as a choice. A field with nothing to fill it is a question.
+ */
+export function giftRequirements(eventId: string, giftId: string): Requirement[] {
+  const gift = requireGift(eventId, giftId);
+  const defs = definitionsFor(eventId);
+  const mappings = new Map((gift.personalization_mappings ?? []).map((m) => [m.vendor_field_key, m]));
+  const out: Requirement[] = [];
+  const variant = variantRequirement(gift, defs);
+  if (variant) out.push(variant);
+  for (const field of gift.personalization?.fields ?? []) out.push(resolveField(field, mappings.get(field.key), defs));
+  return out;
+}
+
+/** The definitions a requirement list asks attendees for: every guest-scope definition a requirement names. */
+function askedDefinitionIds(requirements: Requirement[], defs: AttributeDefinition[]): string[] {
+  const byId = new Map(defs.map((d) => [d.id, d]));
+  return requirements.flatMap((r) => (r.definition_id && byId.get(r.definition_id)?.scope === "guest" ? [r.definition_id] : []));
+}
+
+function missingDefinitionIds(guest: Guest, definitionIds: string[]): string[] {
+  const values = valuesFor(guest);
+  return definitionIds.filter((id) => isBlank(values[id]));
+}
+
+/** The attendee's own link, for the log in place of the email. */
+function attendeeLink(event: Event, guest: Guest): string {
+  return event.invite_code ? `/i/${event.invite_code}?guest=${guest.id}` : `(unpublished event) guest ${guest.id}`;
+}
+
+/**
+ * Creates the questions the gift's requirements need, stores the mapping and the variant wiring on the
+ * gift, and records a request to every going attendee who lacks an answer. The send is the request row
+ * and the attendee's link in the log.
  */
 export function requestFromAttendees(eventId: string, giftId: string) {
+  const event = requireEvent(eventId);
   const gift = requireGift(eventId, giftId);
-  const mappingRows = [...gift.mapping];
-  for (const r of giftRequestables(eventId, giftId)) {
-    if (r.already) continue;
-    const def = upsertDefinition(eventId, { namespace: "core", key: r.key, label: r.label, scope: "guest", value_type: r.value_type, constraints: r.value_type === "enum" ? { options: r.options } : { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
-    if (r.source === "variant" && r.options) {
-      for (const o of r.options) {
-        const variant = gift.variants.find((v) => (v.options ?? []).some((vo) => slugValue(vo.label) === o.value));
-        if (variant && !mappingRows.some((m) => m.definition_id === def.id && m.value === o.value)) mappingRows.push({ definition_id: def.id, value: o.value, variant_id: variant.id });
+  return transactionally(() => {
+    const variantRows = [...gift.mapping];
+    const fieldRows = [...(gift.personalization_mappings ?? [])];
+    const resolved = giftRequirements(eventId, giftId).map((r) => {
+      if (!r.question) return r;
+      const created = upsertDefinition(eventId, { namespace: "organizer", key: r.key, label: r.label, scope: "guest", value_type: r.question.value_type, constraints: r.question.constraints, default_visibility: [], required_rule: "going", creator: "organizer", ...(r.kind === "variant" ? {} : { vendor_field: { key: r.key, label: r.label, kind: r.kind } }) });
+      const mapping: PersonalizationMapping | undefined = r.kind === "variant" ? undefined : { vendor_field_key: r.key, source: { type: "definition", definition_id: created.id, subject_scope: "guest" } };
+      return { ...r, source: "definition" as const, definition_id: created.id, already: true, mapping };
+    });
+    for (const r of resolved) {
+      if (r.mapping && !fieldRows.some((m) => m.vendor_field_key === r.key)) fieldRows.push(r.mapping);
+      if (r.kind === "variant" && r.definition_id) {
+        for (const o of getDefinition(r.definition_id).constraints.options ?? []) {
+          const variant = gift.variants.find((v) => (v.options ?? []).some((vo) => slugValue(vo.label) === o.value));
+          if (variant && !variantRows.some((m) => m.definition_id === r.definition_id && m.value === o.value)) variantRows.push({ definition_id: r.definition_id, value: o.value, variant_id: variant.id });
+        }
       }
     }
+    updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows } as Partial<GiftInput>);
+    const asked = askedDefinitionIds(resolved, definitionsFor(eventId));
+    for (const guest of listGuests(eventId, GOING)) {
+      const missing = missingDefinitionIds(guest, asked);
+      if (!missing.length) continue;
+      upsertRequest(eventId, guest.id, giftId, missing);
+      console.info(`Request to ${guest.display_name}: ${attendeeLink(event, guest)}`);
+    }
+    return snapshot(eventId);
+  });
+}
+
+/** Sends the request again to every attendee whose request still has an unanswered question. */
+export function followUp(eventId: string, giftId: string) {
+  const event = requireEvent(eventId);
+  requireGift(eventId, giftId);
+  for (const request of requestsFor(eventId, giftId)) {
+    const guest = getGuest(request.guest_id);
+    if (!missingDefinitionIds(guest, request.definition_ids).length) continue;
+    recordFollowUp(request);
+    console.info(`Follow-up to ${guest.display_name}: ${attendeeLink(event, guest)}`);
   }
-  if (mappingRows.length !== gift.mapping.length) updateGift(giftId, { mapping: mappingRows } as Partial<GiftInput>);
   return snapshot(eventId);
+}
+
+/** Every request on the event with, per question, whether the attendee has answered it. */
+function requestViews(eventId: string) {
+  return requestsFor(eventId).map((r) => {
+    const values = valuesFor(getGuest(r.guest_id));
+    const answered = Object.fromEntries(r.definition_ids.map((id) => [id, !isBlank(values[id])]));
+    return { guest_id: r.guest_id, gift_id: r.gift_id, definition_ids: r.definition_ids, sent_at: r.sent_at, follow_ups: r.followed_up_at.length, answered, complete: Object.values(answered).every(Boolean) };
+  });
 }
 
 export function giftView(eventId: string, giftId: string) {

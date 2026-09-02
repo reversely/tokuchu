@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { giftRequestables, requestFromAttendees, errorResponse } from "../../../../../../../server/api";
+import { giftRequirements, requestFromAttendees, errorResponse } from "../../../../../../../server/api";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
-/** The per-attendee questions this gift implies, derived from the product the search read. */
+/** The product's requirements with the source that fills each: the guest row, the event, a literal, a definition, or a question to ask. */
 export async function GET(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return NextResponse.json({ requestables: giftRequestables(id, giftId) });
+    return NextResponse.json({ requirements: giftRequirements(id, giftId) });
   } catch (e) {
     return errorResponse(e);
   }
 }
 
-/** The organizer requests those questions from attendees; they persist on the event. */
+/** The organizer requests the missing values from attendees: the questions persist on the event and each attendee gets a request row. */
 export async function POST(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;

@@ -1,91 +1,155 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Snapshot } from "./dashboard";
-import type { Requestable } from "../../../server/api";
+import type { Requirement } from "../../../server/api";
+import { executeThroughApi } from "../../../webmcp/register";
+import { TOOLS } from "../../../webmcp/tools";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
+type Definition = Snapshot["definitions"][number];
 
 /** A guest question in plain words: the control it renders and, for a choice, the options it offers. */
-function questionKind(def: Snapshot["definitions"][number]): string {
+function questionKind(def: Definition): string {
   const opts = (def.constraints.options ?? []).map((o) => o.label);
   if (def.value_type === "enum") return opts.length ? `choose one of ${opts.join(", ")}` : "choose one";
   if (def.value_type === "multi_enum") return opts.length ? `choose any of ${opts.join(", ")}` : "choose any";
   if (def.value_type === "date") return "a date";
   if (def.value_type === "number") return "a number";
+  if (def.constraints.max_length) return `text up to ${def.constraints.max_length} characters`;
   return "short text";
+}
+
+/** Where a requirement's value comes from, in the organizer's words. */
+function sourceLabel(r: Requirement, defs: Map<string, Definition>): string {
+  if (r.source === "guest") return "from the RSVP name";
+  if (r.source === "event") return "from the event";
+  if (r.source === "literal") return "a fixed value";
+  if (r.source === "definition") {
+    const def = r.definition_id ? defs.get(r.definition_id) : undefined;
+    return def?.scope === "guest" ? `asked of attendees as ${questionKind(def)}` : "from the event's records";
+  }
+  return "to be asked of attendees";
+}
+
+/**
+ * Runs one organizer tool through the same path a browser agent takes on this page, so a click and a
+ * tool call share one request. Returns the error text when the call failed.
+ */
+async function runTool(name: string, eventId: string, giftId: string): Promise<string | null> {
+  const tool = TOOLS.find((t) => t.name === name);
+  if (!tool) return `No tool ${name}`;
+  const result = await executeThroughApi(tool, eventId, { gift_id: giftId }, fetch);
+  if (!result.isError) return null;
+  try {
+    return (JSON.parse(result.content[0].text) as { error?: string }).error ?? "The request failed";
+  } catch {
+    return "The request failed";
+  }
 }
 
 /** The Attendees records grid, the organizer's request panel, the WebMCP routing that carries it, and the approve gate. */
 export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () => void }) {
   // A choice question with no options cannot be answered, so it is neither a column nor a request.
-  const answerable = (d: Snapshot["definitions"][number]) => !((d.value_type === "enum" || d.value_type === "multi_enum") && (d.constraints.options?.length ?? 0) === 0);
+  const answerable = (d: Definition) => !((d.value_type === "enum" || d.value_type === "multi_enum") && (d.constraints.options?.length ?? 0) === 0);
   const guestDefs = snap.definitions.filter((d) => d.scope === "guest" && answerable(d));
-  const questions = snap.definitions.filter((d) => d.scope === "guest" && d.required_rule !== "never" && answerable(d));
+  const defsById = new Map(snap.definitions.map((d) => [d.id, d]));
   const attendees = snap.guests.filter((g) => g.status === "going");
   const gift = snap.gifts[0] as (Snapshot["gifts"][number] & { checkout_url?: string | null; locked_at?: string | null }) | undefined;
   const approved = Boolean(gift?.locked_at);
   const vendor = gift?.shop_domain?.replace(/^https?:\/\//, "") || "the vendor";
+  const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
+  const incomplete = [...requests.values()].filter((r) => !r.complete).length;
 
-  const [requestables, setRequestables] = useState<Requestable[]>([]);
-  const [busy, setBusy] = useState<null | "request" | "approve">(null);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [busy, setBusy] = useState<null | "request" | "follow_up" | "approve">(null);
   const [error, setError] = useState<string | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!gift) { setRequestables([]); return; }
-    let stop = false;
-    fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/request-fields`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { requestables: [] }))
-      .then((d: { requestables: Requestable[] }) => { if (!stop) setRequestables(d.requestables); })
-      .catch(() => { if (!stop) setRequestables([]); });
-    return () => { stop = true; };
-  }, [snap.event.id, gift?.id, snap.definitions.length]);
+  const loadRequirements = useCallback(async () => {
+    if (!gift) return setRequirements([]);
+    try {
+      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/request-fields`, { cache: "no-store" });
+      setRequirements(res.ok ? ((await res.json()) as { requirements: Requirement[] }).requirements : []);
+    } catch {
+      setRequirements([]);
+    }
+  }, [snap.event.id, gift]);
 
-  const pending = requestables.filter((r) => !r.already);
+  // The requirement list changes with the definitions and the gift's mappings; the snapshot sequence tracks both.
+  useEffect(() => { void loadRequirements(); }, [loadRequirements, snap.seq]);
 
-  async function post(action: "request-fields" | "approve-specs", which: "request" | "approve") {
+  const pending = requirements.filter((r) => !r.already);
+
+  async function run(name: "request_from_attendees" | "follow_up", which: "request" | "follow_up") {
     if (!gift) return;
     setBusy(which);
     setError(null);
+    const failure = await runTool(name, snap.event.id, gift.id);
+    if (failure) setError(failure);
+    else onChanged();
+    setBusy(null);
+  }
+
+  async function approve() {
+    if (!gift) return;
+    setBusy("approve");
+    setApproveError(null);
     try {
-      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/${action}`, { method: "POST" });
+      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/approve-specs`, { method: "POST" });
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setApproveError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
   }
 
-  function cell(value: unknown, def: (typeof guestDefs)[number], going: boolean) {
+  function cell(guestId: string, value: unknown, def: Definition, going: boolean) {
     const label = Array.isArray(value)
       ? (value as string[]).map((x) => def.constraints.options?.find((o) => o.value === x)?.label ?? x).join(" ")
       : value === undefined || value === "" ? "" : def.constraints.options?.find((o) => o.value === value)?.label ?? String(value);
+    if (label) return requests.get(guestId)?.definition_ids.includes(def.id) ? <span className="answered" data-state="answered">{label}</span> : label;
+    const requested = requests.get(guestId)?.definition_ids.includes(def.id);
     const required = def.required_rule === "always" || (def.required_rule === "going" && going);
-    return label || (required ? <span className="missing">missing</span> : <span className="quiet">not given</span>);
+    return requested || required ? <span className="missing" data-state="missing">missing</span> : <span className="quiet">not given</span>;
   }
 
   return (
     <div className="wrap solo">
       <section className="block" aria-labelledby="requested" data-testid="requested-info">
         <div className="labelrow"><h2 id="requested">Information requested from attendees</h2>{gift && <span className="eyebrow">{gift.product_title}</span>}</div>
-        {questions.length > 0 ? (
+        {requirements.length > 0 ? (
           <div className="chips">
-            {questions.map((q) => (
-              <span className="chip" key={q.id} data-testid="requested-field"><strong>{q.label}</strong> <span className="quiet">{questionKind(q)}</span></span>
+            {requirements.map((r) => (
+              <span className="chip" key={r.key} data-testid="requested-field" data-source={r.source}><strong>{r.label}</strong> <span className="quiet">{sourceLabel(r, defsById)}</span></span>
             ))}
           </div>
         ) : (
-          <p className="hint" style={{ color: "var(--muted)" }}>No questions requested yet</p>
+          <p className="hint" style={{ color: "var(--muted)" }}>No requirements yet</p>
         )}
-        {gift && pending.length > 0 && (
+        {gift && (
           <div className="sendrow" style={{ marginTop: 16 }}>
-            <div className="lead">{gift.product_title} needs {pending.map((r) => r.label.toLowerCase()).join(" and ")} from each attendee</div>
-            <button type="button" className="btn primary" onClick={() => post("request-fields", "request")} disabled={busy !== null} data-testid="request-fields">
-              {busy === "request" ? "Adding" : `Request ${pending.map((r) => r.label).join(" and ")} from attendees`}
-            </button>
+            <div className="lead">
+              {pending.length > 0
+                ? `${gift.product_title} needs ${pending.map((r) => r.label.toLowerCase()).join(" and ")} from each attendee`
+                : incomplete > 0
+                  ? `${incomplete} ${incomplete === 1 ? "attendee is" : "attendees are"} still missing values`
+                  : requests.size > 0
+                    ? "Every request is complete"
+                    : "Nothing to ask attendees yet"}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="button" className="btn primary" onClick={() => run("request_from_attendees", "request")} disabled={busy !== null || approved} data-testid="request-fields">
+                {busy === "request" ? "Sending" : "Request from attendees"}
+              </button>
+              <button type="button" className="btn ghost" onClick={() => run("follow_up", "follow_up")} disabled={busy !== null || incomplete === 0} data-testid="follow-up">
+                {busy === "follow_up" ? "Sending" : `Send follow-up to ${incomplete}`}
+              </button>
+            </div>
           </div>
         )}
+        {error && <p className="error" role="alert" data-testid="request-error">{error}</p>}
       </section>
 
       <section className="block" aria-labelledby="records" data-testid="attendees">
@@ -100,16 +164,29 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                   <th>Attendee</th>
                   <th>Status</th>
                   {guestDefs.map((d) => <th key={d.id}>{d.label}</th>)}
+                  {requests.size > 0 && <th>Request</th>}
                 </tr>
               </thead>
               <tbody>
-                {attendees.map((g) => (
-                  <tr key={g.id} data-testid="attendee-row">
-                    <td>{g.display_name}</td>
-                    <td>{STATUS_LABEL[g.status]}</td>
-                    {guestDefs.map((d) => <td key={d.id}>{cell(g.values[d.id], d, g.status === "going")}</td>)}
-                  </tr>
-                ))}
+                {attendees.map((g) => {
+                  const request = requests.get(g.id);
+                  return (
+                    <tr key={g.id} data-testid="attendee-row" data-request={request ? (request.complete ? "complete" : "incomplete") : "none"}>
+                      <td>{g.display_name}</td>
+                      <td>{STATUS_LABEL[g.status]}</td>
+                      {guestDefs.map((d) => <td key={d.id}>{cell(g.id, g.values[d.id], d, g.status === "going")}</td>)}
+                      {requests.size > 0 && (
+                        <td>
+                          {request ? (
+                            request.complete ? <span className="answered">complete</span> : <span className="missing">{request.follow_ups > 0 ? `waiting after ${request.follow_ups} follow-up${request.follow_ups === 1 ? "" : "s"}` : "waiting"}</span>
+                          ) : (
+                            <span className="quiet">nothing to ask</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -121,9 +198,9 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           <div className="labelrow"><h2 id="routing">How this reaches the vendor</h2><span className="eyebrow">WebMCP</span></div>
           <div className="list">
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store agent surface</span><span className="type"><code>https://{vendor}/api/ucp/mcp</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Reads the product's fields</span><span className="type"><code>get_personalization_schema</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Checks the batch before sending</span><span className="type"><code>validate_personalized_batch</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Fills the cart on approval</span><span className="type"><code>create_personalized_batch</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
+            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Fills the cart on approval</span><span className="type"><code>add_customized_to_cart</code></span></div>
           </div>
         </section>
       )}
@@ -136,13 +213,13 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
             {approved ? (
               <span className="pill live" data-testid="specs-approved">Approved and sent to vendor</span>
             ) : (
-              <button type="button" className="btn primary" onClick={() => post("approve-specs", "approve")} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Sending" : "Approve and send to vendor"}</button>
+              <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Sending" : "Approve and send to vendor"}</button>
             )}
           </div>
           {approved && gift.checkout_url && (
             <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {vendor}</a></p>
           )}
-          {error && <p className="error" role="alert" data-testid="approve-error">{error}</p>}
+          {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
         </section>
       )}
     </div>

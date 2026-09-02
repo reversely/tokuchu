@@ -1,5 +1,5 @@
 /**
- * Personalization mappings (#117): how RSVP definitions, event fields, and literals flow into a
+ * Personalization mappings: how RSVP definitions, event fields, guest rows, and literals flow into a
  * vendor's personalization fields. The compatibility tables are data, so a new kind or transform
  * is a row here; gifts.ts calls personalizeRow per manifest row and api.ts calls validateMappings
  * before a mapping is stored.
@@ -13,6 +13,7 @@ export type ResolvedField = { value: unknown; source: MappingSource };
 export type RowPersonalization = { personalization: Record<string, ResolvedField>; personalization_status: PersonalizationStatus; personalization_issues: PersonalizationIssue[] };
 
 type EventKey = "title" | "starts_at" | "venue";
+type GuestKey = "display_name";
 
 /** The definition value types each field kind accepts. */
 export const KIND_VALUE_TYPES: Record<PersonalizationKind, ValueType[]> = {
@@ -20,6 +21,7 @@ export const KIND_VALUE_TYPES: Record<PersonalizationKind, ValueType[]> = {
   name: ["text"],
   monogram: ["text"],
   date: ["date"],
+  time: ["text"],
   location: ["text"],
   star_map: ["text", "date"],
   color: ["text", "enum"],
@@ -32,8 +34,22 @@ export const KIND_EVENT_KEYS: Record<PersonalizationKind, EventKey[]> = {
   name: ["title"],
   monogram: [],
   date: ["starts_at"],
+  time: [],
   location: ["venue"],
   star_map: ["starts_at", "venue"],
+  color: [],
+  word_list: []
+};
+
+/** The guest row fields each field kind accepts: the display name fills a name or a text field. */
+export const KIND_GUEST_KEYS: Record<PersonalizationKind, GuestKey[]> = {
+  text: ["display_name"],
+  name: ["display_name"],
+  monogram: [],
+  date: [],
+  time: [],
+  location: [],
+  star_map: [],
   color: [],
   word_list: []
 };
@@ -85,6 +101,8 @@ function sourceErrors(mapping: PersonalizationMapping, field: PersonalizationFie
     if (transform) {
       if (!TRANSFORM_EVENT_KEYS[transform].includes(source.key)) err("incompatible_transform", `${transform} does not fit the event ${source.key}`);
     } else if (!KIND_EVENT_KEYS[field.kind].includes(source.key)) err("incompatible_type", `the event ${source.key} does not fit a ${field.kind} field`);
+  } else if (source.type === "guest") {
+    if (!KIND_GUEST_KEYS[field.kind].includes(source.key)) err("incompatible_type", `the guest ${source.key} does not fit a ${field.kind} field`);
   } else if (transform) {
     // Apply the transform to the literal exactly as personalizeRow will later, so a literal the
     // transform can never consume (a "hello" into date_only) is refused here, not per unit downstream.
@@ -97,6 +115,8 @@ function sourceErrors(mapping: PersonalizationMapping, field: PersonalizationFie
 /* ---- Resolution (get_manifest) ---- */
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$/;
+/** The clock form a time field takes: HH:MM on a 24-hour clock. */
+export const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const isMissing = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
 /** True when the gift's product carries personalization fields, so its manifest rows resolve values. */
@@ -109,13 +129,15 @@ export function locationQuery(venue: Partial<Venue>): string {
   return [venue.name, venue.city, venue.region, venue.country].filter((part) => typeof part === "string" && part.trim() !== "").join(", ");
 }
 
-/** The raw value a mapping's source names: the subject's answer, the event field, or the literal. */
+/** The raw value a mapping's source names: the subject's answer, the event field, the guest's display name, or the literal. */
 export function resolveSourceValue(source: MappingSource, event: Event, subject: Subject): unknown {
   switch (source.type) {
     case "definition":
       return subject.values[source.definition_id];
     case "event":
       return source.key === "title" ? event.title : source.key === "starts_at" ? event.starts_at : event.venue;
+    case "guest":
+      return subject.guest.display_name;
     case "literal":
       return source.value;
   }
@@ -141,19 +163,29 @@ export function applyTransform(transform: PersonalizationTransform, value: unkno
   }
 }
 
+/** A field's length cap and allowed set, read from the store's constraints block or the older flat keys. */
+export function fieldConstraints(field: PersonalizationField): { max_length?: number; allowed: string[] } {
+  const max_length = field.constraints?.max_length ?? field.max_length;
+  const allowed = field.constraints?.options?.map((o) => o.value) ?? field.allowed_values ?? [];
+  return { max_length, allowed };
+}
+
 function valueIssue(field: PersonalizationField, value: unknown): Pick<PersonalizationIssue, "code" | "message"> | null {
+  const { max_length, allowed } = fieldConstraints(field);
   if (field.kind === "date") {
     if (typeof value !== "string" || !ISO_DATE.test(value) || Number.isNaN(Date.parse(value))) return { code: "invalid_type", message: `${field.label} needs a date` };
+  } else if (field.kind === "time") {
+    if (typeof value !== "string" || !CLOCK_TIME.test(value)) return { code: "invalid_type", message: `${field.label} needs a time as HH:MM` };
   } else if (field.kind === "word_list") {
     const list = Array.isArray(value) ? value : typeof value === "string" ? [value] : null;
     if (!list || list.some((v) => typeof v !== "string")) return { code: "invalid_type", message: `${field.label} needs words` };
   } else if (typeof value !== "string") {
     return { code: "invalid_type", message: `${field.label} needs text` };
   }
-  if (field.max_length !== undefined && typeof value === "string" && value.length > field.max_length) return { code: "too_long", message: `${field.label} allows ${field.max_length} characters` };
-  if (field.allowed_values?.length) {
+  if (max_length !== undefined && typeof value === "string" && value.length > max_length) return { code: "too_long", message: `${field.label} allows ${max_length} characters` };
+  if (allowed.length) {
     const values = Array.isArray(value) ? value : [value];
-    if (values.some((v) => !field.allowed_values!.includes(String(v)))) return { code: "unsupported_value", message: `${field.label} takes ${field.allowed_values.join(" or ")}` };
+    if (values.some((v) => !allowed.includes(String(v)))) return { code: "unsupported_value", message: `${field.label} takes ${allowed.join(" or ")}` };
   }
   return null;
 }

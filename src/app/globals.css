@@ -178,5 +178,6 @@ table.records th { text-align: left; color: var(--muted); font-size: 12px; font-
 table.records td { padding: 10px 14px; border: 1px solid var(--line); vertical-align: top; }
 table.records tr:nth-child(even) td { background: #FBFDFF; }
 table.records .missing { color: var(--sky-dark); }
+table.records .answered { color: #1d6b3a; }
 table.records .quiet { color: var(--muted); }
 .sendrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }

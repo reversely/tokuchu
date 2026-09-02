@@ -35,7 +35,9 @@ export const AttributeDefinition = z.object({
   default_visibility: z.array(z.string()),
   /** When a guest must answer: always, only when going, or never. */
   required_rule: z.enum(["always", "going", "never"]),
-  creator: z.string()
+  creator: z.string(),
+  /** Set when a store's customization field created the question: the field it came from. */
+  vendor_field: z.object({ key: z.string(), label: z.string(), kind: z.string() }).optional()
 });
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
 
@@ -178,12 +180,16 @@ export type ChangeEntry = z.infer<typeof ChangeEntry>;
 /* ---- Personalization ---- */
 
 /** The field kinds a vendor's personalization schema may state; the list is data, so a new kind is a row here (#117). */
-export const PERSONALIZATION_KINDS = ["text", "name", "monogram", "date", "location", "star_map", "color", "word_list"] as const;
+export const PERSONALIZATION_KINDS = ["text", "name", "monogram", "date", "time", "location", "star_map", "color", "word_list"] as const;
 export const PersonalizationKind = z.enum(PERSONALIZATION_KINDS);
 export type PersonalizationKind = z.infer<typeof PersonalizationKind>;
 
+/** The constraints a store states on one field: a length cap and an allowed set. */
+export const FieldConstraints = z.object({ max_length: z.number().int().optional(), options: z.array(Option).optional() });
+export type FieldConstraints = z.infer<typeof FieldConstraints>;
+
 /** One value a personalized unit carries, as the vendor's schema states it. */
-export const PersonalizationField = z.object({ key: z.string(), label: z.string(), kind: PersonalizationKind, max_length: z.number().int().optional(), required: z.boolean(), allowed_values: z.array(z.string()).optional() });
+export const PersonalizationField = z.object({ key: z.string(), label: z.string(), kind: PersonalizationKind, max_length: z.number().int().optional(), required: z.boolean(), allowed_values: z.array(z.string()).optional(), constraints: FieldConstraints.optional() });
 export type PersonalizationField = z.infer<typeof PersonalizationField>;
 
 /** The transforms a mapping may apply; personalization.ts states what each accepts. */
@@ -191,10 +197,11 @@ export const PERSONALIZATION_TRANSFORMS = ["uppercase", "lowercase", "date_only"
 export const PersonalizationTransform = z.enum(PERSONALIZATION_TRANSFORMS);
 export type PersonalizationTransform = z.infer<typeof PersonalizationTransform>;
 
-/** Where a vendor field's value comes from: an RSVP definition, an event field, or a fixed value. */
+/** Where a vendor field's value comes from: an RSVP definition, an event field, the guest's own row, or a fixed value. */
 export const MappingSource = z.discriminatedUnion("type", [
   z.object({ type: z.literal("definition"), definition_id: z.string(), subject_scope: z.enum(["guest", "party", "event"]) }),
   z.object({ type: z.literal("event"), key: z.enum(["title", "starts_at", "venue"]) }),
+  z.object({ type: z.literal("guest"), key: z.enum(["display_name"]) }),
   z.object({ type: z.literal("literal"), value: z.unknown() })
 ]);
 export type MappingSource = z.infer<typeof MappingSource>;
@@ -287,6 +294,20 @@ export const Batch = z.object({
   vendor_seq: z.number().int().nullable().optional()
 });
 export type Batch = z.infer<typeof Batch>;
+
+/* ---- Requests ---- */
+
+/** The questions sent to one attendee for one gift: when they went out and each follow-up since. */
+export const Request = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  guest_id: z.string(),
+  gift_id: z.string(),
+  definition_ids: z.array(z.string()),
+  sent_at: z.string(),
+  followed_up_at: z.array(z.string())
+});
+export type Request = z.infer<typeof Request>;
 
 /** A synonym row proposes a mapping when a variant title matches the pattern for an option label; the table ships empty. */
 export const SynonymRow = z.object({ option_label_pattern: z.string(), variant_title_pattern: z.string() });

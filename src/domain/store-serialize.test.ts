@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift } from "./gifts";
-import { createEvent, createGuest, createParty, definitionsFor, deserializeState, freshState, newId, resetState, runWithState, serializeState, setGuestStatus, state, transactionally, writeValue, type EventInput, type State } from "./store";
+import { createEvent, createGuest, createParty, definitionsFor, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, state, transactionally, upsertRequest, writeValue, type EventInput, type State } from "./store";
 import type { CallerToken, VendorUpdate } from "./types";
 
 const EVENT: EventInput = {
@@ -36,6 +36,7 @@ function populate(): void {
   s.seq = update.seq;
   const token: CallerToken = { id: newId("tok"), event_id: event.id, holder: "vendor", gift_ids: [gift.id], readable_definition_ids: [name.id], callable_tools: ["list_guests"], expires_at: null, last_profile_url: null };
   s.tokens.set(token.id, token);
+  recordFollowUp(upsertRequest(event.id, guest.id, gift.id, [name.id]));
 }
 
 describe("state scoping", () => {
@@ -70,7 +71,7 @@ describe("state serialization", () => {
   it("round-trips a populated State through JSON", () => {
     populate();
     const s = state();
-    for (const key of ["events", "parties", "guests", "definitions", "values", "updates", "gifts", "tokens"] as const) expect(s[key].size).toBeGreaterThan(0);
+    for (const key of ["events", "parties", "guests", "definitions", "values", "updates", "gifts", "tokens", "requests"] as const) expect(s[key].size).toBeGreaterThan(0);
     expect(s.changes.length).toBeGreaterThan(0);
     const restored = deserializeState(JSON.parse(JSON.stringify(serializeState(s))));
     expect(restored).toEqual(s);

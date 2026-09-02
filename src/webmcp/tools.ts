@@ -107,18 +107,39 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "set_personalization_mapping",
-    description: "Replaces a personalized gift's field mappings: each row sends an RSVP definition, an event field (title, starts_at, venue), or a literal into one vendor field of the selected product, with an optional transform (uppercase, lowercase, date_only, location_query). Use it after choosing a product with personalization fields.",
+    description: "Replaces a personalized gift's field mappings: each row sends an RSVP definition, an event field (title, starts_at, venue), the guest's display_name, or a literal into one vendor field of the selected product, with an optional transform (uppercase, lowercase, date_only, location_query). Use it after choosing a product with personalization fields.",
     inputSchema: {
       type: "object",
       properties: {
         gift_id: { type: "string", description: "The gift's id" },
-        mappings: { type: "array", description: "Rows as {vendor_field_key, source, transform?}; source is {type: 'definition', definition_id, subject_scope}, {type: 'event', key} or {type: 'literal', value}", items: { type: "object" } }
+        mappings: { type: "array", description: "Rows as {vendor_field_key, source, transform?}; source is {type: 'definition', definition_id, subject_scope}, {type: 'event', key}, {type: 'guest', key: 'display_name'} or {type: 'literal', value}", items: { type: "object" } }
       },
       required: ["gift_id", "mappings"],
       additionalProperties: false
     },
     scopes: ["organizer"],
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/personalization", body: (a) => ({ mappings: a.mappings }) }
+  },
+  {
+    name: "get_requirements",
+    description: "Returns the requirements of a gift's product with the source that fills each: the guest's own row, an event field, a literal, an existing question, or a question a request would create. Call it before request_from_attendees to see what attendees will be asked.",
+    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/request-fields" }
+  },
+  {
+    name: "request_from_attendees",
+    description: "Creates the questions a gift's product still needs and records a request to every going attendee who lacks an answer, with each attendee's own link. Returns the event snapshot with the requests.",
+    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/request-fields" }
+  },
+  {
+    name: "follow_up",
+    description: "Sends a gift's request again to every attendee whose request still has an unanswered question. Returns the event snapshot with the requests.",
+    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/follow-up" }
   },
   {
     name: "send_to_vendor",

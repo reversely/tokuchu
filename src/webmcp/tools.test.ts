@@ -25,8 +25,13 @@ describe("the tool definitions", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({ kind: "confirmed", text: "Confirmed.", expected_date: null, reference: null, guest_id: null });
   });
+  it("maps the request tools onto the request-fields and follow-up routes", () => {
+    expect(buildRequest(tool("get_requirements"), "evt_1", { gift_id: "gift_9" })).toMatchObject({ url: "/api/events/evt_1/gifts/gift_9/request-fields", init: { method: "GET" } });
+    expect(buildRequest(tool("request_from_attendees"), "evt_1", { gift_id: "gift_9" })).toMatchObject({ url: "/api/events/evt_1/gifts/gift_9/request-fields", init: { method: "POST" } });
+    expect(buildRequest(tool("follow_up"), "evt_1", { gift_id: "gift_9" })).toMatchObject({ url: "/api/events/evt_1/gifts/gift_9/follow-up", init: { method: "POST" } });
+  });
   it("keeps the money-spending tools away from vendor scope", () => {
-    for (const name of ["set_gift_plan", "set_personalization_mapping", "send_to_vendor", "approve", "list_guests", "get_guest", "list_missing", "search_gifts"]) expect(tool(name).scopes).toEqual(["organizer"]);
+    for (const name of ["set_gift_plan", "set_personalization_mapping", "send_to_vendor", "approve", "list_guests", "get_guest", "list_missing", "search_gifts", "get_requirements", "request_from_attendees", "follow_up"]) expect(tool(name).scopes).toEqual(["organizer"]);
     for (const name of ["get_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"]) expect(tool(name).scopes).toContain("vendor");
   });
 });

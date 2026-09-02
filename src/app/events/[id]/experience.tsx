@@ -45,7 +45,9 @@ function sourceLabel(m: CurationProposal["personalization_mapping"][number], def
       ? `From ${definitions.find((d) => d.id === source.definition_id)?.label ?? source.definition_id}`
       : source.type === "event"
         ? (source.key === "starts_at" ? "From the event date" : source.key === "venue" ? "From the venue" : "From the event title")
-        : `Fixed value ${String(source.value)}`;
+        : source.type === "guest"
+          ? "From the RSVP name"
+          : `Fixed value ${String(source.value)}`;
   return m.transform ? `${base} via ${m.transform.replace(/_/g, " ")}` : base;
 }
 

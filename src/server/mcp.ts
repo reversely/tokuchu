@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changes, counts, guestList, guestView, manifestView, missing, postUpdate, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError } from "./api";
+import { changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError } from "./api";
 import { newId, state } from "../domain/store";
 import { LockedValueError } from "../domain/store";
 import type { CallerToken } from "../domain/types";
@@ -148,6 +148,12 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       if (!organizer) requireGiftScope(token, giftId);
       return { updates: updatesFor(eventId, giftId, Number(args.since_seq ?? 0) || 0) };
     }
+    case "get_requirements":
+      return { requirements: giftRequirements(eventId, String(args.gift_id)) };
+    case "request_from_attendees":
+      return requestFromAttendees(eventId, String(args.gift_id));
+    case "follow_up":
+      return followUp(eventId, String(args.gift_id));
     case "search_gifts":
       return searchOperation(eventId, args);
     case "send_to_vendor":
