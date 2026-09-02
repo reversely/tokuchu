@@ -12,7 +12,7 @@ import { afterCommit, withPersistedEvent } from "./persistence";
 export type Outgoing = { guest: Guest; gift_id: string; definition_ids: string[]; kind: "request" | "follow_up" };
 
 /** The public origin the links point at. */
-function appUrl(): string {
+export function appUrl(): string {
   return (process.env.APP_URL || process.env.AUTH_URL || "http://localhost:3113").replace(/\/$/, "");
 }
 

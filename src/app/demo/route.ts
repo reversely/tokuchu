@@ -1,3 +1,4 @@
+import { appUrl as appOrigin } from "../../server/request-mail";
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse } from "../../server/api";
 import { hasDatabase } from "../../server/db";
@@ -18,14 +19,19 @@ function usesMemory(): boolean {
 export async function GET(request: NextRequest) {
   try {
     const caller = await currentCaller();
-    if (caller && !caller.is_demo && !caller.is_local) return NextResponse.redirect(new URL("/events", request.url));
+    if (caller && !caller.is_demo && !caller.is_local) return NextResponse.redirect(new URL("/events", publicOrigin(request)));
     if (usesMemory()) sweepDemoState();
     const demoId = demoIdFromCookie(request.cookies.get(DEMO_COOKIE)?.value) ?? newDemoId();
     const eventId = await demoEventFor(demoId);
-    const response = NextResponse.redirect(new URL(`/events/${eventId}?demo=1`, request.url));
+    const response = NextResponse.redirect(new URL(`/events/${eventId}?demo=1`, publicOrigin(request)));
     response.cookies.set(DEMO_COOKIE, demoCookieValue(demoId), demoCookieOptions());
     return response;
   } catch (e) {
     return errorResponse(e);
   }
+}
+
+/** The origin a redirect should carry: the configured public URL, since the standalone server reports its bind address in request.url. */
+function publicOrigin(request: Request): string {
+  return process.env.APP_URL || process.env.AUTH_URL ? appOrigin() : new URL(request.url).origin;
 }
