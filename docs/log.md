@@ -156,3 +156,6 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   GIFs under 1 MB in public/media captured by scripts/capture-home-media.ts. Gate: 166 vitest, 19
   Playwright, live flow demo 4/4. The static screenshot shows each GIF's first frame only; judge the
   clips in the browser.
+- #16 landed as 7d15963 (clean). Docs reconciled with the shipped code; prepare_handoff renamed
+  prepare_cart; tutorial re-recorded: tests/videos/flow-demo-2026-09-02-with-checkout.mp4 (2:22).
+  Open on the user's side: #14 theme install, #2 live deploy (Render workspace), the license file.
