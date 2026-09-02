@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 
 test("a draft becomes a published event with the organizer's questions", async ({ page, request }) => {
-  await page.goto("/");
+  await page.goto("/events/new");
   await expect(page.getByTestId("publish")).toBeDisabled();
   await page.getByTestId("title").fill("Team offsite");
   await page.getByTestId("starts_at").fill("2030-01-10T19:00");
@@ -49,7 +49,7 @@ test("a draft becomes a published event with the organizer's questions", async (
 test("a case variant of a choice is rejected so the value stays unique (#138)", async ({ page }) => {
   const warnings: string[] = [];
   page.on("console", (m) => { if (m.type() === "warning" || m.type() === "error") warnings.push(m.text()); });
-  await page.goto("/");
+  await page.goto("/events/new");
   const questions = page.getByTestId("questions");
   await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();
   const choiceInput = questions.getByLabel(/Add a choice to/).first();
@@ -64,7 +64,7 @@ test("a case variant of a choice is rejected so the value stays unique (#138)", 
 });
 
 test("publish waits for a required choice question to have options (#139)", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/events/new");
   await page.getByTestId("title").fill("Team offsite");
   await page.getByTestId("starts_at").fill("2030-01-10T19:00");
   await page.getByTestId("city").fill("City");

@@ -2,14 +2,11 @@ import type { OwnedEvent } from "../server/persistence";
 
 const STATUS_LABEL: Record<OwnedEvent["status"], string> = { draft: "Draft", published: "Published" };
 
-/** The signed-in organizer's events with a link into each and one to the draft below. */
+/** The organizer's events as a list with a link into each. */
 export function MyEvents({ events }: { events: OwnedEvent[] }) {
   return (
     <section className="block" aria-labelledby="my-events" data-testid="my-events">
-      <div className="labelrow">
-        <h2 id="my-events">Your events</h2>
-        <a className="btn ghost small" href="#new-event" data-testid="new-event-link">Create a new event</a>
-      </div>
+      <h1 className="title" id="my-events">Your events</h1>
       {events.length === 0 ? (
         <p className="lead" data-testid="my-events-empty">No events yet</p>
       ) : (

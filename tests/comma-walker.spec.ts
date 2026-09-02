@@ -49,7 +49,7 @@ async function publishedEvent(request: APIRequestContext) {
 }
 
 test("the draft page renders no comma in the details or the invite preview", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/events/new");
   await page.getByTestId("title").fill("Team offsite");
   await page.getByTestId("starts_at").fill("2030-01-10T19:00");
   await page.getByTestId("host").fill("A. Host");

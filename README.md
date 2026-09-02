@@ -10,10 +10,12 @@ Tokuchu is an event procurement system that uses attendee information and WebMCP
 | `src/server/` | the operations behind the routes and the tools (`api.ts`), the shared catalog search (`search.ts`), the cart operations (`cart-api.ts`), the MCP endpoint with tokens (`mcp.ts`), the Admin API client (`shopify-admin.ts`) |
 | `src/agent/` | catalog search, delivery probe, and ranking (`search.ts`), the cart at the store (`cart.ts`), the curation agent (`curation-agent.ts`) |
 | `src/webmcp/` | the tool definitions as data mapped to routes (`tools.ts`), registration on `document.modelContext` (`register.ts`), the polyfill |
-| `src/app/` | sign-in, the draft page, the invite form, the dashboard (Overview, Guest Experience, Attendees), and the API routes |
+| `src/app/` | the landing page at the root, sign-in, the organizer's event list at `/events`, the draft at `/events/new`, the invite form, the dashboard (Overview, Guest Experience, Attendees), and the API routes |
+| `public/media/` | the five walkthrough clips the landing page shows, recorded by `scripts/capture-home-media.ts` |
 | `packages/shopify-ucp/` | the client for the Global Catalog and a store's UCP endpoint, as a local workspace |
 | `integrations/customily/` | the merchant WebMCP tools the store's theme loads, with installation notes |
-| `tests/` | Playwright: draft, invite, overview, experience, the tools through the polyfill, and the live flow demo |
+| `tests/` | Playwright: the landing page, draft, invite, overview, experience, the tools through the polyfill, and the live flow demo |
+| `scripts/` | the database migration and the walkthrough capture |
 
 ## Running
 
@@ -29,6 +31,8 @@ LIVE_CUSTOMILY=1 npm run test:flow-demo  # the recorded flow demo against the li
 ```
 
 The demo store sells a customizable crewneck. Its product page carries Shopify's storefront WebMCP tools and the two merchant tools. The flow demo opens the checkout link it records in a fresh browser and asserts one line per attendee.
+
+The landing page's walkthrough clips in `public/media/` come from the same flow. With the dev server up and ffmpeg on PATH, `LIVE_CUSTOMILY=1 npx tsx scripts/capture-home-media.ts` runs the five steps against the live store and writes one GIF per step under the 1000 KB limit the pre-commit hook enforces; `APP_URL` points it at a server on another port.
 
 ## Deployment
 

@@ -123,7 +123,7 @@ test.afterAll(async () => {
 
 test("1: create the event", async () => {
   test.setTimeout(LIVE_MS);
-  await page.goto("/");
+  await page.goto("/events/new");
   await tut("Step 1 of 5", "Create the event", "The organizer fills in the event details and publishes it, which creates a link attendees reply through.");
   await caption("1. Create the event");
   await typeInto(page.getByTestId("title"), EVENT.title);

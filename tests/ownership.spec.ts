@@ -1,6 +1,6 @@
 /**
  * Ownership through the browser: the organizer signs in through the logged magic link, creates an
- * event, and sees it in the list; once signed out the dashboard sends the browser to sign in, the
+ * event, and sees it in the list at /events; once signed out the dashboard sends the browser to sign in, the
  * event API answers 401, and the invite link still opens. The server runs without DATABASE_URL, so
  * a request with no session is the local organizer; an event a signed-in account owns still turns
  * such a request away.
@@ -29,7 +29,7 @@ test("an organizer's event stays theirs after they sign out and the invite stays
 
   const listed = (await (await page.request.get("/api/events")).json()) as { events: { id: string; title: string; status: string; invite_code: string }[] };
   expect(listed.events.map((e) => e.id)).toContain(id);
-  await page.goto("/");
+  await page.goto("/events");
   await expect(page.getByTestId("my-events").locator(`a[href="/events/${id}"]`)).toHaveText(BODY.title);
   await page.goto(`/events/${id}`);
   await expect(page.getByTestId("status")).toHaveText("Published");
