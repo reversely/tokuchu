@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { registerTokuchuTools } from "../webmcp/register";
+import { useEffect, useState, type DependencyList } from "react";
+import { registerTokuchuTools, type RegisterResult } from "../webmcp/register";
 
 type Status = "pending" | "ready" | "unavailable";
 const LABEL: Record<Status, string> = { pending: "Agent tools loading", ready: "Agent tools ready", unavailable: "Agent tools unavailable in this browser" };
@@ -19,8 +19,8 @@ function notifyingFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
   });
 }
 
-/** Registers the organizer-scoped tools while the dashboard is mounted (PRD Section 7) and shows whether an agent can see them. */
-export function WebMcpProvider({ eventId }: { eventId: string }) {
+/** Loads the polyfill when asked, runs `register` while the page is mounted, and reports whether an agent can see the tools. */
+export function useWebMcp(register: (signal: AbortSignal) => Promise<RegisterResult>, deps: DependencyList): Status {
   const [status, setStatus] = useState<Status>("pending");
   useEffect(() => {
     const controller = new AbortController();
@@ -30,14 +30,26 @@ export function WebMcpProvider({ eventId }: { eventId: string }) {
         await import("../webmcp/polyfill.js");
       }
       if (controller.signal.aborted) return;
-      const result = await registerTokuchuTools({ eventId, fetchImpl: notifyingFetch, signal: controller.signal });
+      const result = await register(controller.signal);
       if (!controller.signal.aborted) setStatus(result.supported ? "ready" : "unavailable");
     })();
     return () => controller.abort();
-  }, [eventId]);
+    // The caller's deps name what the registration reads, the same way they would for the effect itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return status;
+}
+
+export function WebMcpPill({ status }: { status: Status }) {
   return (
     <span className={`pill${status === "ready" ? " live" : ""}`} data-testid="webmcp-status" data-status={status} aria-live="polite">
       {LABEL[status]}
     </span>
   );
+}
+
+/** Registers the organizer-scoped tools while the dashboard is mounted (PRD Section 7) and shows whether an agent can see them. */
+export function WebMcpProvider({ eventId }: { eventId: string }) {
+  const status = useWebMcp((signal) => registerTokuchuTools({ eventId, fetchImpl: notifyingFetch, signal }), [eventId]);
+  return <WebMcpPill status={status} />;
 }

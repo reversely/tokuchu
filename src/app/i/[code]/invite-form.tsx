@@ -4,6 +4,8 @@ import type { inviteView } from "../../../server/api";
 import type { AttributeDefinition, GuestStatus } from "../../../domain/types";
 import { controlFor } from "../../../domain/values";
 import { dateTime, money } from "../../../lib/format";
+import { InviteWebMcp } from "./invite-webmcp";
+import { sendRsvp } from "./send-rsvp";
 
 type Invite = ReturnType<typeof inviteView>;
 type Answers = Record<string, unknown>;
@@ -102,32 +104,21 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
   async function send(nextStatus?: GuestStatus) {
     setSaving(true);
     setError(null);
-    try {
-      const finalStatus = nextStatus ?? status!;
-      if (done) {
-        const res = await fetch(`/api/events/${event.id}/rsvp/${done.guest_id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: finalStatus, answers: nextStatus ? {} : answers }) });
-        if (res.status === 409) {
-          const body = (await res.json()) as { error: string; locked: { definition_id: string } };
-          setLocked({ ...locked, [body.locked.definition_id]: body.error });
-          throw new Error(body.error);
-        }
-        if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-        setStatus(finalStatus);
-        setSavedStatus(finalStatus);
-      } else {
-        const res = await fetch(`/api/events/${event.id}/rsvp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests: [{ display_name: name.trim(), status: finalStatus, answers }] }) });
-        if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-        const body = (await res.json()) as { guest_ids: string[] };
-        setDone({ guest_id: body.guest_ids[0] });
-        setStatus(finalStatus);
-        setSavedStatus(finalStatus);
-        window.history.replaceState(null, "", `?guest=${body.guest_ids[0]}`);
+    const finalStatus = nextStatus ?? status!;
+    // A cancel keeps the saved answers; an edit sends the form's.
+    const outcome = await sendRsvp({ eventId: event.id, guestId: done?.guest_id ?? null, displayName: name, status: finalStatus, answers: nextStatus ? {} : answers });
+    if (outcome.ok) {
+      if (!done) {
+        setDone({ guest_id: outcome.guest.id });
+        window.history.replaceState(null, "", `?guest=${outcome.guest.id}`);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+      setStatus(finalStatus);
+      setSavedStatus(finalStatus);
+    } else {
+      if (outcome.locked) setLocked({ ...locked, [outcome.locked.definition_id]: outcome.error });
+      setError(outcome.error);
     }
+    setSaving(false);
   }
 
   const venue = [event.venue.name, event.venue.line1, event.venue.city].filter(Boolean);
@@ -136,6 +127,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
     <>
       <header className="band">
         <span className="brand">Tokuchu</span>
+        <InviteWebMcp eventId={event.id} guestId={done?.guest_id ?? null} questions={questions} responseOptions={event.response_options} />
       </header>
       <main className="sheet">
         <div className="wrap" style={{ gridTemplateColumns: "minmax(0, 640px)", justifyContent: "center" }}>

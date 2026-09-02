@@ -4,14 +4,21 @@
  * endpoint (#91) serves the same list over HTTP. The model sees only name, description, and
  * inputSchema, so those three carry the whole contract.
  */
+import type { AttributeDefinition, GuestStatus } from "../domain/types";
+
 export type ToolArgs = Record<string, unknown>;
-export type Scope = "organizer" | "vendor";
+export type Scope = "organizer" | "vendor" | "attendee";
 
 export interface JsonSchemaProperty {
   type: "string" | "integer" | "number" | "boolean" | "object" | "array";
   description: string;
   enum?: readonly string[];
-  items?: { type: string };
+  items?: { type: string; enum?: readonly string[] };
+  maxLength?: number;
+  pattern?: string;
+  format?: "date";
+  minimum?: number;
+  maximum?: number;
 }
 export interface JsonObjectSchema {
   type: "object";
@@ -36,12 +43,24 @@ export interface ToolDefinition {
   route: Route;
 }
 
+const REPLY = { type: "string", description: "The attendee's reply", enum: ["going", "maybe", "cant_go"] } as const;
+const DISPLAY_NAME = { type: "string", description: "The attendee's name as the organizer's list shows it" } as const;
+const GUEST_ID = { type: "string", description: "The guest id an earlier reply returned; send it to edit the same record" } as const;
+
 const FILTER = { type: "string", description: "A filter as field:op:value clauses joined by ';' (fields: status, role, attendance.<segment id>, party.size, or a definition id; ops: eq, neq, in, not_in, gt, gte, lt, lte, contains, present, missing). Empty means every guest." } as const;
 const FIELDS = { type: "array", description: "Definition ids to include; empty means every value the caller may read.", items: { type: "string" } } as const;
 const csv = (v: unknown) => (Array.isArray(v) ? v.map(String).join(",") : typeof v === "string" ? v : undefined);
 const str = (v: unknown) => (v === undefined || v === null ? undefined : String(v));
 
 export const TOOLS: ToolDefinition[] = [
+  {
+    name: "submit_rsvp",
+    description: "Records the attendee's reply and answers on this invite. The schema lists one property per question the attendee has been asked with the store's limits. A first call creates the guest and returns a guest_id; a call with that guest_id edits the same record.",
+    inputSchema: { type: "object", properties: { display_name: DISPLAY_NAME, status: REPLY, guest_id: GUEST_ID }, required: ["display_name", "status"], additionalProperties: false },
+    scopes: ["attendee"],
+    // The invite page rebuilds inputSchema from its questions with rsvpInputSchema and sends an edit as PATCH /rsvp/{guest_id} (send-rsvp.ts).
+    route: { method: "POST", path: "/api/events/:eventId/rsvp", body: (a) => ({ guests: [{ display_name: a.display_name, status: a.status, answers: a.answers ?? {} }] }) }
+  },
   {
     name: "get_guest",
     description: "Returns one guest with their status and the answers the caller may read.",
@@ -182,6 +201,56 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/updates", query: (a) => ({ since: str(a.since_seq ?? 0) }) }
   }
 ];
+
+/** A choice question with no options has no answer, so it stays off the schema as it stays off the form. */
+function askable(def: AttributeDefinition): boolean {
+  return !((def.value_type === "enum" || def.value_type === "multi_enum") && !def.constraints.options?.length);
+}
+
+/** One question as a JSON Schema property: the store's length cap, allowed set, date form, or pattern travel with it. */
+function questionProperty(def: AttributeDefinition): JsonSchemaProperty {
+  const { options, min, max, max_length, pattern } = def.constraints;
+  const values = options?.map((o) => o.value);
+  const description = def.required_rule === "never" ? def.label : `${def.label}; required when ${def.required_rule === "going" ? "going" : "replying"}`;
+  switch (def.value_type) {
+    case "number":
+      return { type: "number", description, ...(min !== undefined && { minimum: min }), ...(max !== undefined && { maximum: max }) };
+    case "boolean":
+      return { type: "boolean", description };
+    case "enum":
+      return { type: "string", description, enum: values };
+    case "multi_enum":
+      return { type: "array", description, items: { type: "string", enum: values } };
+    case "date":
+      return { type: "string", description, format: "date" };
+    default:
+      return { type: "string", description, ...(max_length !== undefined && { maxLength: max_length }), ...(pattern && { pattern }) };
+  }
+}
+
+/**
+ * The submit_rsvp schema for one invite: the name, the event's response options, an optional guest
+ * id, and one property per guest-scope question named by its key. A question required when going is
+ * required in the schema, since the tool exists to answer the organizer's request.
+ */
+export function rsvpInputSchema(definitions: AttributeDefinition[], responseOptions: GuestStatus[]): JsonObjectSchema {
+  const asked = definitions.filter((d) => d.scope === "guest" && d.required_rule !== "never" && askable(d));
+  const properties: Record<string, JsonSchemaProperty> = { display_name: DISPLAY_NAME, status: { ...REPLY, enum: responseOptions }, guest_id: GUEST_ID };
+  for (const def of asked) properties[def.key] = questionProperty(def);
+  const required = ["display_name", "status", ...asked.filter((d) => d.required_rule === "going" || d.required_rule === "always").map((d) => d.key)];
+  return { type: "object", properties, required, additionalProperties: false };
+}
+
+/** The answers in a submit_rsvp call keyed by definition id, as the RSVP route stores them; an unknown key is skipped. */
+export function rsvpAnswers(definitions: AttributeDefinition[], args: ToolArgs): Record<string, unknown> {
+  const byKey = new Map(definitions.map((d) => [d.key, d.id]));
+  const answers: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    const id = byKey.get(key);
+    if (id !== undefined && value !== undefined) answers[id] = value;
+  }
+  return answers;
+}
 
 /** Builds the URL and init for one call: path arguments in braces, then the query or the body. */
 export function buildRequest(tool: ToolDefinition, eventId: string, args: ToolArgs): { url: string; init: RequestInit } {

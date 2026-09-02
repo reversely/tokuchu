@@ -3,7 +3,9 @@
  * organizer's identity (the page's own session). A result is MCP-shaped: text content, isError on
  * a failed request. Aborting `signal` unregisters every tool.
  */
-import { buildRequest, TOOLS, type ToolArgs, type ToolDefinition } from "./tools";
+import type { AttributeDefinition, GuestStatus } from "../domain/types";
+import { sendRsvp } from "../app/i/[code]/send-rsvp";
+import { buildRequest, rsvpAnswers, rsvpInputSchema, TOOLS, type ToolArgs, type ToolDefinition } from "./tools";
 
 export interface ToolResult {
   content: [{ type: "text"; text: string }];
@@ -99,4 +101,35 @@ export async function registerVendorTools({ eventId, token, fetchImpl, signal, o
     );
   }
   return { supported: true, toolNames: vendorTools.map((t) => t.name) };
+}
+
+/**
+ * Registers submit_rsvp on the invite page with a schema built from the questions the attendee is
+ * asked. A call runs the same sendRsvp the form runs; the link's guest id is the default record, and
+ * a 409 lock or a 400 constraint failure comes back as an error result with the route's detail.
+ */
+export async function registerRsvpTool({ eventId, guestId, definitions, responseOptions, fetchImpl, signal, onToolCall }: { eventId: string; guestId: string | null; definitions: AttributeDefinition[]; responseOptions: GuestStatus[]; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
+  const modelContext = document.modelContext;
+  if (!modelContext) return { supported: false };
+  const tool = TOOLS.find((t) => t.name === "submit_rsvp")!;
+  const keyOf = new Map(definitions.map((d) => [d.id, d.key]));
+  await modelContext.registerTool(
+    {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: rsvpInputSchema(definitions, responseOptions),
+      execute: async (raw) => {
+        const started = Date.now();
+        const args = (raw ?? {}) as ToolArgs;
+        const outcome = await sendRsvp({ eventId, guestId: typeof args.guest_id === "string" && args.guest_id ? args.guest_id : guestId, displayName: String(args.display_name ?? ""), status: args.status as GuestStatus, answers: rsvpAnswers(definitions, args) }, fetchImpl ?? globalThis.fetch.bind(globalThis));
+        const result = outcome.ok
+          ? textResult({ guest_id: outcome.guest.id, display_name: outcome.guest.display_name, status: outcome.guest.status, answers: Object.fromEntries(Object.entries(outcome.guest.values).map(([id, value]) => [keyOf.get(id) ?? id, value])) }, false)
+          : textResult({ error: outcome.error, status: outcome.status, locked: outcome.locked }, true);
+        onToolCall?.({ name: tool.name, args, result, ok: !result.isError, duration_ms: Date.now() - started });
+        return result;
+      }
+    },
+    { signal }
+  );
+  return { supported: true, toolNames: [tool.name] };
 }
