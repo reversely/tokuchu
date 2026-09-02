@@ -278,10 +278,10 @@ table.records .quiet { color: var(--muted); }
 .home .window .ttl { font-size: 12.5px; color: var(--ink-3); font-weight: 500; margin-left: 6px; }
 .home .window img { display: block; width: 100%; height: auto; }
 .home section { padding: 84px 0; }
-.home .usecase { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 48px; align-items: center; }
-.home .usecase-copy h2 { font-size: clamp(26px, 3.2vw, 36px); line-height: 1.1; margin-top: 12px; }
-.home .usecase-copy p { margin-top: 14px; font-size: 17px; color: var(--ink-2); }
-@media (max-width: 900px) { .home .usecase { grid-template-columns: 1fr; gap: 28px; } }
+.home .story-interlude { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 44px 0; border-top: 1px solid var(--line); }
+.home .usecase-copy h3 { font-size: clamp(24px, 2.8vw, 32px); line-height: 1.1; margin-top: 10px; }
+.home .usecase-copy p { margin-top: 12px; font-size: 16.5px; color: var(--ink-2); }
+@media (max-width: 900px) { .home .story-interlude { grid-template-columns: 1fr; gap: 24px; } }
 .home section.tint { background: var(--pale); border-block: 1px solid var(--line); }
 .home .sec-head { max-width: 62ch; }
 .home .sec-head h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.08; margin-top: 12px; }

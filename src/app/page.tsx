@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { currentCaller } from "../server/ownership";
 import { SessionPill } from "./session-pill";
@@ -126,29 +127,30 @@ export default async function Page() {
             </div>
             <div className="story" data-testid="walkthrough">
               {STEPS.map((step, i) => (
-                <div className="story-step" key={step.media} data-testid="walkthrough-step">
-                  <div className="copy">
-                    <div className="stepno">{i + 1}</div>
-                    <h3>{step.title}</h3>
-                    {step.body.map((line) => <p key={line}>{line}</p>)}
+                <Fragment key={step.media}>
+                  <div className="story-step" data-testid="walkthrough-step">
+                    <div className="copy">
+                      <div className="stepno">{i + 1}</div>
+                      <h3>{step.title}</h3>
+                      {step.body.map((line) => <p key={line}>{line}</p>)}
+                    </div>
+                    <Window title={step.window}>
+                      <img src={step.media} alt={step.alt} loading="lazy" />
+                    </Window>
                   </div>
-                  <Window title={step.window}>
-                    <img src={step.media} alt={step.alt} loading="lazy" />
-                  </Window>
-                </div>
+                  {i === 1 && (
+                    <div className="story-interlude" id="usecase" data-testid="usecase">
+                      <img className="banner" src="/media/customworks-banner.webp" alt="Customworks. Make it your own. A Shopify storefront for the 2026 WebMCP Challenge" loading="lazy" />
+                      <div className="usecase-copy">
+                        <span className="eyebrow">The store in this walkthrough</span>
+                        <h3>Customworks</h3>
+                        <p>Customworks is the trial Shopify store created for this project. Beside Shopify's own storefront tools it exposes WebMCP functions for Tokuchu's agents to use: one that returns the customization a product needs and its limits and one that fills the cart with configured lines. The next step reads the first of them.</p>
+                        <p>The same contract fits any store whose products are made to order. Event merchandise is one case. Team kits and named gifts and engraved awards follow the same path once the store publishes the functions.</p>
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
               ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="usecase" data-testid="usecase">
-          <div className="wrap usecase">
-            <img className="banner" src="/media/customworks-banner.webp" alt="Customworks. Make it your own. A Shopify storefront for the 2026 WebMCP Challenge" loading="lazy" />
-            <div className="usecase-copy">
-              <span className="eyebrow">One use case</span>
-              <h2>A store that publishes what its products need.</h2>
-              <p>Customworks is the demo storefront built for this project. Beside Shopify's own storefront tools it exposes a callable WebMCP tool that returns the customization a product needs and its limits. Tokuchu reads that tool on the pick and fills the store's cart through its second tool.</p>
-              <p>The same contract fits any store whose products are made to order. Event merchandise is one case. Team kits and named gifts and engraved awards follow the same path once the store publishes the tool.</p>
             </div>
           </div>
         </section>
