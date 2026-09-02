@@ -4,7 +4,7 @@ import { createEventFromBody, importGuests, inviteView, snapshot } from "./api";
 import { pgliteDatabase, setDatabase, type Database } from "./db";
 import { NotFoundError } from "./errors";
 import { migrate } from "./migrations";
-import { afterCommit, createPersistedEvent, withPersistedEvent, withPersistedEventByInviteCode } from "./persistence";
+import { afterCommit, createPersistedEvent, listOwnedEvents, withPersistedEvent, withPersistedEventByInviteCode } from "./persistence";
 
 const BODY = { title: "Persisted event", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" } };
 
@@ -85,6 +85,19 @@ describe("withPersistedEvent", () => {
     await withPersistedEvent(event.id, () => { committed = afterCommit(); importGuests(event.id, { lines: ["Late"] }); });
     await committed;
     expect(JSON.parse(await rowData(event.id)).guests).toHaveLength(1);
+  });
+});
+
+describe("ownership", () => {
+  it("writes the owner to the row and lists an organizer's events by it", async () => {
+    const mine = await createPersistedEvent(() => createEventFromBody({ ...BODY, title: "Mine" }, "user_owner"));
+    await createPersistedEvent(() => createEventFromBody({ ...BODY, title: "Theirs" }, "user_other"));
+    expect((await db.query("select owner_id from events where id = $1", [mine.id]))[0].owner_id).toBe("user_owner");
+    const listed = await listOwnedEvents("user_owner");
+    expect(listed.map((e) => e.id)).toEqual([mine.id]);
+    expect(listed[0]).toMatchObject({ title: "Mine", status: "draft", invite_code: null });
+    expect(Date.parse(listed[0].updated_at)).not.toBeNaN();
+    expect((await withPersistedEvent(mine.id, () => snapshot(mine.id))).event.owner_id).toBe("user_owner");
   });
 });
 

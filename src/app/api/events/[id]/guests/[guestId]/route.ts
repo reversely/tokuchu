@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { errorResponse, guestView } from "../../../../../../server/api";
-import { withPersistedEvent } from "../../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string; guestId: string }> };
 
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id, guestId } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const fields = new URL(request.url).searchParams.get("fields")?.split(",").filter(Boolean);
       return NextResponse.json(guestView(id, guestId, fields));
     });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "../../../../../../../server/api";
-import { withPersistedEvent } from "../../../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../../../server/ownership";
 import { syncGiftOp } from "../../../../../../../server/cart-api";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function POST(_: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json(await syncGiftOp(id, giftId));
     });
   } catch (e) {

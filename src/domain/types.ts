@@ -112,7 +112,9 @@ export const Event = z.object({
   definition_ids: z.array(z.string()),
   status: z.enum(["draft", "published"]),
   invite_code: z.string().nullable(),
-  created_at: z.string()
+  created_at: z.string(),
+  /** The organizer's user id; a document stored before ownership existed reads as null. */
+  owner_id: z.string().nullable().default(null)
 });
 export type Event = z.infer<typeof Event>;
 

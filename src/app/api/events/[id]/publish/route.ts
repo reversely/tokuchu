@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { publishEvent } from "../../../../../domain/store";
 import { errorResponse, requireEvent } from "../../../../../server/api";
-import { withPersistedEvent } from "../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(_: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const event = publishEvent(requireEvent(id).id);
       return NextResponse.json({ event, invite_path: `/i/${event.invite_code}` });
     });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runCurationAgent } from "../../../../../agent/curation-agent";
 import { BadRequestError, errorResponse, requireEvent } from "../../../../../server/api";
+import { withOwnedEvent } from "../../../../../server/ownership";
 import { withPersistedEvent } from "../../../../../server/persistence";
 
 type Params = { params: Promise<{ id: string }> };
@@ -18,16 +19,16 @@ export async function POST(request: Request, { params }: Params) {
     const message = body.message?.trim();
     if (!message) throw new BadRequestError("Send a message.");
     if (new URL(request.url).searchParams.get("stream") === "1") {
-      await withPersistedEvent(id, () => requireEvent(id));
+      await withOwnedEvent(id, () => requireEvent(id));
       return streamRun(id, message);
     }
-    return await withPersistedEvent(id, async () => NextResponse.json(await runCurationAgent({ eventId: requireEvent(id).id }, message)));
+    return await withOwnedEvent(id, async () => NextResponse.json(await runCurationAgent({ eventId: requireEvent(id).id }, message)));
   } catch (e) {
     return errorResponse(e);
   }
 }
 
-/** The agent runs in its own persisted scope, which writes the event before the final line goes out. */
+/** The agent runs in its own persisted scope, which writes the event before the final line goes out; the ownership check ran before the stream opened. */
 function streamRun(eventId: string, message: string): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

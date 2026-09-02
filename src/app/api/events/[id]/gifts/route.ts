@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createGiftFromBody, errorResponse, requireEvent } from "../../../../../server/api";
 import { withStoreCustomization } from "../../../../../server/customization";
-import { withPersistedEvent } from "../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../server/ownership";
 import { giftsFor, quantities } from "../../../../../domain/gifts";
 
 type Params = { params: Promise<{ id: string }> };
@@ -10,7 +10,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       requireEvent(id);
       return NextResponse.json({ gifts: giftsFor(id).map((g) => ({ ...g, quantities: quantities(g) })) });
     });
@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const body = await withStoreCustomization(await request.json());
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json(createGiftFromBody(id, body), { status: 201 });
     });
   } catch (e) {

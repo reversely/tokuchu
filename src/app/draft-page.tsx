@@ -40,7 +40,7 @@ function slug(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
 }
 
-export function DraftPage({ library, account }: { library: Library; account: ReactNode }) {
+export function DraftPage({ library, account, events }: { library: Library; account: ReactNode; events?: ReactNode }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>({
     title: "",
@@ -149,7 +149,8 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
       <main className="sheet">
         <div className="wrap">
           <div>
-            <h1 className="title">New event</h1>
+            {events}
+            <h1 className="title" id="new-event">New event</h1>
             <p className="lead">Details and questions for the invite on the right</p>
 
             <section className="block" aria-labelledby="details">

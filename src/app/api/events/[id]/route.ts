@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, snapshot, updateEventFromBody } from "../../../../server/api";
-import { withPersistedEvent } from "../../../../server/persistence";
+import { withOwnedEvent } from "../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json(snapshot(id));
     });
   } catch (e) {
@@ -19,7 +19,7 @@ export async function GET(_: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json(updateEventFromBody(id, await request.json()));
     });
   } catch (e) {

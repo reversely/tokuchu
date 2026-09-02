@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { approveSpecs, errorResponse } from "../../../../../../../server/api";
 import { startCartFill } from "../../../../../../../server/cart-job";
-import { withPersistedEvent } from "../../../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string; giftId: string }> };
 
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string; giftId: string }> };
 export async function POST(_request: Request, { params }: Params) {
   try {
     const { id, giftId } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const view = approveSpecs(id, giftId);
       void startCartFill(id, giftId);
       return NextResponse.json(view);

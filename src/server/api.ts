@@ -45,7 +45,7 @@ import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, lockGift, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
-import { BadRequestError, NotFoundError } from "./errors";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { afterRsvpWrite } from "./hooks";
 import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
 
@@ -83,10 +83,11 @@ export const EventBody = z.object({
   segments: z.array(Segment).default([])
 });
 
-export function createEventFromBody(body: unknown) {
+/** Creates the draft for the organizer whose user id `ownerId` names. */
+export function createEventFromBody(body: unknown, ownerId: string | null = null) {
   const parsed = EventBody.safeParse(body);
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-  return createEvent(parsed.data as EventInput, newEventId());
+  return createEvent(parsed.data as EventInput, newEventId(), ownerId);
 }
 
 export function updateEventFromBody(eventId: string, body: unknown) {
@@ -484,10 +485,16 @@ export function setPersonalizationMappings(eventId: string, giftId: string, body
 
 /* ---- Invite and RSVP ---- */
 
+/** The event as a guest sees it: every field but the owner's id. */
+function publicEvent(event: Event): Omit<Event, "owner_id"> {
+  const { owner_id: _owner, ...rest } = event;
+  return rest;
+}
+
 export function inviteView(code: string) {
   const event = eventByCode(code);
   if (!event || event.status !== "published") throw new NotFoundError(`No published event with code ${code}.`);
-  return { event, questions: definitionsFor(event.id).filter((d) => d.scope === "guest" && d.required_rule !== "never") };
+  return { event: publicEvent(event), questions: definitionsFor(event.id).filter((d) => d.scope === "guest" && d.required_rule !== "never") };
 }
 
 const Answers = z.record(z.string(), z.unknown());
@@ -686,6 +693,8 @@ export function errorResponse(e: unknown): NextResponse {
   if (e instanceof SyntaxError) return NextResponse.json({ error: "The body is not JSON." }, { status: 400 });
   if (e instanceof NotFoundError) return NextResponse.json({ error: e.message }, { status: 404 });
   if (e instanceof BadRequestError) return NextResponse.json({ error: e.message }, { status: 400 });
+  if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: 401 });
+  if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
   if (e instanceof LockedValueError) return NextResponse.json({ error: e.message, locked: { definition_id: e.definition.id, label: e.definition.label, ...e.lock } }, { status: 409 });
   throw e;
 }

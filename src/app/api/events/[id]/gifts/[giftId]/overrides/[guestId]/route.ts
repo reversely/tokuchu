@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, setOverride } from "../../../../../../../../server/api";
-import { withPersistedEvent } from "../../../../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string; giftId: string; guestId: string }> };
 
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string; giftId: string; guestId: string }>
 export async function PUT(request: Request, { params }: Params) {
   try {
     const { id, giftId, guestId } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const text = await request.text();
       return NextResponse.json(setOverride(id, giftId, guestId, text ? JSON.parse(text) : {}));
     });

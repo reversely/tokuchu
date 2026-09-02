@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "../../../../../server/api";
-import { withPersistedEvent } from "../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../server/ownership";
 import { createToken, tokensFor } from "../../../../../server/mcp";
 
 type Params = { params: Promise<{ id: string }> };
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json(createToken(id, await request.json()), { status: 201 });
     });
   } catch (e) {
@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: Params) {
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       return NextResponse.json({ tokens: tokensFor(id).map(({ id, ...rest }) => ({ ...rest, id: `${id.slice(0, 6)}...` })) });
     });
   } catch (e) {

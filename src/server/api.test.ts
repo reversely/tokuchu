@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { lockValue, resetState, upsertDefinition } from "../domain/store";
 import { GET as getSnapshot } from "../app/api/events/[id]/route";
 import { POST as postEvent } from "../app/api/events/route";
@@ -8,6 +8,7 @@ import { PUT as putOverride } from "../app/api/events/[id]/gifts/[giftId]/overri
 import { DELETE as deleteGiftRoute } from "../app/api/events/[id]/gifts/[giftId]/route";
 import { publishEvent } from "../domain/store";
 import { lockGift } from "../domain/gifts";
+import { LOCAL_ORGANIZER_ID, setSessionReader } from "./ownership";
 
 const BODY = {
   title: "Test event",
@@ -20,8 +21,9 @@ const BODY = {
 };
 const OPTIONS = [{ value: "a", label: "Option A" }, { value: "none", label: "None" }];
 
+/** The routes run with no session and no database, so the local organizer owns what the tests seed. */
 function seed() {
-  const event = publishEvent(createEventFromBody(BODY).id);
+  const event = publishEvent(createEventFromBody(BODY, LOCAL_ORGANIZER_ID).id);
   const name = upsertDefinition(event.id, { namespace: "organizer", key: "printed_name", label: "Name for printing", scope: "guest", value_type: "text", constraints: { max_length: 40 }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const dietary = upsertDefinition(event.id, { namespace: "organizer", key: "dietary", label: "Dietary", scope: "guest", value_type: "multi_enum", constraints: { options: OPTIONS }, default_visibility: [], required_rule: "going", creator: "organizer" });
   const reply = submitRsvp(event.id, {
@@ -37,7 +39,11 @@ function seed() {
 }
 
 describe("the API operations", () => {
-  beforeEach(resetState);
+  beforeEach(() => {
+    resetState();
+    setSessionReader(async () => null);
+  });
+  afterAll(() => setSessionReader(null));
 
   it("creates a draft with defaults, publishes it, and serves the invite by code", () => {
     const event = createEventFromBody(BODY);

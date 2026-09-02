@@ -36,7 +36,7 @@ async function request({ eventId, guestId, displayName, status, answers }: RsvpS
   const created = await fetchImpl(`${events}/rsvp`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ guests: [{ display_name: displayName.trim(), status, answers }] }) });
   if (!created.ok) return failure(created);
   const { guest_ids } = (await created.json()) as { guest_ids: string[] };
-  const guest = await fetchImpl(`${events}/guests/${encodeURIComponent(guest_ids[0])}`);
+  const guest = await fetchImpl(`${events}/rsvp/${encodeURIComponent(guest_ids[0])}`);
   if (!guest.ok) return failure(guest);
   return { ok: true, guest: (await guest.json()) as RecordedGuest };
 }

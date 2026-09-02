@@ -157,18 +157,18 @@ export function seedDefinitions(eventId: string): AttributeDefinition[] {
     .map((q) => ({ id: newId("def"), event_id: eventId, namespace: "core", key: q.key, label: q.label, scope: q.scope, value_type: q.value_type, constraints: q.constraints, default_visibility: [], required_rule: q.required_rule, creator: "library" }));
 }
 
-export type EventInput = Omit<Event, "id" | "definition_ids" | "status" | "invite_code" | "created_at" | "contact"> & { contact?: Event["contact"] };
+export type EventInput = Omit<Event, "id" | "definition_ids" | "status" | "invite_code" | "created_at" | "contact" | "owner_id"> & { contact?: Event["contact"] };
 
 /** An event id unique across every stored document, unlike the per-document `newId` counter. */
 export function newEventId(): string {
   return `evt_${crypto.randomUUID()}`;
 }
 
-export function createEvent(input: EventInput, id: string = newId("evt")): Event {
+export function createEvent(input: EventInput, id: string = newId("evt"), ownerId: string | null = null): Event {
   const s = state();
   const defs = seedDefinitions(id);
   for (const d of defs) s.definitions.set(d.id, d);
-  const event: Event = { ...input, contact: input.contact ?? { email: null, phone: null }, id, definition_ids: defs.map((d) => d.id), status: "draft", invite_code: null, created_at: now() };
+  const event: Event = { ...input, contact: input.contact ?? { email: null, phone: null }, id, definition_ids: defs.map((d) => d.id), status: "draft", invite_code: null, created_at: now(), owner_id: ownerId };
   s.events.set(id, event);
   return event;
 }

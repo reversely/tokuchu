@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse, readFilter, summary } from "../../../../../server/api";
-import { withPersistedEvent } from "../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const url = new URL(request.url);
       const definitions = url.searchParams.get("definitions")?.split(",").filter(Boolean) ?? [];
       return NextResponse.json(summary(id, definitions, readFilter(url.searchParams.get("filter"))));

@@ -2,15 +2,21 @@ import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn } from "../../server/auth";
 
-type Props = { searchParams: Promise<{ sent?: string; error?: string }> };
+type Props = { searchParams: Promise<{ sent?: string; error?: string; next?: string }> };
 
 const sendsEmail = process.env.NODE_ENV === "production" && !!process.env.RESEND_API_KEY;
+
+/** The page the link returns to: a path on this site, or the root for anything else. */
+function returnPath(next: FormDataEntryValue | string | null | undefined): string {
+  const path = typeof next === "string" ? next : "";
+  return path.startsWith("/") && !path.startsWith("//") ? path : "/";
+}
 
 /** Sends the link and lands on the confirmation; a denied address lands back here with the reason. */
 async function sendLink(formData: FormData): Promise<void> {
   "use server";
   try {
-    await signIn("resend", { email: String(formData.get("email") ?? ""), redirectTo: "/" });
+    await signIn("resend", { email: String(formData.get("email") ?? ""), redirectTo: returnPath(formData.get("next")) });
   } catch (error) {
     if (!(error instanceof AuthError)) throw error;
     redirect(`/sign-in?error=${error.type}`);
@@ -19,7 +25,7 @@ async function sendLink(formData: FormData): Promise<void> {
 
 /** One field and one button: the address gets a magic link and the confirmation says where it went. */
 export default async function Page({ searchParams }: Props) {
-  const { sent, error } = await searchParams;
+  const { sent, error, next } = await searchParams;
   return (
     <>
       <header className="band">
@@ -34,6 +40,7 @@ export default async function Page({ searchParams }: Props) {
             ) : (
               <form action={sendLink}>
                 <p className="lead">Enter the address on the organizer list to get a sign-in link</p>
+                <input type="hidden" name="next" value={returnPath(next)} />
                 <div className="field">
                   <label htmlFor="email">Email</label>
                   <input id="email" name="email" type="email" autoComplete="email" required data-testid="sign-in-email" />

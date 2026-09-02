@@ -5,7 +5,8 @@
  * the dev server and the browser suites need no database.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import { deserializeState, freshState, runWithState, serializeState, type State } from "../domain/store";
+import { deserializeState, freshState, runWithState, serializeState, state, type State } from "../domain/store";
+import type { Event } from "../domain/types";
 import { getDatabase, hasDatabase, type Database, type Row } from "./db";
 import { NotFoundError } from "./errors";
 
@@ -40,11 +41,11 @@ function stateOf(row: Row): State {
 }
 
 async function upsert(db: Database, s: State, eventId: string, document: string): Promise<void> {
-  const inviteCode = s.events.get(eventId)?.invite_code ?? null;
+  const event = s.events.get(eventId);
   await db.query(
-    `insert into events (id, invite_code, data, updated_at) values ($1, $2, $3::jsonb, now())
-     on conflict (id) do update set invite_code = excluded.invite_code, data = excluded.data, updated_at = now()`,
-    [eventId, inviteCode, document]
+    `insert into events (id, owner_id, invite_code, data, updated_at) values ($1, $2, $3, $4::jsonb, now())
+     on conflict (id) do update set owner_id = excluded.owner_id, invite_code = excluded.invite_code, data = excluded.data, updated_at = now()`,
+    [eventId, event?.owner_id ?? null, event?.invite_code ?? null, document]
   );
 }
 
@@ -110,6 +111,30 @@ export async function createPersistedEvent<T>(handler: Handler<T>): Promise<T> {
     if (!event) throw new Error("The create handler stored no event.");
     return event.id;
   });
+}
+
+/** One row of an organizer's event list. */
+export type OwnedEvent = { id: string; title: string; status: Event["status"]; invite_code: string | null; updated_at: string };
+
+/**
+ * The events one organizer owns, latest first. The title and status sit inside the document at the
+ * first entry of its events list, so the query reads them by path instead of loading each document.
+ * The in-memory store keeps no write time, so there the creation time stands in for `updated_at`.
+ */
+export async function listOwnedEvents(ownerId: string): Promise<OwnedEvent[]> {
+  if (!usesDatabase()) {
+    return [...state().events.values()]
+      .filter((event) => event.owner_id === ownerId)
+      .map((event) => ({ id: event.id, title: event.title, status: event.status, invite_code: event.invite_code, updated_at: event.created_at }))
+      .reverse();
+  }
+  const db = await getDatabase();
+  const rows = await db.query(
+    `select id, invite_code, updated_at, data #>> '{events,0,1,title}' as title, data #>> '{events,0,1,status}' as status
+     from events where owner_id = $1 order by updated_at desc`,
+    [ownerId]
+  );
+  return rows.map((row) => ({ id: row.id as string, title: row.title as string, status: row.status as Event["status"], invite_code: row.invite_code as string | null, updated_at: new Date(row.updated_at as string | Date).toISOString() }));
 }
 
 /** Resolves once the enclosing request's row is written, or at once outside a persisted request. */

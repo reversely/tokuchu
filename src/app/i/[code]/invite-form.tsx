@@ -82,7 +82,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
 
   useEffect(() => {
     if (!guestId) return;
-    fetch(`/api/events/${event.id}/guests/${guestId}`)
+    fetch(`/api/events/${event.id}/rsvp/${guestId}`)
       .then(async (r) => {
         if (!r.ok) {
           setBadLink(true);

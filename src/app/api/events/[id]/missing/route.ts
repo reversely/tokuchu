@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BadRequestError, errorResponse, missing, readFilter } from "../../../../../server/api";
-import { withPersistedEvent } from "../../../../../server/persistence";
+import { withOwnedEvent } from "../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params;
-    return await withPersistedEvent(id, async () => {
+    return await withOwnedEvent(id, async () => {
       const url = new URL(request.url);
       const definition = url.searchParams.get("definition");
       if (!definition) throw new BadRequestError("definition is required.");
