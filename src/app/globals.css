@@ -257,11 +257,16 @@ table.records .quiet { color: var(--muted); }
 .home .btn.light:hover { transform: translateY(-1px); }
 .home .btn.outline-light { background: transparent; color: var(--on-night); border-color: color-mix(in srgb, var(--on-night) 34%, transparent); }
 .home .btn.outline-light:hover { border-color: var(--on-night); }
-.home .hero { padding: 74px 0 44px; }
-.home .banner { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 22px; border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+.home .hero { padding: 8px 0 36px; }
+.home .banner { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 22px; }
+/* The hero banner shares the field's cream, so it carries no frame and its edges fade into the page. */
+.home .hero-banner { max-width: 640px; margin: -28px auto -36px; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, #000 62%, transparent 100%); }
+.home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; }
+.home .hero .cta { justify-content: center; }
+.home .hero .note { text-align: center; }
 .home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .home .hero h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.04; }
-.home .hero .sub { margin-top: 22px; font-size: 20px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
+.home .hero .sub { margin-top: 8px; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
 .home .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
 .home .hero .note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
 .home .hero .note b { color: var(--ink-2); font-weight: 600; }

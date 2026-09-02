@@ -95,7 +95,7 @@ export default async function Page() {
       <main id="top">
         <section className="hero">
           <div className="wrap">
-            <img className="banner" src="/media/tokuchu-banner.png" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
+            <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
             <h1 className="sr-only">Turn an RSVP list into one personalized order per attendee.</h1>
             <p className="sub">Tokuchu reads a product's requirements from a WebMCP store and asks each attendee only for the values that product needs. The finished cart returns to the organizer with one line per attendee.</p>
             <div className="cta">
@@ -143,7 +143,7 @@ export default async function Page() {
 
         <section id="usecase" data-testid="usecase">
           <div className="wrap usecase">
-            <img className="banner" src="/media/customworks-banner.png" alt="Customworks. Make it your own. A Shopify storefront for the 2026 WebMCP Challenge" loading="lazy" />
+            <img className="banner" src="/media/customworks-banner.webp" alt="Customworks. Make it your own. A Shopify storefront for the 2026 WebMCP Challenge" loading="lazy" />
             <div className="usecase-copy">
               <span className="eyebrow">One use case</span>
               <h2>A store that publishes what its products need.</h2>
