@@ -5,7 +5,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { resetState } from "../../../../../domain/store";
 import { llmEnabled } from "../../../../../server/flags";
-import { setSessionReader } from "../../../../../server/ownership";
+import { setDemoIdReader, setSessionReader } from "../../../../../server/ownership";
 import { POST } from "./route";
 
 const sdkLoads = vi.hoisted(() => ({ count: 0 }));
@@ -16,8 +16,14 @@ vi.mock("@openai/agents", async (importOriginal) => {
 });
 
 /** The route runs with no session and no database, so the local organizer is the caller. */
-beforeAll(() => setSessionReader(async () => null));
-afterAll(() => setSessionReader(null));
+beforeAll(() => {
+  setSessionReader(async () => null);
+  setDemoIdReader(async () => null);
+});
+afterAll(() => {
+  setSessionReader(null);
+  setDemoIdReader(null);
+});
 
 const before = process.env.LLM_ENABLED;
 afterEach(() => {
