@@ -130,3 +130,7 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
   (fixed next as fix(requests)).
 - fix(requests): a gift records requested_at when the organizer requests; each RSVP write then issues the
   request to going attendees without a row. Verified on screen (docs/progress, after-fix capture).
+- #17 landed as bafbde2 (clean cherry-pick of d103f34). submit_rsvp on the invite page with the store's
+  constraints in its schema; the form and the tool share send-rsvp.ts. Gate: 137 vitest, 16 Playwright.
+- #18 landed as 0b1d8ee (clean cherry-pick of 48bed91). A fresh event starts with no questions; the
+  name rule maps a store name field to any printed_name question present. Gate: 137 vitest, 16 Playwright.
