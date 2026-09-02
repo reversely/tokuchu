@@ -206,3 +206,8 @@ only; LLM paths off unless needed.
   demo-store labeling in the pick step and the routing panel. Gate: 189 vitest, 21 Playwright, live
   tour 1/1. User asked next (#23): drop the post-approval lock (allow overwrite, re-approve refills
   a fresh cart) and sweep the vendor-era copy.
+- #23 landed as b5f47e9 (clean). No post-approval lock: an edit after approval is accepted, the row
+  reads "changed after approval", and "Approve again" mints a new key and a fresh cart. Copy sweep:
+  "Approve and fill the cart", "Fill the cart", "How this reaches the store", "Cart job progress";
+  the organizer reply path and the Guest Experience thread button are gone; the Overview's vendor
+  follow-ups deleted. Gate: 190 vitest, 21 Playwright, live tour 1/1 (flow demo 4/4 in the worktree).
