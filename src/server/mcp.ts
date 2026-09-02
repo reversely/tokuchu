@@ -4,9 +4,10 @@
  * which gifts and read which definitions; every call checks it. Results are MCP-shaped: text
  * content, isError on a refusal or a failure. Nothing here spends money for a vendor token.
  */
+import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError } from "./api";
+import { changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
 import { newId, state } from "../domain/store";
 import { LockedValueError } from "../domain/store";
 import type { CallerToken } from "../domain/types";
@@ -154,6 +155,11 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       return requestFromAttendees(eventId, String(args.gift_id));
     case "follow_up":
       return followUp(eventId, String(args.gift_id));
+    case "approve_specs": {
+      const view = approveSpecs(eventId, String(args.gift_id));
+      void startCartFill(eventId, String(args.gift_id));
+      return view;
+    }
     case "search_gifts":
       return searchOperation(eventId, args);
     case "send_to_vendor":

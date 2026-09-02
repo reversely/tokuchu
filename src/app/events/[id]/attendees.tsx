@@ -102,15 +102,10 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
     if (!gift) return;
     setBusy("approve");
     setApproveError(null);
-    try {
-      const res = await fetch(`/api/events/${snap.event.id}/gifts/${gift.id}/approve-specs`, { method: "POST" });
-      if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-      onChanged();
-    } catch (e) {
-      setApproveError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
+    const failure = await runTool("approve_specs", snap.event.id, gift.id);
+    if (failure) setApproveError(failure);
+    else onChanged();
+    setBusy(null);
   }
 
   function cell(guestId: string, value: unknown, def: Definition, going: boolean) {

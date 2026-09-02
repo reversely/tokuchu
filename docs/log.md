@@ -147,3 +147,5 @@ ddb191b, so tickets land by cherry-pick. User asked for at most two agents at a 
 - #6 landed as 36803ec (two route conflicts with #15 resolved: withOwnedEvent + awaited calls). Dev
   without DATABASE_URL and no session runs as the local organizer for its own events only. Gate: 166
   vitest, 18 Playwright, live flow demo 4/4. #8 closed as delivered by #12 + #6.
+- feat(attendees): approval runs through the page's approve_specs tool (the last #12 checklist item);
+  the MCP endpoint dispatches it too. Live flow demo 4/4.

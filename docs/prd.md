@@ -162,7 +162,7 @@ Tokuchu publishes its records as tools. The organizer's page registers them on `
 | `set_field_sources` | the source per requirement, or the validation errors |
 | `request_from_attendees` | the request per attendee for their missing fields |
 | `get_manifest` | one row per attendee: variant, resolved values, and each row's ready or incomplete state |
-| `approve` | locks the answers, fills the store's cart, records the checkout URL |
+| `approve_specs` | locks the answers, fills the store's cart, records the checkout URL |
 | `get_changes` | the change log after a sequence number |
 | `submit_rsvp` (invite page) | records an attendee's response and answers, with the store's constraints in its schema |
 

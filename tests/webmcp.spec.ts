@@ -27,7 +27,7 @@ test("the dashboard registers the organizer's tools; get_summary reads the seede
   await page.goto(`/events/${id}?webmcp=polyfill`);
   await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
   const names = await page.evaluate(async () => (await document.modelContext!.getTools()).map((t) => t.name).sort());
-  expect(names).toEqual(["approve", "count_by", "follow_up", "get_changes", "get_guest", "get_manifest", "get_requirements", "get_summary", "get_updates", "list_guests", "list_missing", "post_update", "request_from_attendees", "search_gifts", "send_to_vendor", "set_gift_plan", "set_personalization_mapping"]);
+  expect(names).toEqual(["approve", "approve_specs", "count_by", "follow_up", "get_changes", "get_guest", "get_manifest", "get_requirements", "get_summary", "get_updates", "list_guests", "list_missing", "post_update", "request_from_attendees", "search_gifts", "send_to_vendor", "set_gift_plan", "set_personalization_mapping"]);
 
   const summary = await execute(page, "get_summary", { filter: "" });
   expect(summary.isError).toBe(false);

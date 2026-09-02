@@ -168,6 +168,13 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/send" }
   },
   {
+    name: "approve_specs",
+    description: "Approves the collected attendee values for a gift: the answers lock and the store's cart fills with one line per attendee. Returns the gift with its cart state.",
+    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/approve-specs" }
+  },
+  {
     name: "approve",
     description: "Approves a sent gift: the cart is kept and updated until the lock date, then checked out.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
