@@ -43,6 +43,7 @@ if (!process.env.OPENAI_API_KEY) {
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const transcriptPath = `${OUT}/agent-run-${stamp}.json`;
 const transcript = { goal, model: MODEL, base: BASE, started_at: new Date().toISOString(), events: [], outcome: null };
+mkdirSync(OUT, { recursive: true });
 const save = () => writeFileSync(transcriptPath, JSON.stringify(transcript, null, 2));
 
 /** One JSON call to Tokuchu's API as the demo guest, for the setup an organizer would have done by hand. */
@@ -77,7 +78,6 @@ async function main() {
   if (!snap.static) throw new Error(`The server at ${BASE} is not in static mode; start it with TOKUCHU_STATIC=1.`);
   const inviteCode = snap.event.invite_code;
   console.log(`Tokuchu event ${eventId} at ${BASE} with ${snap.guests.length} guests; model ${MODEL}; transcript ${transcriptPath}`);
-  mkdirSync(OUT, { recursive: true });
   save();
 
   const playbook = readFileSync("docs/agent-runtime.md", "utf8");
