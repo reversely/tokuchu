@@ -315,6 +315,49 @@ export const Batch = z.object({
 });
 export type Batch = z.infer<typeof Batch>;
 
+/* ---- The event's chat and schedule ---- */
+
+/** Who wrote a chat line: the organizer, the assistant answering, or the system posting a status on its own. */
+export const ChatRole = z.enum(["organizer", "assistant", "system"]);
+export type ChatRole = z.infer<typeof ChatRole>;
+
+/** One line of the event's chat thread. Tool calls the assistant made while answering ride along for the transcript. */
+export const ChatMessage = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  role: ChatRole,
+  text: z.string(),
+  at: z.string(),
+  tool_calls: z.array(z.object({ tool: z.string(), label: z.string() })).default([]),
+  /** A scheduled action this line reports on, when it does. */
+  schedule_id: z.string().nullable().default(null)
+});
+export type ChatMessage = z.infer<typeof ChatMessage>;
+
+/** What a scheduled action does when it runs: a follow-up to unanswered requests, a status post into the chat, or a message the organizer wrote to be sent then. */
+export const ScheduleAction = z.enum(["follow_up", "status", "message"]);
+export type ScheduleAction = z.infer<typeof ScheduleAction>;
+
+/** An action the organizer scheduled in the chat: when it runs, what it does, and how it repeats. */
+export const Schedule = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  action: ScheduleAction,
+  /** The organizer's words for it, shown back in the chat. */
+  description: z.string(),
+  /** The gift a follow-up is for; null for every gift. */
+  gift_id: z.string().nullable().default(null),
+  /** The text a message action sends or posts. */
+  text: z.string().nullable().default(null),
+  run_at: z.string(),
+  /** Minutes between runs; null runs once. */
+  every_minutes: z.number().int().positive().nullable().default(null),
+  last_run_at: z.string().nullable().default(null),
+  created_at: z.string(),
+  cancelled_at: z.string().nullable().default(null)
+});
+export type Schedule = z.infer<typeof Schedule>;
+
 /* ---- Requests ---- */
 
 /** How the latest email for a request left: through the provider, into the dev log, skipped for want of an address, or rejected. */
