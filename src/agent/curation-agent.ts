@@ -50,7 +50,10 @@ export type RunOptions = {
 type RunState = { candidates: Map<string, Candidate>; giftId: string | null; calls: AgentToolCallSummary[] };
 
 /** One-clause activity labels for the UI's running state. */
+import { SCHEDULE_LABELS, scheduleTools } from "./schedule-tools";
+
 const LABELS: Record<string, string> = {
+  ...SCHEDULE_LABELS,
   read_event: "Reading the event",
   read_definitions: "Reading the RSVP fields",
   read_missing_values: "Checking missing answers",
@@ -75,7 +78,7 @@ How to answer:
 - Lead with the most salient fact for this organizer right now: a request nobody answered, a needed-by date near or past a gift's delivery window, a cart that failed, an attendee without an email, or a required answer still missing. Then answer what was asked.
 - When a request is ambiguous, ask one focused question instead of guessing; name the choice the organizer has to make.
 - The thread above is the conversation so far; a system line is a status post from Tokuchu, not from the organizer.
-- You cannot schedule anything for later; when the organizer asks for a reminder or a timed action, say so plainly and offer to do it now instead.
+- A reminder or a timed action is a schedule: call schedule with the organizer's words and confirm the local time it resolved to; when the reply says the time is ambiguous ask one question. list_schedules and cancel_schedule manage them.
 
 Curation:
 - Before proposing a product, read the event and the RSVP definitions: call read_event and read_definitions first.
@@ -300,7 +303,8 @@ function rawTools({ tool }: Sdk, ctx: CurationContext, state: RunState, options:
         };
       }
     }),
-    ...managementTools({ tool }, eventId)
+    ...managementTools({ tool }, eventId),
+    ...scheduleTools({ tool } as Parameters<typeof scheduleTools>[0], ctx)
   ];
 }
 

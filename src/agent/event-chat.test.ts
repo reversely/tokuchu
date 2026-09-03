@@ -65,7 +65,7 @@ describe("chatTurn (#31)", () => {
       ["user", "Any change?"]
     ]);
     expect(model.requests[0].systemInstructions).toMatch(/Lead with the most salient fact/);
-    expect(model.requests[0].systemInstructions).toMatch(/cannot schedule/);
+    expect(model.requests[0].systemInstructions).toMatch(/call schedule with the organizer/);
     expect(seen).toEqual(["Reading the event's status"]);
 
     // The thread carries the organizer's line and the reply with its tool calls.
