@@ -26,6 +26,13 @@ test("the tour runs the flow to a checkout link per gift and the store's crewnec
     const eventId = new URL(page.url()).pathname.split("/")[2];
     await expect(page.getByTestId("tour-autoplay")).toBeChecked();
     await expect(page.getByTestId("tour-narration")).toHaveText(STEPS[0].narration);
+    // A step that fails stops the tour; its reason is the only clue, so it goes to the report before the assertion.
+    await Promise.race([
+      page.locator('[data-testid="tour"][data-step="checkout"]').waitFor({ state: "attached", timeout: TOUR_MS }),
+      page.locator('[data-testid="tour"][data-phase="failed"]').waitFor({ state: "attached", timeout: TOUR_MS }).then(async () => {
+        throw new Error(`The tour failed at step ${await page.getByTestId("tour").getAttribute("data-step")}: ${await page.getByTestId("tour-error").textContent().catch(() => "")} ${await page.getByTestId("tour-note").textContent().catch(() => "")}`);
+      })
+    ]);
     await expect(page.getByTestId("tour")).toHaveAttribute("data-step", "checkout", { timeout: TOUR_MS });
     const href = await page.getByTestId("tour-checkout").getAttribute("href");
     expect(href).toContain("/cart/c/");
