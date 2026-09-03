@@ -221,3 +221,12 @@ only; LLM paths off unless needed.
 - #24 landed as 9b316b0 (clean): the demo URL carries a signed token (t) and every demo fetch sends it
   as x-tokuchu-demo, so a browser that drops the cookie keeps the guest session. Gate: 193 vitest,
   fast suites, live tour 1/1.
+
+## 2026-09-02 — Accounts and isolation (#26)
+
+History rewritten by the owner to strip attribution trailers; CLAUDE.md became CONTRIBUTING.md.
+- #26 landed as 4dea74c (clean). event.demo on the record; any caller owns a demo; a guest token beside
+  a session hands the guest's events to the account once and the guest id is consumed; guests are
+  limited to their demo event and sent to sign-in to keep it; ORGANIZER_EMAILS unset opens sign-up;
+  resolveAccess + openEvent behind every route; isolation matrix test. Gate: 222 vitest, 23 fast
+  Playwright, live tour 1/1. Mail delivery still pending on Render (links log until RESEND_API_KEY).
