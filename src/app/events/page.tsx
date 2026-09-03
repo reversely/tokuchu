@@ -1,11 +1,11 @@
 import { listOwnedEvents } from "../../server/persistence";
 import { MyEvents } from "../my-events";
-import { callerOrSignIn } from "../organizer-gate";
+import { accountOrSignIn } from "../organizer-gate";
 import { SessionPill } from "../session-pill";
 
 /** The signed-in organizer's events with a link into each and one to a new draft. */
 export default async function Page() {
-  const caller = await callerOrSignIn("/events");
+  const caller = await accountOrSignIn("/events");
   return (
     <>
       <header className="band">

@@ -15,9 +15,9 @@ beforeAll(async () => {
 afterAll(() => db.close());
 
 describe("migrate", () => {
-  it("creates the four tables the pg adapter queries", async () => {
+  it("creates the events and consumed guests tables and the four the pg adapter queries", async () => {
     const tables = await db.query("select table_name from information_schema.tables where table_schema = 'public' order by table_name");
-    expect(tables.map((t) => t.table_name)).toEqual(["accounts", "events", "schema_migrations", "sessions", "users", "verification_token"]);
+    expect(tables.map((t) => t.table_name)).toEqual(["accounts", "consumed_guests", "events", "schema_migrations", "sessions", "users", "verification_token"]);
   });
 });
 
@@ -55,6 +55,11 @@ describe("allowOrganizer", () => {
   it("denies an unlisted or missing address", () => {
     expect(allowOrganizer({ user: { email: "stranger@example.com" } }, allowed)).toBe(false);
     expect(allowOrganizer({ user: { email: null } }, allowed)).toBe(false);
-    expect(allowOrganizer({ user: { email: "host@example.com" } }, organizerEmails(""))).toBe(false);
+  });
+
+  it("lets any address with an email sign in when the list is empty", () => {
+    expect(allowOrganizer({ user: { email: "anyone@example.com" } }, organizerEmails(""))).toBe(true);
+    expect(allowOrganizer({ user: { email: "anyone@example.com" } }, organizerEmails(" , "))).toBe(true);
+    expect(allowOrganizer({ user: { email: null } }, organizerEmails(""))).toBe(false);
   });
 });

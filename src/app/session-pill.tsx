@@ -18,3 +18,13 @@ export async function SessionPill() {
     </form>
   );
 }
+
+/** The band for a guest: the demo label and the one action that keeps the event under a new account. */
+export function GuestPill({ signIn }: { signIn: string }) {
+  return (
+    <span className="session">
+      <span className="pill" data-testid="guest-pill">Guest demo</span>
+      <a className="btn ghost small" href={signIn} data-testid="keep-event-link">Create an account to keep this event</a>
+    </span>
+  );
+}

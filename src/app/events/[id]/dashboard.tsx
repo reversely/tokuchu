@@ -6,12 +6,12 @@ import { Experience, type SearchReply } from "./experience";
 import { Attendees } from "./attendees";
 import { WebMcpProvider } from "../../webmcp-provider";
 import { Tour } from "../../demo/tour";
-import { withDemoHeaders, withDemoToken } from "../../../demo/token";
+import { withDemoHeaders } from "../../../demo/token";
 
 export type Snapshot = ReturnType<typeof snapshot>;
 type Tab = "overview" | "experience" | "attendees";
 
-/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. The tour mounts only on a demo organizer's event. */
+/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. The tour mounts only on the seeded demo event. */
 export function Dashboard({ initial, account }: { initial: Snapshot; account: ReactNode }) {
   const [snap, setSnap] = useState(initial);
   const [tab, setTab] = useState<Tab>("overview");
@@ -27,7 +27,6 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
     const tick = async () => {
       try {
         const res = await fetch(`/api/events/${event.id}`, withDemoHeaders({ cache: "no-store" }));
-        if (res.status === 403 && snap.demo) window.location.assign(withDemoToken("/demo"));
         if (res.ok && !stop) setSnap((await res.json()) as Snapshot);
       } catch {
         // The next tick reads again.

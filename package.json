@@ -17,7 +17,8 @@
     "setup": "bash scripts/setup.sh",
     "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "sweep-demo": "tsx scripts/sweep-demo.ts"
+    "sweep-demo": "tsx scripts/sweep-demo.ts",
+    "reparent-events": "tsx scripts/reparent-events.ts"
   },
   "dependencies": {
     "@auth/pg-adapter": "1.11.3",

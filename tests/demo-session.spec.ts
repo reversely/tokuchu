@@ -1,12 +1,13 @@
 /**
  * The guest session through the browser: `/demo` sets the signed cookie, repeats its value as the
- * `t` token in the URL, creates the seeded event, and lands on its dashboard; a second visit lands
- * on the same event; the demo organizer lists only its event, cannot create a second one, gets 403
- * from the API on an event another organizer owns, and lands back on its own event when it opens
- * that event's page. The server runs without DATABASE_URL, so a request with no cookie is the local
- * organizer. The tour mounts on the demo event with its first step, lists search_catalog in its
- * second step's wire, and stays off an ordinary event. A browser that drops the cookie keeps the
- * session through the token: the dashboard renders and the page tools still write to the event.
+ * `t` token in the URL, creates the seeded event, and lands on its dashboard with the guest band; a
+ * second visit lands on the same event; the guest lists only its event, gets 401 with the sign-in
+ * path on a create, and sees the page naming another organizer on an event it does not own; the
+ * event list and the draft page send the guest to sign-in with its event and token as `next`. The
+ * server runs without DATABASE_URL, so a request with no cookie is the local organizer. The tour
+ * mounts on the demo event with its first step, lists search_catalog in its second step's wire, and
+ * stays off an ordinary event. A browser that drops the cookie keeps the session through the token:
+ * the dashboard renders and the page tools still write to the event.
  */
 import { expect, test, type Page } from "@playwright/test";
 import { STEPS } from "../src/demo/steps";
@@ -42,11 +43,12 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   await page.goto("/");
   await expect(page.getByTestId("demo")).toHaveAttribute("href", "/demo");
   await page.goto("/demo");
-  await expect(page).toHaveURL(/\/events\/[^/?]+\?demo=1&t=demo_[^&]+$/);
+  await expect(page).toHaveURL(/\/events\/[^/?]+\?t=demo_[^&]+$/);
   const landed = new URL(page.url());
   const id = landed.pathname.split("/")[2];
   await expect(page.getByTestId("status")).toHaveText("Published");
   await expect(page.getByTestId("event-title")).toHaveText(DEMO_TITLE);
+  await expect(page.getByTestId("guest-pill")).toHaveText("Guest demo");
   await expect(page.getByTestId("tour-narration")).toHaveText(STEPS[0].narration);
   await expect(page.getByTestId("tour-step")).toHaveAttribute("data-step", "1");
   await expect(page.getByTestId("tour-autoplay")).not.toBeChecked();
@@ -60,9 +62,11 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Lax" });
   expect(cookie!.value).toMatch(/^demo_[A-Za-z0-9_-]{16}\.[0-9a-f]{64}$/);
   expect(landed.searchParams.get("t")).toBe(cookie!.value);
+  const keep = `/sign-in?next=${encodeURIComponent(`/events/${id}?t=${encodeURIComponent(cookie!.value)}`)}`;
+  await expect(page.getByTestId("keep-event-link")).toHaveAttribute("href", keep);
 
   await page.goto("/demo");
-  await expect(page).toHaveURL(`/events/${id}?demo=1&t=${cookie!.value}`);
+  await expect(page).toHaveURL(`/events/${id}?t=${cookie!.value}`);
   expect((await page.context().cookies()).find((c) => c.name === "tokuchu_demo")?.value).toBe(cookie!.value);
 
   const snap = (await (await page.request.get(`/api/events/${id}`)).json()) as { demo: boolean; event: { title: string } };
@@ -72,14 +76,23 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   const listed = (await (await page.request.get("/api/events")).json()) as { events: { id: string }[] };
   expect(listed.events.map((e) => e.id)).toEqual([id]);
   const second = await page.request.post("/api/events", { data: BODY });
-  expect(second.status()).toBe(403);
-  expect(await second.json()).toMatchObject({ error: "The demo holds one event." });
+  expect(second.status()).toBe(401);
+  expect(await second.json()).toEqual({ error: "Create an account to keep this event.", sign_in: keep });
 
-  // The bare request fixture carries no cookie, so it is the local organizer and its event is not the demo's.
+  // The guest's pages that need an account go to sign-in and come back to the event with the token.
+  await page.goto("/events");
+  await expect(page).toHaveURL(keep);
+  await page.goto("/events/new");
+  await expect(page).toHaveURL(keep);
+  await page.goto("/");
+  await expect(page.getByTestId("start")).toHaveAttribute("href", "/sign-in?next=%2Fevents%2Fnew");
+
+  // The bare request fixture carries no cookie, so it is the local organizer and its event is not the guest's.
   const theirs = (await (await request.post("/api/events", { data: BODY })).json()) as { id: string };
   expect((await page.request.get(`/api/events/${theirs.id}`)).status()).toBe(403);
   await page.goto(`/events/${theirs.id}`);
-  await expect(page).toHaveURL(`/events/${id}?demo=1&t=${cookie!.value}`);
+  await expect(page.getByTestId("forbidden-title")).toHaveText("This event belongs to another organizer");
+  await expect(page.getByTestId("forbidden-events-link")).toHaveAttribute("href", "/events");
 });
 
 test("a browser that drops the demo cookie keeps the session through the URL token", async ({ browser }) => {
@@ -87,7 +100,7 @@ test("a browser that drops the demo cookie keeps the session through the URL tok
   try {
     const page = await context.newPage();
     await page.goto("/demo");
-    await expect(page).toHaveURL(/\/events\/[^/?]+\?demo=1&t=demo_[^&]+$/);
+    await expect(page).toHaveURL(/\/events\/[^/?]+\?t=demo_[^&]+$/);
     const landed = new URL(page.url());
     const id = landed.pathname.split("/")[2];
     const token = landed.searchParams.get("t")!;
@@ -116,7 +129,7 @@ test("a browser that drops the demo cookie keeps the session through the URL tok
   }
 });
 
-test("the tour stays off an event that is not the demo's", async ({ page }) => {
+test("the tour stays off an event that is not the demo", async ({ page }) => {
   const theirs = (await (await page.request.post("/api/events", { data: BODY })).json()) as { id: string };
   await page.goto(`/events/${theirs.id}`);
   await expect(page.getByTestId("event-title")).toHaveText(BODY.title);

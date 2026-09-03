@@ -70,6 +70,15 @@ export const migrations: Migration[] = [
         token text not null,
         primary key (identifier, token)
       )`
+  },
+  // A guest id an account took over; a token naming it no longer resolves to a caller.
+  {
+    name: "006_consumed_guests",
+    sql: `
+      create table if not exists consumed_guests (
+        id text primary key,
+        consumed_at timestamptz not null default now()
+      )`
   }
 ];
 

@@ -90,7 +90,8 @@ function Window({ title, children }: { title: string; children: ReactNode }) {
 /** The landing page: the problem, the five-step walkthrough with a clip per step, and the three WebMCP tools (PRD Sections 1 and 3). */
 export default async function Page() {
   const caller = await currentCaller();
-  const start = caller ? "/events/new" : "/sign-in?next=%2Fevents%2Fnew";
+  // A visitor with no account and a guest both go through sign-in; a first sign-in creates the account.
+  const start = caller && !caller.is_demo ? "/events/new" : "/sign-in?next=%2Fevents%2Fnew";
   return (
     <div className="home">
       <header className="nav">

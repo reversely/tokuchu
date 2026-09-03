@@ -27,7 +27,7 @@ const rowData = async (id: string) => JSON.stringify((await db.query("select dat
 describe("migrate", () => {
   it("creates the events table once and records the name", async () => {
     expect(await migrate(db)).toEqual([]);
-    expect((await db.query("select name from schema_migrations")).map((r) => r.name)).toEqual(["001_events", "002_users", "003_accounts", "004_sessions", "005_verification_token"]);
+    expect((await db.query("select name from schema_migrations")).map((r) => r.name)).toEqual(["001_events", "002_users", "003_accounts", "004_sessions", "005_verification_token", "006_consumed_guests"]);
     const columns = await db.query("select column_name from information_schema.columns where table_name = 'events' order by ordinal_position");
     expect(columns.map((c) => c.column_name)).toEqual(["id", "owner_id", "invite_code", "data", "updated_at"]);
   });

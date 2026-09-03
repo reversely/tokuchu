@@ -29,8 +29,11 @@ and `packages/shopify-ucp`; both must be green before a commit. Playwright suite
 `.env` holds `OPENAI_API_KEY` (the curation agent), `CUSTOMILY_SHOP_URL` (the demo store), and the
 four Shopify Admin API keys (`SHOPIFY_STORE_DOMAIN`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`,
 `SHOPIFY_ADMIN_API_VERSION`). The deployment adds `DATABASE_URL`, `AUTH_SECRET`, `RESEND_API_KEY`, and
-`ORGANIZER_EMAILS`. Copy `.env.example` and fill it. Never read or print secret values; check a key's
-presence by name.
+`ORGANIZER_EMAILS`. Every person signs in with an email address and a first sign-in creates the
+account; `ORGANIZER_EMAILS` unset or empty lets any address sign in, and set, it names the only
+addresses that may. A server without `RESEND_API_KEY` outside production writes the magic link to its
+log. Copy `.env.example` and fill it. Never read or print secret values; check a key's presence by
+name.
 
 ## WebMCP
 

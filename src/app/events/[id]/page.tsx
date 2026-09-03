@@ -1,41 +1,63 @@
 import { notFound, redirect } from "next/navigation";
 import { snapshot } from "../../../server/api";
-import { UnauthorizedError, ForbiddenError } from "../../../server/errors";
-import { currentCaller, withEventOwnedBy } from "../../../server/ownership";
+import { guestKeepPath, signInPath } from "../../../server/demo";
+import { currentCaller, openEvent } from "../../../server/ownership";
 import { DEMO_TOKEN_PARAM } from "../../../demo/token";
 import { Dashboard } from "./dashboard";
-import { SessionPill } from "../../session-pill";
+import { GuestPill, SessionPill } from "../../session-pill";
 
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+type Query = Record<string, string | string[] | undefined>;
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<Query> };
 
 /** The single `t` search param, or null when the URL carries none or repeats it. */
-function tokenFrom(query: Record<string, string | string[] | undefined>): string | null {
+function tokenFrom(query: Query): string | null {
   const value = query[DEMO_TOKEN_PARAM];
   return typeof value === "string" ? value : null;
 }
 
+/** The page's own path with every search param but the token, so a consumed token leaves the address bar. */
+function pathWithoutToken(id: string, query: Query): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (key !== DEMO_TOKEN_PARAM && typeof value === "string") params.set(key, value);
+  const search = params.toString();
+  return `/events/${id}${search ? `?${search}` : ""}`;
+}
+
+/** The page for an event another account owns. */
+function Forbidden() {
+  return (
+    <>
+      <header className="band">
+        <a className="brand" href="/">Tokuchu</a>
+      </header>
+      <main className="sheet">
+        <div className="wrap solo">
+          <h1 className="title" data-testid="forbidden-title">This event belongs to another organizer</h1>
+          <p className="lead"><a href="/events" data-testid="forbidden-events-link">Open your events</a></p>
+        </div>
+      </main>
+    </>
+  );
+}
+
 /**
- * The published event's dashboard (PRD Section 5) for the organizer who owns it; anyone else sees
- * the not-found page or the sign-in page. A demo URL's `t` token stands in for the demo cookie on
- * this render, so the first load after `/demo` succeeds in a browser that dropped the cookie.
+ * The published event's dashboard (PRD Section 5) for the caller who owns it. A guest URL's `t`
+ * token stands in for the cookie on this render, so the first load after `/demo` succeeds in a
+ * browser that dropped the cookie; beside a session the token hands the event to the account and
+ * the page reloads without it. A refusal renders as sign-in, the not-found page, or the page that
+ * names another organizer.
  */
 export default async function Page({ params, searchParams }: Props) {
   const { id } = await params;
-  const token = tokenFrom(await searchParams);
+  const query = await searchParams;
+  const token = tokenFrom(query);
   const caller = await currentCaller(token);
-  let initial;
-  let needsSignIn = !caller;
-  let ownDemo = false;
-  try {
-    initial = await withEventOwnedBy(caller, id, () => snapshot(id));
-  } catch (e) {
-    if (e instanceof UnauthorizedError) needsSignIn = true;
-    else if (e instanceof ForbiddenError && caller?.is_demo) ownDemo = true;
-    else notFound();
-  }
-  // A guest whose cookie names another demo id lands on that id's own event instead of a dead end; the token goes along so a browser without the cookie resumes the same session.
-  if (ownDemo) redirect(token ? `/demo?${DEMO_TOKEN_PARAM}=${encodeURIComponent(token)}` : "/demo");
-  // `redirect` throws, so it runs outside the try that maps every other failure to not-found.
-  if (needsSignIn || !initial) redirect(`/sign-in?next=${encodeURIComponent(`/events/${id}`)}`);
-  return <Dashboard initial={initial} account={<SessionPill />} />;
+  if (token && caller && !caller.is_demo) redirect(pathWithoutToken(id, query));
+  const opened = await openEvent(caller, id, () => snapshot(id));
+  // `redirect` and `notFound` throw, so they run outside any try.
+  if (opened.kind === "sign_in") redirect(signInPath(`/events/${id}`));
+  if (opened.kind === "not_found") notFound();
+  if (opened.kind === "forbidden") return <Forbidden />;
+  const account = caller?.is_demo ? <GuestPill signIn={signInPath(await guestKeepPath(caller.id))} /> : <SessionPill />;
+  return <Dashboard initial={opened.value} account={account} />;
 }

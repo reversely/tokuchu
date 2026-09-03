@@ -28,6 +28,8 @@ export type State = {
   changes: ChangeEntry[];
   seq: number;
   ids: number;
+  /** The guest ids an account has taken over; process-wide bookkeeping that no document carries. */
+  consumed_guests: Set<string>;
 };
 
 declare global {
@@ -36,7 +38,7 @@ declare global {
 }
 
 export function freshState(): State {
-  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), requests: new Map(), changes: [], seq: 0, ids: 0 };
+  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), requests: new Map(), changes: [], seq: 0, ids: 0, consumed_guests: new Set() };
 }
 
 const scopedState = new AsyncLocalStorage<State>();
@@ -96,7 +98,7 @@ export function serializeState(s: State): StateDocument {
  */
 export function deserializeState(doc: unknown): State {
   const d = StateDocument.parse(doc);
-  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), requests: new Map(d.requests), changes: d.changes, seq: d.seq, ids: d.ids };
+  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), requests: new Map(d.requests), changes: d.changes, seq: d.seq, ids: d.ids, consumed_guests: new Set() };
 }
 
 /**
@@ -107,7 +109,7 @@ export function deserializeState(doc: unknown): State {
  */
 export function transactionally<T>(fn: () => T): T {
   const s = state();
-  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), requests: new Map(s.requests), changes: [...s.changes], seq: s.seq, ids: s.ids };
+  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), requests: new Map(s.requests), changes: [...s.changes], seq: s.seq, ids: s.ids, consumed_guests: s.consumed_guests };
   try {
     return fn();
   } catch (e) {
@@ -152,18 +154,18 @@ export function seedDefinitions(eventId: string): AttributeDefinition[] {
     .map((q) => ({ id: newId("def"), event_id: eventId, namespace: "core", key: q.key, label: q.label, scope: q.scope, value_type: q.value_type, constraints: q.constraints, default_visibility: [], required_rule: q.required_rule, creator: "library" }));
 }
 
-export type EventInput = Omit<Event, "id" | "definition_ids" | "status" | "invite_code" | "created_at" | "contact" | "owner_id"> & { contact?: Event["contact"] };
+export type EventInput = Omit<Event, "id" | "definition_ids" | "status" | "invite_code" | "created_at" | "contact" | "owner_id" | "demo"> & { contact?: Event["contact"] };
 
 /** An event id unique across every stored document, unlike the per-document `newId` counter. */
 export function newEventId(): string {
   return `evt_${crypto.randomUUID()}`;
 }
 
-export function createEvent(input: EventInput, id: string = newId("evt"), ownerId: string | null = null): Event {
+export function createEvent(input: EventInput, id: string = newId("evt"), ownerId: string | null = null, demo = false): Event {
   const s = state();
   const defs = seedDefinitions(id);
   for (const d of defs) s.definitions.set(d.id, d);
-  const event: Event = { ...input, contact: input.contact ?? { email: null, phone: null }, id, definition_ids: defs.map((d) => d.id), status: "draft", invite_code: null, created_at: now(), owner_id: ownerId };
+  const event: Event = { ...input, contact: input.contact ?? { email: null, phone: null }, id, definition_ids: defs.map((d) => d.id), status: "draft", invite_code: null, created_at: now(), owner_id: ownerId, demo };
   s.events.set(id, event);
   return event;
 }

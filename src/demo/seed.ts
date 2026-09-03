@@ -1,5 +1,5 @@
 /**
- * The demo organizer's event as data: the astronomy symposium the recorded walkthrough runs, the
+ * The seeded demo event as data: the astronomy symposium the recorded walkthrough runs, the
  * crewneck store the tour searches, and the three attendees the tour loads through the RSVP API in
  * place of email replies. `/demo` creates the event; the tour (#20) reads the rest.
  */

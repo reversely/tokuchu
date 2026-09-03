@@ -110,7 +110,9 @@ export const Event = z.object({
   invite_code: z.string().nullable(),
   created_at: z.string(),
   /** The organizer's user id; a document stored before ownership existed reads as null. */
-  owner_id: z.string().nullable().default(null)
+  owner_id: z.string().nullable().default(null),
+  /** The event `/demo` seeded from the walkthrough; the dashboard mounts the tour on it. */
+  demo: z.boolean().default(false)
 });
 export type Event = z.infer<typeof Event>;
 

@@ -114,7 +114,7 @@ export async function createPersistedEvent<T>(handler: Handler<T>): Promise<T> {
 }
 
 /** One row of an organizer's event list. */
-export type OwnedEvent = { id: string; title: string; status: Event["status"]; invite_code: string | null; updated_at: string };
+export type OwnedEvent = { id: string; title: string; status: Event["status"]; invite_code: string | null; updated_at: string; demo: boolean };
 
 /**
  * The events one organizer owns, latest first. The title and status sit inside the document at the
@@ -125,16 +125,16 @@ export async function listOwnedEvents(ownerId: string): Promise<OwnedEvent[]> {
   if (!usesDatabase()) {
     return [...state().events.values()]
       .filter((event) => event.owner_id === ownerId)
-      .map((event) => ({ id: event.id, title: event.title, status: event.status, invite_code: event.invite_code, updated_at: event.created_at }))
+      .map((event) => ({ id: event.id, title: event.title, status: event.status, invite_code: event.invite_code, updated_at: event.created_at, demo: event.demo }))
       .reverse();
   }
   const db = await getDatabase();
   const rows = await db.query(
-    `select id, invite_code, updated_at, data #>> '{events,0,1,title}' as title, data #>> '{events,0,1,status}' as status
+    `select id, invite_code, updated_at, data #>> '{events,0,1,title}' as title, data #>> '{events,0,1,status}' as status, data #>> '{events,0,1,demo}' as demo
      from events where owner_id = $1 order by updated_at desc`,
     [ownerId]
   );
-  return rows.map((row) => ({ id: row.id as string, title: row.title as string, status: row.status as Event["status"], invite_code: row.invite_code as string | null, updated_at: new Date(row.updated_at as string | Date).toISOString() }));
+  return rows.map((row) => ({ id: row.id as string, title: row.title as string, status: row.status as Event["status"], invite_code: row.invite_code as string | null, updated_at: new Date(row.updated_at as string | Date).toISOString(), demo: row.demo === "true" }));
 }
 
 /** Resolves once the enclosing request's row is written, or at once outside a persisted request. */

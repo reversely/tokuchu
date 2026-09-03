@@ -47,7 +47,6 @@ import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGif
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { llmEnabled } from "./flags";
-import { isDemoId } from "./demo-session";
 import { afterRsvpWrite } from "./hooks";
 import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
 
@@ -85,11 +84,11 @@ export const EventBody = z.object({
   segments: z.array(Segment).default([])
 });
 
-/** Creates the draft for the organizer whose user id `ownerId` names. */
-export function createEventFromBody(body: unknown, ownerId: string | null = null) {
+/** Creates the draft for the organizer whose user id `ownerId` names; `demo` marks the seeded walkthrough event. */
+export function createEventFromBody(body: unknown, ownerId: string | null = null, demo = false) {
   const parsed = EventBody.safeParse(body);
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
-  return createEvent(parsed.data as EventInput, newEventId(), ownerId);
+  return createEvent(parsed.data as EventInput, newEventId(), ownerId, demo);
 }
 
 export function updateEventFromBody(eventId: string, body: unknown) {
@@ -175,7 +174,7 @@ function changedSinceApproval(guest: Guest, approvedSeqs: number[]): boolean {
   return approvedSeqs.some((seq) => latest > seq);
 }
 
-/** The dashboard's whole view; `demo` says a demo organizer owns the event, so the page can mount the tour. */
+/** The dashboard's whole view; `demo` says the event is the seeded walkthrough, so the page can mount the tour. */
 export function snapshot(eventId: string) {
   const event = requireEvent(eventId);
   const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
@@ -183,7 +182,7 @@ export function snapshot(eventId: string) {
   const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g), changed_since_approval: changedSinceApproval(g, approvedSeqs) }));
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: isDemoId(event.owner_id) };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
 }
 
 /* ---- Gifts ---- */

@@ -5,6 +5,7 @@ import { createEventFromBody, importGuests, snapshot } from "./api";
 import { pgliteDatabase, setDatabase, type Database } from "./db";
 import { demoEventFor, sweepDemoEvents, sweepDemoState } from "./demo";
 import { DEMO_ID_PREFIX, demoCookieValue, demoIdFromCookie, isDemoId, newDemoId } from "./demo-session";
+import { handOffGuest, isConsumedGuest } from "./handoff";
 import { migrate } from "./migrations";
 import { createPersistedEvent, listOwnedEvents, withPersistedEvent } from "./persistence";
 
@@ -41,23 +42,34 @@ describe("in memory", () => {
     const eventId = await demoEventFor(id);
     expect(await demoEventFor(id)).toBe(eventId);
     const snap = snapshot(eventId);
-    expect(snap.event).toMatchObject({ title: DEMO_EVENT.title, owner_id: id, status: "published" });
+    expect(snap.event).toMatchObject({ title: DEMO_EVENT.title, owner_id: id, status: "published", demo: true });
     expect(snap.event.invite_code).toMatch(/^[A-Z0-9]{6}$/);
     expect(snap.demo).toBe(true);
     expect(snapshot(createEvent(INPUT, "evt_owned", "user_a").id).demo).toBe(false);
   });
 
-  it("sweeps a stale demo event with its rows and leaves a fresh one and an account's event", async () => {
-    const stale = createEventFromBody(DEMO_EVENT, newDemoId());
-    importGuests(stale.id, { lines: ["Ana", "Ben"] });
-    const fresh = createEventFromBody(DEMO_EVENT, newDemoId());
+  it("creates the demo event under an account and reuses it beside the account's other events", async () => {
     const owned = createEvent(INPUT, "evt_owned", "user_a");
+    const eventId = await demoEventFor("user_a");
+    expect(eventId).not.toBe(owned.id);
+    expect(await demoEventFor("user_a")).toBe(eventId);
+    expect(snapshot(eventId)).toMatchObject({ demo: true, event: { owner_id: "user_a", demo: true } });
+    expect((await listOwnedEvents("user_a")).map((e) => [e.id, e.demo])).toEqual([[eventId, true], [owned.id, false]]);
+  });
+
+  it("sweeps a guest's expired demo event with its rows and leaves a fresh one and an account's demo", async () => {
+    const expired = createEventFromBody(DEMO_EVENT, newDemoId(), true);
+    importGuests(expired.id, { lines: ["Ana", "Ben"] });
+    const fresh = createEventFromBody(DEMO_EVENT, newDemoId(), true);
+    const kept = createEventFromBody(DEMO_EVENT, "user_a", true);
     const s = state();
-    s.events.set(stale.id, { ...stale, created_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString() });
+    const dayAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    s.events.set(expired.id, { ...expired, created_at: dayAgo });
+    s.events.set(kept.id, { ...kept, created_at: dayAgo });
     expect(sweepDemoState(24)).toBe(1);
-    expect([...s.events.keys()].sort()).toEqual([fresh.id, owned.id].sort());
-    expect([...s.guests.values()].some((g) => g.event_id === stale.id)).toBe(false);
-    expect([...s.definitions.values()].some((d) => d.event_id === stale.id)).toBe(false);
+    expect([...s.events.keys()].sort()).toEqual([fresh.id, kept.id].sort());
+    expect([...s.guests.values()].some((g) => g.event_id === expired.id)).toBe(false);
+    expect([...s.definitions.values()].some((d) => d.event_id === expired.id)).toBe(false);
     expect(sweepDemoState(24)).toBe(0);
   });
 });
@@ -76,7 +88,7 @@ describe("in the database", () => {
     await db.close();
   });
 
-  it("creates the demo event as a row the demo organizer owns and reuses it", async () => {
+  it("creates the demo event as a row the guest owns and reuses it", async () => {
     const id = newDemoId();
     const eventId = await demoEventFor(id);
     expect(await demoEventFor(id)).toBe(eventId);
@@ -84,15 +96,27 @@ describe("in the database", () => {
     expect((await withPersistedEvent(eventId, () => snapshot(eventId))).event.status).toBe("published");
   });
 
-  it("sweeps the demo rows older than the window and leaves the rest", async () => {
-    const stale = await demoEventFor(newDemoId());
+  it("sweeps a guest's demo rows older than the window and leaves the rest", async () => {
+    const expired = await demoEventFor(newDemoId());
     const fresh = await demoEventFor(newDemoId());
     const owned = await createPersistedEvent(() => createEventFromBody(DEMO_EVENT, "user_a"));
-    await db.query("update events set updated_at = now() - interval '25 hours' where id in ($1, $2)", [stale, owned.id]);
+    const kept = await demoEventFor("user_a");
+    await db.query("update events set updated_at = now() - interval '25 hours' where id in ($1, $2, $3)", [expired, owned.id, kept]);
     expect(await sweepDemoEvents(db, 24)).toBe(1);
     const ids = (await db.query("select id from events order by id")).map((r) => r.id);
-    expect(ids).not.toContain(stale);
-    expect(ids).toContain(fresh);
-    expect(ids).toContain(owned.id);
+    expect(ids).not.toContain(expired);
+    expect(ids).toEqual(expect.arrayContaining([fresh, owned.id, kept]));
+  });
+
+  it("hands a guest's event to an account once and consumes the guest id", async () => {
+    const guest = newDemoId();
+    const eventId = await demoEventFor(guest);
+    await handOffGuest(guest, "user_b");
+    expect(await isConsumedGuest(guest)).toBe(true);
+    expect((await listOwnedEvents(guest))).toEqual([]);
+    expect((await listOwnedEvents("user_b")).map((e) => [e.id, e.demo])).toEqual([[eventId, true]]);
+    expect((await withPersistedEvent(eventId, () => snapshot(eventId))).event.owner_id).toBe("user_b");
+    await handOffGuest(guest, "user_c");
+    expect((await listOwnedEvents("user_c"))).toEqual([]);
   });
 });

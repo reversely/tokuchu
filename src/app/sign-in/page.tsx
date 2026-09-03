@@ -23,7 +23,7 @@ async function sendLink(formData: FormData): Promise<void> {
   }
 }
 
-/** One field and one button: the address gets a magic link and the confirmation says where it went. */
+/** One field and one button: the address gets a magic link and the confirmation says where it went; a first sign-in creates the account. */
 export default async function Page({ searchParams }: Props) {
   const { sent, error, next } = await searchParams;
   return (
@@ -39,7 +39,8 @@ export default async function Page({ searchParams }: Props) {
               <p className="lead" data-testid="sign-in-sent">{sendsEmail ? "Check your email for the sign-in link" : "The sign-in link is in the server log"}</p>
             ) : (
               <form action={sendLink}>
-                <p className="lead">Enter the address on the organizer list to get a sign-in link</p>
+                <p className="lead" data-testid="sign-in-lead">Enter your email to get a sign-in link. A first sign-in creates your account.</p>
+                <p className="lead"><a href="/demo" data-testid="sign-in-demo">Try the demo</a> without an account</p>
                 <input type="hidden" name="next" value={returnPath(next)} />
                 <div className="field">
                   <label htmlFor="email">Email</label>

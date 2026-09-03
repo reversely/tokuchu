@@ -172,7 +172,7 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
 /**
  * The guided tour over the demo event: it walks the steps in order, spotlights each step's target,
  * narrates the organizer's situation, and drives the real controls when a step has an action. Mounted
- * only when the snapshot marks the event as a demo organizer's.
+ * only when the snapshot marks the event as the seeded demo.
  */
 export function Tour({ snap }: { snap: Snapshot }) {
   const [index, setIndex] = useState(() => startIndex(snap));

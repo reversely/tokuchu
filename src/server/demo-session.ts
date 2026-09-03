@@ -1,8 +1,9 @@
 /**
- * The guest session behind `/demo`: a demo organizer id signed with the auth secret. The signed
- * value travels in a cookie and, for a browser that drops the cookie, in the event URL and the demo
- * header (`src/demo/token.ts`). The id carries a fixed prefix so the owner of an event says whether
- * the event is a demo, and the signature keeps a visitor from naming another visitor's id.
+ * The guest session behind `/demo`: a guest id signed with the auth secret. The signed value is
+ * the guest's identity: it travels in the event URL as `t`, in a cookie set for convenience, and in
+ * the demo header the page derives from the token (`src/demo/token.ts`). The id carries a fixed
+ * prefix so the sweep tells a guest's rows from an account's, and the signature keeps a visitor from
+ * naming another visitor's id.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { authSecret } from "./auth-secret";
