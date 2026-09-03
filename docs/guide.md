@@ -2,6 +2,8 @@
 
 This guide walks an organizer through Tokuchu from sign-in to a filled store cart and through the store's side of the order, and names the WebMCP tool each screen calls. WebMCP is the browser standard that lets a page register tools an agent can call through `document.modelContext`. Tokuchu sits between two sets of those tools: the storefront's and its own.
 
+The app runs in two ways. In normal mode, the mode this guide shows, the organizer clicks through the screens and the server does the store work itself: it searches the catalog and opens the store's product page in a headless browser to call `get_customization` and `add_customized_to_cart`. In static mode (`TOKUCHU_STATIC=1`) the server makes no search and opens no store page; every capability is a WebMCP tool on a page, and an agent in the browser or in a terminal with a browser tool moves between Tokuchu's pages and the store's page itself. `docs/agent-playbook.md` is the prompt and the order of operations for that agent, and `scripts/agent-playbook.mjs` plays it without a model.
+
 | Who exposes it | Tool | What Tokuchu does with it |
 |---|---|---|
 | Shopify, on every storefront and at the Global Catalog endpoint | `search_catalog`, `get_product`, `get_cart`, `update_cart` and the rest of the catalog and cart set | Finds products across stores and reads their variants and delivery terms |

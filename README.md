@@ -1,6 +1,6 @@
 # Tokuchu
 
-Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled storefronts to coordinate personalized purchases for events. It acts as the agentic orchestration layer over WebMCP tools on both ends: Shopify's commerce tools for discovery, the demo store's own `get_customization` tool for the product's requirements, and the store's `add_customized_to_cart` tool, which fills the cart through Shopify's cart endpoint and returns the checkout link the organizer pays at. Tokuchu's own records register as WebMCP tools on the organizer's page. The project is built against one live demo store, deployed as a separate component, and is a submission to The WebMCP Challenge. The specification is `docs/prd.md`, the hop-by-hop routing is `docs/webmcp-routing.md`, and the screen-by-screen guide for an organizer is `docs/guide.md`.
+Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled storefronts to coordinate personalized purchases for events. It acts as the agentic orchestration layer over WebMCP tools on both ends: Shopify's commerce tools for discovery, the demo store's own `get_customization` tool for the product's requirements, and the store's `add_customized_to_cart` tool, which fills the cart through Shopify's cart endpoint and returns the checkout link the organizer pays at. Tokuchu's own records register as WebMCP tools on the organizer's page. The project is built against one live demo store, deployed as a separate component, and is a submission to The WebMCP Challenge. The specification is `docs/prd.md`, the hop-by-hop routing is `docs/webmcp-routing.md`, the screen-by-screen guide for an organizer is `docs/guide.md`, and the prompt and steps for an agent that drives both sides through their WebMCP tools is `docs/agent-playbook.md`.
 
 ## Who exposes what
 
@@ -26,7 +26,7 @@ Shopify gives every store a common commerce surface. Customworks extends it with
 | `packages/shopify-ucp/` | the client for the Global Catalog and a store's UCP endpoint, as a local workspace |
 | `integrations/customily/` | the merchant WebMCP tools the store's theme loads, with installation notes |
 | `tests/` | Playwright: the landing page, draft, invite, overview, experience, the tools through the polyfill, and the live flow demo |
-| `scripts/` | the database migration and the walkthrough capture |
+| `scripts/` | the database migration, the walkthrough capture, and the scripted agent playbook run (`agent-playbook.mjs`) |
 
 ## Running
 
