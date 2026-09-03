@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant A as Browser agent
+    participant T as Tokuchu tab
+    participant C as Customworks tab
+    A->>T: modelContext.getTools()
+    A->>T: list_guests { filter: "status:eq:going" }
+    A->>C: open the product page and getTools()
+    A->>C: get_customization { product_id }
+    A->>A: compare the fields with the guests
+    A->>T: set_gift_plan { rules, shop_domain, product_title, product_url }
+    A->>T: set_gift_customization { gift_id, fields, variants }
+    A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
+    A->>T: list_missing { definition_id } until every row answers
+    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: approve_specs { gift_id }
+    A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
+    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
