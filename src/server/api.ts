@@ -46,13 +46,14 @@ import {
 import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type Event, type MappingSource, type PersonalizationKind, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
-import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
+import { validateMappings } from "../domain/personalization";
 import { changesAfter, exceptionsFor, recordProcurementChange, resolveExceptionsByAnswer } from "../domain/procurement";
 import { slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
 import { afterRsvpWrite } from "./hooks";
+import { reconcileGift, requirementsFor, type RequirementConfirmation } from "./reconcile";
 import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
 import { tickAfterRead } from "./tick";
 
@@ -296,74 +297,20 @@ export type Requirement = {
   already: boolean;
   question?: { value_type: ValueType; constraints: Constraints };
   mapping?: PersonalizationMapping;
+  /** Set when the reconciliation left the requirement to the organizer: the candidate fields and why. */
+  confirmation?: RequirementConfirmation;
 };
 
 const isBlank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** The question a store field becomes: a date for a date kind, a file address for an image, a choice for an allowed set, and text with the store's cap otherwise. */
-function questionFor(field: PersonalizationField): Requirement["question"] {
-  const { max_length, allowed } = fieldConstraints(field);
-  if (field.kind === "date") return { value_type: "date", constraints: {} };
-  if (field.kind === "image") return { value_type: "file", constraints: {} };
-  if (allowed.length) return { value_type: "enum", constraints: { options: field.constraints?.options ?? allowed.map((value) => ({ value, label: value })) } };
-  const constraints: Constraints = {};
-  if (max_length !== undefined) constraints.max_length = max_length;
-  if (field.kind === "time") constraints.pattern = CLOCK_TIME.source;
-  return { value_type: "text", constraints };
-}
-
 /**
- * Resolves one store field in order: a stored mapping to the event, a literal, or the guest row; a
- * stored mapping to a definition; a name the guest row already holds; a definition an earlier request
- * created for this field; and otherwise a new question.
- */
-function resolveField(field: PersonalizationField, mapping: PersonalizationMapping | undefined, defs: AttributeDefinition[]): Requirement {
-  const base = { key: field.key, label: field.label, kind: field.kind };
-  const byId = new Map(defs.map((d) => [d.id, d]));
-  if (mapping && mapping.source.type !== "definition") return { ...base, source: mapping.source.type, already: true };
-  if (mapping?.source.type === "definition" && byId.has(mapping.source.definition_id)) return { ...base, source: "definition", definition_id: mapping.source.definition_id, already: true };
-  if (field.kind === "name") {
-    // A printed_name question the organizer added from the library stands in for the guest's display name.
-    const printed = defs.find((d) => d.key === "printed_name");
-    if (printed) return { ...base, source: "definition", definition_id: printed.id, already: true, mapping: { vendor_field_key: field.key, source: { type: "definition", definition_id: printed.id, subject_scope: printed.scope } } };
-    return { ...base, source: "guest", already: true, mapping: { vendor_field_key: field.key, source: { type: "guest", key: "display_name" } } };
-  }
-  const earlier = defs.find((d) => d.vendor_field?.key === field.key);
-  if (earlier) return { ...base, source: "definition", definition_id: earlier.id, already: true, mapping: { vendor_field_key: field.key, source: { type: "definition", definition_id: earlier.id, subject_scope: earlier.scope } } };
-  return { ...base, source: "question", already: false, question: questionFor(field) };
-}
-
-/** The variant axis the store sells by (Size, or the first axis with a choice) as a choice requirement, when the product has one. */
-function variantRequirement(gift: Batch, defs: AttributeDefinition[]): Requirement | null {
-  const byOption = new Map<string, Map<string, string>>();
-  for (const v of gift.variants ?? []) for (const o of v.options ?? []) {
-    if (!byOption.has(o.name)) byOption.set(o.name, new Map());
-    byOption.get(o.name)!.set(slugValue(o.label), o.label);
-  }
-  const optionName = [...byOption.keys()].find((n) => /size/i.test(n)) ?? [...byOption.entries()].find(([, m]) => m.size > 1)?.[0];
-  if (!optionName) return null;
-  const options = [...byOption.get(optionName)!].map(([value, label]) => ({ value, label }));
-  if (options.length < 2) return null;
-  const key = `variant_${slugValue(optionName)}`;
-  const existing = defs.find((d) => d.key === key);
-  const base = { key, label: optionName, kind: "variant" as const };
-  if (existing) return { ...base, source: "definition", definition_id: existing.id, already: true };
-  return { ...base, source: "question", already: false, question: { value_type: "enum", constraints: { options } } };
-}
-
-/**
- * Compares the product's requirements with what the event already holds: each store field with the
- * source that fills it, plus the variant axis as a choice. A field with nothing to fill it is a question.
+ * Compares the product's requirements with what the event already holds through the reconciliation
+ * service (#38): the variant axis as a choice, then each store field with the source that fills it. A
+ * field with nothing to fill it is a question, and an ambiguous one waits for the organizer.
  */
 export function giftRequirements(eventId: string, giftId: string): Requirement[] {
   const gift = requireGift(eventId, giftId);
-  const defs = definitionsFor(eventId);
-  const mappings = new Map((gift.personalization_mappings ?? []).map((m) => [m.vendor_field_key, m]));
-  const out: Requirement[] = [];
-  const variant = variantRequirement(gift, defs);
-  if (variant) out.push(variant);
-  for (const field of gift.personalization?.fields ?? []) out.push(resolveField(field, mappings.get(field.key), defs));
-  return out;
+  return requirementsFor(gift, definitionsFor(eventId));
 }
 
 /** The definitions a requirement list asks attendees for: every guest-scope definition a requirement names. */
@@ -385,6 +332,8 @@ function missingDefinitionIds(guest: Guest, definitionIds: string[]): string[] {
 export async function requestFromAttendees(eventId: string, giftId: string) {
   const event = requireEvent(eventId);
   const gift = requireGift(eventId, giftId);
+  // The model step runs here, outside the transaction, and records its proposals for the reads below.
+  await reconcileGift(gift, definitionsFor(eventId));
   const outgoing = transactionally(() => {
     const variantRows = [...gift.mapping];
     const fieldRows = [...(gift.personalization_mappings ?? [])];
