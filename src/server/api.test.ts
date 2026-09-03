@@ -145,6 +145,11 @@ describe("the API operations", () => {
     expect(manifestView(event.id, gift.id).rows).toHaveLength(2);
     const patched = updateGiftFromBody(event.id, gift.id, { mapping: [...gift.mapping, { definition_id: dietary.id, value: "none", variant_id: "var_plain" }] });
     expect(patched.quantities.reduce((n, q) => n + q.quantity, 0)).toBe(2);
+    // A patch carrying one key leaves every other field as it was (#54).
+    const rulesOnly = updateGiftFromBody(event.id, gift.id, { rules: gift.rules });
+    expect(rulesOnly).toMatchObject({ product_title: gift.product_title, shop_domain: gift.shop_domain, default_variant_id: gift.default_variant_id });
+    expect(rulesOnly.variants).toEqual(gift.variants);
+    expect(rulesOnly.mapping).toEqual(patched.mapping);
     expect(() => createGiftFromBody(event.id, {})).toThrow(/product_id/);
     expect(() => giftView(event.id, "gift_none")).toThrow(/No gift/);
     deleteGift(event.id, gift.id);

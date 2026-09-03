@@ -251,7 +251,10 @@ export function createGiftFromBody(eventId: string, body: unknown) {
 
 export function updateGiftFromBody(eventId: string, giftId: string, body: unknown) {
   const gift = requireGift(eventId, giftId);
-  const { personalization, ...patch } = parseBody(GiftBody.partial(), body);
+  const parsed = parseBody(GiftBody.partial(), body);
+  // zod fills defaults under partial(), so only the keys the body sent reach the gift; the rest stay as they are.
+  const sent = new Set(Object.keys((body ?? {}) as Record<string, unknown>));
+  const { personalization, ...patch } = Object.fromEntries(Object.entries(parsed).filter(([key]) => sent.has(key))) as typeof parsed;
   updateGift(giftId, patch as Partial<GiftInput>);
   // A re-read schema goes through the diff, so a changed requirement never continues silently against the old one.
   if (personalization) applyRequirementSchema(giftId, { schema_id: personalization.schema_id ?? deriveSchemaId(gift.shop_domain, gift.product_id), version: personalization.schema_version ?? deriveSchemaVersion(personalization.fields), product_id: gift.product_id, requirements: personalization.fields }, "organizer");
