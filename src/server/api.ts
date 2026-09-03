@@ -50,6 +50,7 @@ import { validateMappings } from "../domain/personalization";
 import { changesAfter, exceptionsFor, recordProcurementChange, resolveExceptionsByAnswer } from "../domain/procurement";
 import { slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
+import { approvalState } from "./approval";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
 import { afterRsvpWrite } from "./hooks";
@@ -184,7 +185,7 @@ function changedSinceApproval(guest: Guest, approvedSeqs: number[]): boolean {
 /** The dashboard's whole view; `demo` says the event is the seeded walkthrough, so the page can mount the tour. */
 export function snapshot(eventId: string) {
   const event = requireEvent(eventId);
-  const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g) }));
+  const gifts = giftsFor(eventId).map((g) => ({ ...g, quantities: quantities(g), approval: approvalState(g) }));
   const approvedSeqs = gifts.flatMap((g) => (g.approved_at && typeof g.approved_seq === "number" ? [g.approved_seq] : []));
   const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g), changed_since_approval: changedSinceApproval(g, approvedSeqs) }));
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
@@ -249,7 +250,9 @@ export function updateGiftFromBody(eventId: string, giftId: string, body: unknow
   requireGift(eventId, giftId);
   const patch = parseBody(GiftBody.partial(), body);
   updateGift(giftId, patch as Partial<GiftInput>);
-  if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
+  // A replaced schema changes what the store asks for, so it leaves an approval stale like a plan edit (#44).
+  const schemaChanged = patch.personalization !== undefined;
+  if (schemaChanged || patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", schemaChanged ? "The product's customization schema changed" : "The organizer changed the gift's plan");
   return giftView(eventId, giftId);
 }
 

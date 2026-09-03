@@ -93,6 +93,9 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const fill = gift?.cart_fill ?? null;
   const filling = fill?.status === "running";
   const changed = attendees.filter((g) => g.changed_since_approval).length;
+  // The approval is stale once a fulfilment-affecting change follows the approved revision (#44); a changed answer on any question also offers the action.
+  const approval = gift?.approval ?? null;
+  const stale = approved && (approval?.stale === true || changed > 0);
   const store = gift ? bareHost(gift.shop_domain) || "the store" : "the store";
   const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
   const incomplete = [...requests.values()].filter((r) => !r.complete).length;
@@ -296,11 +299,20 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
               ) : (
                 <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Approving" : "Approve and fill the cart"}</button>
               )}
-              {approved && changed > 0 && (
-                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || filling} data-testid="approve-again">{busy === "approve" ? "Approving" : "Approve again"}</button>
+              {stale && (
+                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || filling} data-testid="re-approve">{busy === "approve" ? "Approving" : "Re-approve"}</button>
               )}
             </div>
           </div>
+          {approved && approval && (
+            approval.stale ? (
+              <p className="hint" style={{ marginTop: 12 }} data-testid="approval-stale" data-approved={approval.approved_revision ?? ""} data-current={approval.current_revision}>
+                Approved at revision {approval.approved_revision}; revision {approval.current_revision} has changes since
+              </p>
+            ) : (
+              <p className="hint" style={{ marginTop: 12 }} data-testid="approval-revision" data-approved={approval.approved_revision ?? ""}>Approved at revision {approval.approved_revision}</p>
+            )
+          )}
           {approved && changed > 0 && <p className="hint" style={{ marginTop: 12 }} data-testid="changed-count">{changed} {changed === 1 ? "attendee" : "attendees"} changed an answer after approval</p>}
           {approved && filling && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart</p>}
           {approved && fill?.status === "done" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filled">Cart filled</p>}
