@@ -10,6 +10,7 @@ import type { GrantView } from "../../../server/grants";
 import type { GrantPermission, VendorUpdate } from "../../../domain/types";
 import { slugValue } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
+import { cellState, ExceptionsList, GridCell, GridLegend, ProcurementState, requirementKey, useFulfillmentManifest } from "./readiness";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -236,6 +237,12 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
   const incomplete = [...requests.values()].filter((r) => !r.complete).length;
 
+  // The grid's cell states come from the organizer's fulfilment manifest (#49), read from its route on every snapshot sequence.
+  const manifest = useFulfillmentManifest(snap.event.id, gift?.id, snap.seq);
+  const rows = new Map((manifest?.attendees ?? []).map((a) => [a.attendee_ref, a]));
+  const procurement = snap.procurements.find((p) => p.gift_id === gift?.id);
+  const exceptions = snap.exceptions.filter((e) => e.procurement_id === gift?.id);
+
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [updates, setUpdates] = useState<VendorUpdate[]>([]);
   const [busy, setBusy] = useState<null | "request" | "follow_up" | "approve">(null);
@@ -298,19 +305,6 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
     setBusy(null);
   }
 
-  function cell(guestId: string, value: unknown, def: Definition, going: boolean) {
-    const label = Array.isArray(value)
-      ? (value as string[]).map((x) => def.constraints.options?.find((o) => o.value === x)?.label ?? x).join(" ")
-      : value === undefined || value === "" ? "" : def.constraints.options?.find((o) => o.value === value)?.label ?? String(value);
-    if (label) {
-      const shown = def.value_type === "file" ? <a href={label} target="_blank" rel="noreferrer">picture</a> : label;
-      return requests.get(guestId)?.definition_ids.includes(def.id) ? <span className="answered" data-state="answered">{shown}</span> : shown;
-    }
-    const requested = requests.get(guestId)?.definition_ids.includes(def.id);
-    const required = def.required_rule === "always" || (def.required_rule === "going" && going);
-    return requested || required ? <span className="missing" data-state="missing">missing</span> : <span className="quiet">not given</span>;
-  }
-
   return (
     <div className="wrap solo">
       {snap.gifts.length > 1 && (
@@ -360,11 +354,12 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
       <section className="block" aria-labelledby="records" data-testid="attendees" data-gift={gift?.id}>
         <div className="labelrow"><h2 id="records">Attendees</h2><span className="eyebrow">{attendees.length} responses</span></div>
+        {gift && <ProcurementState procurement={procurement} current={approval?.current_revision ?? 0} approved={approval?.approved_revision ?? null} />}
         {attendees.length === 0 ? (
           <p className="hint" style={{ color: "var(--muted)" }} data-testid="attendees-empty">No attendees yet</p>
         ) : (
           <div className="list" style={{ overflowX: "auto" }}>
-            <table className="records" data-testid="attendees-grid">
+            <table className="records" data-testid="attendees-grid" data-manifest={manifest ? manifest.revision : ""}>
               <thead>
                 <tr>
                   <th>Attendee</th>
@@ -380,7 +375,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                     <tr key={g.id} data-testid="attendee-row" data-request={request ? (request.complete ? "complete" : "incomplete") : "none"} data-changed={g.changed_since_approval ? "true" : "false"}>
                       <td>{g.display_name}</td>
                       <td>{STATUS_LABEL[g.status]}</td>
-                      {columns.map((d) => <td key={d.id}>{cell(g.id, g.values[d.id], d, g.status === "going")}</td>)}
+                      {columns.map((d) => <td key={d.id} data-requirement={requirementKey(d)}><GridCell def={d} cell={cellState(d, g.values[d.id], rows.get(g.id), g.status === "going")} /></td>)}
                       {(requests.size > 0 || approved) && (
                         <td>
                           {g.changed_since_approval ? (
@@ -399,6 +394,8 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
             </table>
           </div>
         )}
+        {attendees.length > 0 && <GridLegend />}
+        <ExceptionsList exceptions={exceptions} guests={snap.guests} definitions={snap.definitions} requests={requests} />
       </section>
 
       {gift && (

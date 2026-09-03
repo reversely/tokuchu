@@ -305,7 +305,7 @@ export const STEPS: TourStep[] = [
     target: { testId: "attendees", gift: "crewneck" },
     waitTarget: "attendees",
     title: "Attendees answer",
-    narration: "Replies arrive as attendees fill in the form, and each invite page registers submit_rsvp over WebMCP so an agent can answer through it too. In this demo the three replies load through that tool's RSVP route with the size, the star map details, and the photo, and each one fills a row in the records grid.",
+    narration: "Replies arrive as attendees fill in the form, and each invite page registers submit_rsvp over WebMCP so an agent can answer through it too. In this demo the three replies load through that tool's RSVP route with the size, the star map details, and the photo, and each one fills a row in the records grid. Every cell shows where its requirement stands: resolved once the value passes the store's constraints and missing until the attendee answers.",
     action: "answer",
     done: hasAnswers,
     wire: answersWire

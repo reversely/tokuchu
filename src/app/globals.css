@@ -212,6 +212,18 @@ table.records tr:nth-child(even) td { background: #FBFDFF; }
 table.records .missing { color: var(--sky-dark); }
 table.records .answered { color: #1d6b3a; }
 table.records .quiet { color: var(--muted); }
+/* Cell states (#49): the value the row grades, the state under it, and the constraint or the store's message behind it. */
+table.records .cellstate { display: flex; flex-direction: column; gap: 2px; }
+table.records .cellvalue { color: var(--ink); }
+table.records .cellwhy { font-size: 12px; }
+.state { display: inline-block; font-size: 12px; font-weight: 600; line-height: 1.3; padding: 2px 8px; border-radius: 999px; background: var(--pale); color: var(--navy); white-space: nowrap; }
+.state.resolved { background: #e6f7ec; color: #1d6b3a; }
+.state.missing { background: #fff4e0; color: #8a4b00; }
+.state.invalid, .state.vendor_rejected, .state.exception { background: #fdecec; color: #9b1c1c; }
+.state.mapping_unresolved, .state.needs_confirmation { background: #efe9ff; color: #4c2c9b; }
+.state.changed_after_approval { background: #e3f1fb; color: #1b4f7a; }
+.legend { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px 20px; font-size: 13px; }
+.legend li { display: flex; align-items: baseline; gap: 10px; }
 .sendrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
 /* The demo tour: a spotlight cut out of a dim mask around the step's target and a callout beside it. */
