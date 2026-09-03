@@ -50,6 +50,7 @@ import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
 import { afterRsvpWrite } from "./hooks";
 import { deliverAfterCommit, deliverAll, type Outgoing } from "./request-mail";
+import { tickAfterRead } from "./tick";
 
 export { BadRequestError, NotFoundError };
 
@@ -183,6 +184,7 @@ export function snapshot(eventId: string) {
   const guests = guestsFor(eventId).map((g) => ({ ...g, values: valuesFor(g), changed_since_approval: changedSinceApproval(g, approvedSeqs) }));
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
+  tickAfterRead(eventId);
   return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
 }
 
