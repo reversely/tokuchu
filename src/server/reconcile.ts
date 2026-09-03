@@ -12,7 +12,7 @@
  */
 import { CLOCK_TIME, fieldConstraints, KIND_VALUE_TYPES } from "../domain/personalization";
 import type { AttributeDefinition, Batch, Constraints, MappingSource, Option, PersonalizationField, PersonalizationKind, PersonalizationMapping, PersonalizationTransform, ValueType } from "../domain/types";
-import { slugValue } from "../domain/values";
+import { canonicalRequirementKey, slugValue } from "../domain/values";
 import type { Requirement } from "./api";
 import { llmEnabled } from "./flags";
 
@@ -148,7 +148,7 @@ export function proposedDefinition(req: VendorRequirement): ProposedDefinition {
 /* ---- The decision order ---- */
 
 type Step = (req: VendorRequirement, ctx: Context) => ReconciliationDecision | null;
-type Context = { defs: AttributeDefinition[]; byId: Map<string, AttributeDefinition>; saved: Map<string, PersonalizationMapping>; confirmations: Map<string, Confirmation>; proposals: Map<string, LlmMatch>; threshold: number };
+type Context = { defs: AttributeDefinition[]; shopDomain: string; byId: Map<string, AttributeDefinition>; saved: Map<string, PersonalizationMapping>; confirmations: Map<string, Confirmation>; proposals: Map<string, LlmMatch>; threshold: number };
 
 const map = (req: VendorRequirement, def: AttributeDefinition, method: MatchMethod, confidence: number): ReconciliationDecision => ({ requirement_id: req.key, decision: "map_existing", attribute_id: def.id, confidence, method });
 const candidate = (def: AttributeDefinition, method: MatchMethod, confidence: number): Candidate => ({ attribute_id: def.id, label: def.label, confidence, method });
@@ -165,7 +165,9 @@ const confirmed: Step = (req, ctx) => {
 
 /** A definition carrying the requirement's key, or created by the vendor field with that key. */
 const exact: Step = (req, ctx) => {
-  const def = ctx.defs.find((d) => d.vendor_field?.key === req.key) ?? ctx.defs.find((d) => d.key === req.key);
+  // The canonical key drops a leading store name, so a store's own prefix on a field still meets the shared concept (#39).
+  const canonical = canonicalRequirementKey(req.key, ctx.shopDomain);
+  const def = ctx.defs.find((d) => d.vendor_field?.key === req.key) ?? ctx.defs.find((d) => d.key === req.key) ?? ctx.defs.find((d) => d.key === canonical && d.vendor_field?.kind === req.kind);
   if (!def) return null;
   const why = incompatibility(req, def);
   return why ? confirm(req, [candidate(def, "exact", 0.5)], why) : map(req, def, "exact", 1);
@@ -209,6 +211,7 @@ const STEPS: Step[] = [confirmed, exact, saved, alias, proposed, create];
 function context(input: ReconcileInput, options: ReconcileOptions): Context {
   return {
     defs: input.tokuchuAttributes,
+    shopDomain: input.vendorSchema.id.split("/")[0] ?? "",
     byId: new Map(input.tokuchuAttributes.map((d) => [d.id, d])),
     saved: new Map(input.savedMappings.map((m) => [m.vendor_field_key, m])),
     confirmations: options.confirmations ?? new Map(),
