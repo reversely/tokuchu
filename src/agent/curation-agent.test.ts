@@ -4,10 +4,11 @@
  * every id the model uses is a retrieved one, and the assertions check the rows the tools wrote.
  */
 import { Usage, type Model, type ModelRequest, type ModelResponse } from "@openai/agents";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { giftsFor } from "../domain/gifts";
-import { publishEvent, resetState, upsertDefinition } from "../domain/store";
-import { createEventFromBody, submitRsvp } from "../server/api";
+import { publishEvent, requestsFor, resetState, upsertDefinition } from "../domain/store";
+import { createEventFromBody, createGiftFromBody, guestList, requireEvent, submitRsvp } from "../server/api";
+import { setMailer, type MailMessage } from "../server/mail";
 import { runCurationAgent, type SearchFn } from "./curation-agent";
 import type { Candidate } from "./search";
 
@@ -191,11 +192,134 @@ describe("CurationAgent proposes from retrieved context (#120)", () => {
     });
     await runCurationAgent({ eventId: event.id }, "Sweatshirts.", { model, search: fakeSearch });
     const tools = model.requests[0].tools.map((t) => t.name);
-    for (const forbidden of ["send", "approve", "checkout", "lock", "add_", "pay"]) expect(tools.some((t) => t.includes(forbidden))).toBe(false);
+    for (const forbidden of ["send", "approve", "checkout", "lock", "to_cart", "pay"]) expect(tools.some((t) => t.includes(forbidden))).toBe(false);
     const gift = giftsFor(event.id)[0];
     expect(gift.cart_id).toBeNull();
     expect(gift.checkout_id).toBeNull();
     expect(gift.locked_at).toBeNull();
+  });
+});
+
+/** A published event with a personalized gift whose caption question the store asks, so a request has something to send. */
+function seedGift(eventId: string) {
+  return createGiftFromBody(eventId, {
+    product_id: "gid://shopify/Product/1",
+    shop_domain: "customworks.example",
+    product_title: "Star Map Crewneck",
+    variants: [{ id: "v-m", title: "M", price_cents: 4500, currency: "CAD", available: true, options: [] }],
+    personalization: { fields: [{ key: "caption", label: "Caption", kind: "name", required: true, constraints: { max_length: 20 } }] },
+    default_variant_id: "v-m"
+  });
+}
+
+/** A mailer that keeps every message so the delivery states read as sent. */
+function fakeMailer() {
+  const sent: MailMessage[] = [];
+  setMailer({
+    async send(message) {
+      sent.push(message);
+      return "sent";
+    }
+  });
+  return sent;
+}
+
+describe("the event-management tools (#32)", () => {
+  beforeEach(() => {
+    resetState();
+    fakeMailer();
+  });
+  afterEach(() => setMailer(null));
+
+  it("adds guests from a list and records a reply for one of them as the organizer", async () => {
+    const { event, name } = seed();
+    const model = scriptedModel((request, turn) => {
+      const results = outputsByName(request);
+      if (turn === 1) return [call("c1", "add_guests", { text: "Dana Park <dana@example.com>\nGuest One\nnew@example.com" })];
+      if (turn === 2) {
+        const added = results.add_guests![0] as { added: number; guests: { id: string; untrusted_name: string; has_email: boolean }[] };
+        // Guest One is already on the list; the bare email names its local part.
+        expect(added.added).toBe(2);
+        expect(added.guests.map((g) => g.untrusted_name)).toEqual(["Dana Park", "new"]);
+        expect(added.guests[0].has_email).toBe(true);
+        return [call("c2", "set_guest_reply", { guest_id: added.guests[0].id, status: "going", answers: JSON.stringify({ [name.id]: "Dana" }) })];
+      }
+      const reply = results.set_guest_reply![0] as { status: { from: string; to: string }; untrusted_answers: Record<string, unknown>; source: string };
+      expect(reply).toMatchObject({ status: { from: "no_reply", to: "going" }, untrusted_answers: { [name.id]: "Dana" }, source: "organizer" });
+      return [say("Added Dana Park and one more and marked Dana as going with the name Dana.")];
+    });
+    const result = await runCurationAgent({ eventId: event.id }, "Add Dana Park, dana@example.com, and mark them going with the name Dana.", { model, search: fakeSearch });
+    const dana = guestList(event.id, []).find((g) => g.display_name === "Dana Park")!;
+    expect(dana.status).toBe("going");
+    expect(dana.values[name.id]).toBe("Dana");
+    expect(result.tool_calls.map((c) => c.label)).toEqual(["Adding guests", "Recording the reply"]);
+  });
+
+  it("returns the answer's validation error instead of writing it", async () => {
+    const { event, name } = seed();
+    const guest = guestList(event.id, []).find((g) => g.display_name === "Guest Two")!;
+    const model = scriptedModel((request, turn) => {
+      const results = outputsByName(request);
+      if (turn === 1) return [call("c1", "set_guest_reply", { guest_id: guest.id, status: null, answers: JSON.stringify({ [name.id]: "A name far longer than the forty characters the field allows" }) })];
+      expect(results.set_guest_reply![0]).toMatchObject({ error: expect.stringMatching(/40|long/) });
+      return [say("The printed name is over the limit; what should it read?")];
+    });
+    await runCurationAgent({ eventId: event.id }, "Set Guest Two's name.", { model, search: fakeSearch });
+    expect(guestList(event.id, []).find((g) => g.id === guest.id)!.values[name.id]).toBeUndefined();
+  });
+
+  it("edits the event details and returns only the fields that changed", async () => {
+    const { event } = seed();
+    const model = scriptedModel((request, turn) => {
+      const results = outputsByName(request);
+      if (turn === 1) return [call("c1", "update_event_details", { title: null, starts_at: null, venue: { name: "The Observatory", line1: null, city: null, region: null, postal_code: null, country: null }, needed_by: "2030-01-08", notes: null })];
+      const changed = (results.update_event_details![0] as { changed: Record<string, { from: unknown; to: unknown }> }).changed;
+      expect(Object.keys(changed).sort()).toEqual(["needed_by", "venue"]);
+      expect(changed.needed_by).toEqual({ from: null, to: "2030-01-08" });
+      expect(changed.venue.to).toMatchObject({ name: "The Observatory", city: "Toronto" });
+      return [say("Set the venue name to The Observatory and the needed-by date to January 8.")];
+    });
+    await runCurationAgent({ eventId: event.id }, "Call the venue The Observatory and have the gifts arrive by January 8.", { model, search: fakeSearch });
+    const updated = requireEvent(event.id);
+    expect(updated.venue).toMatchObject({ name: "The Observatory", line1: "1 Street" });
+    expect(updated.delivery.needed_by).toBe("2030-01-08");
+    expect(updated.title).toBe("Winter gathering");
+  });
+
+  it("requests the missing values, follows up on the open ones, and reads the delivery states", async () => {
+    const { event } = seed();
+    const gift = seedGift(event.id);
+    const model = scriptedModel((request, turn) => {
+      const results = outputsByName(request);
+      if (turn === 1) return [call("c1", "read_status", {})];
+      if (turn === 2) {
+        const status = results.read_status![0] as { counts: { going: number }; gifts: { id: string; units: number; cart: { priced: boolean } }[]; requests: unknown[] };
+        expect(status.counts.going).toBe(2);
+        expect(status.gifts).toEqual([expect.objectContaining({ id: gift.id, units: 2, cart: expect.objectContaining({ priced: false, fill_status: null }) })]);
+        expect(status.requests).toEqual([]);
+        return [call("c2", "request_from_attendees", { gift_id: status.gifts[0].id })];
+      }
+      if (turn === 3) {
+        const requested = results.request_from_attendees![0] as { recorded: number; requests: { delivery: string; complete: boolean }[] };
+        // Guest One's printed name fills the caption and Guest Two lacks it; the seeded party has no email, so the request settles as no_address.
+        expect(requested.recorded).toBe(1);
+        expect(requested.requests.every((r) => r.delivery === "no_address" && !r.complete)).toBe(true);
+        return [call("c3", "follow_up", { gift_id: gift.id })];
+      }
+      if (turn === 4) {
+        expect(results.follow_up![0]).toMatchObject({ followed_up: 1 });
+        return [call("c4", "read_status", {})];
+      }
+      const status = results.read_status![1] as { requests: { follow_ups: number; delivery: string }[]; follow_ups: { kind: string; definition_label: string | null }[]; guests: { has_email: boolean }[] };
+      expect(status.requests.map((r) => r.follow_ups)).toEqual([1]);
+      expect(status.follow_ups.some((f) => f.kind === "missing_value" && typeof f.definition_label === "string")).toBe(true);
+      expect(status.guests.every((g) => !g.has_email)).toBe(true);
+      return [say("One request went out for the caption with one follow-up; the attendee has no email so nothing was delivered.")];
+    });
+    const result = await runCurationAgent({ eventId: event.id }, "Ask everyone for the caption and chase them.", { model, search: fakeSearch });
+    expect(requestsFor(event.id, gift.id)).toHaveLength(1);
+    expect(requestsFor(event.id, gift.id).every((r) => r.followed_up_at.length === 1 && r.delivery === "no_address")).toBe(true);
+    expect(result.tool_calls.map((c) => c.tool)).toEqual(["read_status", "request_from_attendees", "follow_up", "read_status"]);
   });
 });
 
