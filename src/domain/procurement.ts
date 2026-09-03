@@ -4,9 +4,10 @@
  * reader lists the changes after a revision in the shape get_changes returns. The store's
  * requirement key (a vendor field key or the variant question's key) names each requirement.
  */
-import type { ActorType, Batch, ChangeEntry, Procurement, ProcurementChangeType, ProcurementException, ProcurementStatus } from "./types";
-import { getGift, manifest } from "./gifts";
+import type { ActorType, Batch, ChangeEntry, PersonalizationMapping, Procurement, ProcurementChangeType, ProcurementException, ProcurementStatus } from "./types";
+import { getGift, manifest, updateGift, type GiftInput } from "./gifts";
 import { canMove, isCollecting } from "./procurement-status";
+import { diffRequirements, isUnchanged, type SchemaDiff, type VendorRequirementSchema } from "./requirement-schema";
 import { actorOf, appendChange, definitionsFor, getGuest, newId, procurementFor, state, updateProcurement } from "./store";
 
 /** One change as get_changes returns it. */
@@ -137,6 +138,41 @@ export function syncReadiness(giftId: string, source: string): Procurement {
   if (!isCollecting(row.status)) return row;
   const target: ProcurementStatus = rowsResolved(getGift(giftId)) ? "ready" : "collecting";
   return target === row.status ? row : moveProcurement(giftId, target, source, { summary: target === "ready" ? "Every attendee row resolves" : "An attendee row no longer resolves" });
+}
+
+/* ---- Requirement schema ---- */
+
+export type SchemaApplied = { procurement: Procurement; diff: SchemaDiff | null; reused: boolean };
+
+/**
+ * Applies a store's requirement schema to a gift and its procurement. The same id and version as the
+ * procurement carries reuses everything persisted. A new version diffs the requirements: a removed
+ * one drops its mapping, a changed one keeps its mapping flagged unresolved, and readiness is
+ * recomputed; an approved procurement returns to collecting or ready and the change is logged. A
+ * gift with no version yet adopts the schema without a diff.
+ */
+export function applyRequirementSchema(giftId: string, schema: VendorRequirementSchema, source: string): SchemaApplied {
+  const gift = getGift(giftId);
+  const row = procurementFor(giftId);
+  if (row.requirement_schema_id === schema.schema_id && row.requirement_schema_version === schema.version) return { procurement: row, diff: null, reused: true };
+  const personalization = { fields: schema.requirements, schema_id: schema.schema_id, schema_version: schema.version };
+  const established = row.requirement_schema_id === schema.schema_id && row.requirement_schema_version !== undefined && gift.personalization?.fields;
+  if (!established) {
+    updateGift(giftId, { personalization } as Partial<GiftInput>);
+    return { procurement: updateProcurement(giftId, { requirement_schema_id: schema.schema_id, requirement_schema_version: schema.version }), diff: null, reused: false };
+  }
+  const diff = diffRequirements(gift.personalization?.fields ?? [], schema.requirements);
+  const removed = new Set(diff.removed);
+  const changed = new Set(diff.changed);
+  const mappings: PersonalizationMapping[] = (gift.personalization_mappings ?? []).filter((m) => !removed.has(m.vendor_field_key)).map((m) => (changed.has(m.vendor_field_key) ? { ...m, resolution: "unresolved" } : m));
+  updateGift(giftId, { personalization, personalization_mappings: mappings } as Partial<GiftInput>);
+  updateProcurement(giftId, { requirement_schema_id: schema.schema_id, requirement_schema_version: schema.version });
+  const parts = [diff.added.length ? `added ${diff.added.join(", ")}` : "", diff.removed.length ? `removed ${diff.removed.join(", ")}` : "", diff.changed.length ? `changed ${diff.changed.join(", ")}` : ""].filter(Boolean);
+  recordProcurementChange(giftId, "mapping_changed", source, `The store's requirement schema moved to version ${schema.version}${parts.length ? `: ${parts.join("; ")}` : ""}`);
+  // A schema change under an approval invalidates it: the procurement returns to collecting and readiness decides whether it is ready again.
+  if (row.status === "approved" && !isUnchanged(diff)) moveProcurement(giftId, "collecting", source, { summary: "The requirement schema changed after the approval" });
+  syncReadiness(giftId, source);
+  return { procurement: procurementFor(giftId), diff, reused: false };
 }
 
 /* ---- Exceptions ---- */

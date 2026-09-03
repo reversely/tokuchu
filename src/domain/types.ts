@@ -268,6 +268,10 @@ export type FieldConstraints = z.infer<typeof FieldConstraints>;
 export const PersonalizationField = z.object({ key: z.string(), label: z.string(), kind: PersonalizationKind, max_length: z.number().int().optional(), required: z.boolean(), allowed_values: z.array(z.string()).optional(), constraints: FieldConstraints.optional() });
 export type PersonalizationField = z.infer<typeof PersonalizationField>;
 
+/** The store's field schema a gift carries: the fields, and the requirement schema's id and version once a read established them. */
+export const PersonalizationSchema = z.object({ fields: z.array(PersonalizationField), schema_id: z.string().optional(), schema_version: z.string().optional() });
+export type PersonalizationSchema = z.infer<typeof PersonalizationSchema>;
+
 /** The transforms a mapping may apply; personalization.ts states what each accepts. */
 export const PERSONALIZATION_TRANSFORMS = ["uppercase", "lowercase", "date_only", "location_query"] as const;
 export const PersonalizationTransform = z.enum(PERSONALIZATION_TRANSFORMS);
@@ -360,8 +364,8 @@ export const Batch = z.object({
   mapping: z.array(VariantMappingRow),
   default_variant_id: z.string().nullable(),
   variants: z.array(Variant),
-  /** Set on a personalized product: the vendor's field schema the search read. */
-  personalization: z.object({ fields: z.array(PersonalizationField) }).nullable().optional(),
+  /** Set on a personalized product: the vendor's field schema the search read, with the schema's id and version when known. */
+  personalization: PersonalizationSchema.nullable().optional(),
   /** Set by set_personalization_mapping: one source per vendor field. */
   personalization_mappings: z.array(PersonalizationMapping).nullable().optional(),
   missing_value_fallback: MissingValueFallback,

@@ -45,11 +45,12 @@ import {
   writeValue,
   type EventInput
 } from "../domain/store";
-import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationField, PersonalizationMapping, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type Event, type MappingSource, type PersonalizationKind, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
+import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest, GuestStatus, MissingValueFallback, PersonalizationMapping, PersonalizationSchema, PostLockCancellation, Segment, UpdateKind, ValueType, Variant, VariantMappingRow, Venue, type AttributeDefinition, type Batch, type Event, type MappingSource, type PersonalizationField, type PersonalizationKind, type VendorUpdate, DeliveryWindow, Delivery } from "../domain/types";
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { validateMappings } from "../domain/personalization";
-import { changesAfter, exceptionsFor, moveProcurement, recordProcurementChange, resolveExceptionsByAnswer, syncReadiness } from "../domain/procurement";
+import { applyRequirementSchema, changesAfter, exceptionsFor, moveProcurement, recordProcurementChange, resolveExceptionsByAnswer, syncReadiness } from "../domain/procurement";
+import { deriveSchemaId, deriveSchemaVersion } from "../domain/requirement-schema";
 import { canonicalRequirementKey, slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { approvalState } from "./approval";
@@ -208,8 +209,8 @@ export const GiftBody = z.object({
   mapping: z.array(VariantMappingRow).default([]),
   default_variant_id: z.string().nullable().default(null),
   variants: z.array(Variant).default([]),
-  /** The store's customization fields for the product, when it has any. */
-  personalization: z.object({ fields: z.array(PersonalizationField) }).nullable().optional(),
+  /** The store's customization fields for the product, when it has any, with the requirement schema's id and version when the read established them. */
+  personalization: PersonalizationSchema.nullable().optional(),
   /** The product's own page at the store, where the merchant tools run. */
   product_url: z.string().nullable().default(null),
   missing_value_fallback: MissingValueFallback.default("default"),
@@ -249,12 +250,12 @@ export function createGiftFromBody(eventId: string, body: unknown) {
 }
 
 export function updateGiftFromBody(eventId: string, giftId: string, body: unknown) {
-  requireGift(eventId, giftId);
-  const patch = parseBody(GiftBody.partial(), body);
+  const gift = requireGift(eventId, giftId);
+  const { personalization, ...patch } = parseBody(GiftBody.partial(), body);
   updateGift(giftId, patch as Partial<GiftInput>);
-  // A replaced schema changes what the store asks for, so it leaves an approval stale like a plan edit (#44).
-  const schemaChanged = patch.personalization !== undefined;
-  if (schemaChanged || patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", schemaChanged ? "The product's customization schema changed" : "The organizer changed the gift's plan");
+  // A re-read schema goes through the diff, so a changed requirement never continues silently against the old one.
+  if (personalization) applyRequirementSchema(giftId, { schema_id: personalization.schema_id ?? deriveSchemaId(gift.shop_domain, gift.product_id), version: personalization.schema_version ?? deriveSchemaVersion(personalization.fields), product_id: gift.product_id, requirements: personalization.fields }, "organizer");
+  if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
   return giftView(eventId, giftId);
 }
 

@@ -11,6 +11,7 @@ import { matches, type Filter, type Subject } from "./filter";
 import * as T from "./types";
 import type { AccessGrant, ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, Procurement, ProcurementException, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
 import { derivedStatus } from "./procurement-status";
+import { deriveSchemaId } from "./requirement-schema";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
 
@@ -277,7 +278,8 @@ function procurementOf(s: State, gift: Batch, status: Procurement["status"]): Pr
     vendor_id: gift.shop_domain,
     product_id: gift.product_id,
     ...(gift.product_url ? { product_url: gift.product_url } : {}),
-    ...(gift.personalization?.fields.length ? { requirement_schema_id: `${gift.shop_domain}/${gift.product_id}` } : {}),
+    ...(gift.personalization?.fields.length ? { requirement_schema_id: gift.personalization.schema_id ?? deriveSchemaId(gift.shop_domain, gift.product_id) } : {}),
+    ...(gift.personalization?.schema_version ? { requirement_schema_version: gift.personalization.schema_version } : {}),
     status,
     current_revision: lastSeq,
     ...(typeof gift.approved_seq === "number" ? { approved_revision: gift.approved_seq } : {}),
