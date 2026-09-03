@@ -105,6 +105,11 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
   const pending = requirements.filter((r) => !r.already);
 
+  /** The two states a blocked row can be in that an email resolves: a specification asked and unanswered, or one never asked. */
+  const blockedIssues = (gift?.cart_blocked ?? []).flatMap((b) => b.issues);
+  const blockedUnconfirmed = blockedIssues.some((i) => i.includes("not confirmed by the attendee"));
+  const blockedUnrequested = blockedIssues.some((i) => i.includes("not been requested from attendees"));
+
   async function run(name: "request_from_attendees" | "follow_up", which: "request" | "follow_up") {
     if (!gift) return;
     setBusy(which);
@@ -253,9 +258,23 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           )}
           {approved && fill?.status === "failed" && <p className="error" role="alert" data-testid="cart-failed">{fill.reason ?? "The cart did not fill"}</p>}
           {approved && (gift.cart_blocked?.length ?? 0) > 0 && (
-            <ul className="hint" style={{ marginTop: 8 }} data-testid="cart-blocked">
-              {gift.cart_blocked!.map((b) => <li key={b.guest_id}>{snap.guests.find((g) => g.id === b.guest_id)?.display_name ?? b.guest_id}: {b.issues.join("; ")}</li>)}
-            </ul>
+            <div data-testid="cart-blocked">
+              {blockedUnconfirmed && (
+                <div className="labelrow" style={{ marginTop: 12, gap: 12 }}>
+                  <p className="hint" style={{ margin: 0 }} data-testid="cart-blocked-unconfirmed">Attendees haven't confirmed their specifications yet</p>
+                  <button type="button" className="btn ghost small" onClick={() => run("follow_up", "follow_up")} disabled={busy !== null} data-testid="cart-blocked-remind">{busy === "follow_up" ? "Sending" : "Send email reminders"}</button>
+                </div>
+              )}
+              {blockedUnrequested && (
+                <div className="labelrow" style={{ marginTop: 12, gap: 12 }}>
+                  <p className="hint" style={{ margin: 0 }} data-testid="cart-blocked-unrequested">Some specifications have not been requested from attendees</p>
+                  <button type="button" className="btn ghost small" onClick={() => run("request_from_attendees", "request")} disabled={busy !== null} data-testid="cart-blocked-request">{busy === "request" ? "Sending" : "Request from attendees"}</button>
+                </div>
+              )}
+              <ul className="hint" style={{ marginTop: 8 }}>
+                {gift.cart_blocked!.map((b) => <li key={b.guest_id}>{snap.guests.find((g) => g.id === b.guest_id)?.display_name ?? b.guest_id}: {b.issues.join("; ")}</li>)}
+              </ul>
+            </div>
           )}
           {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
         </section>

@@ -199,7 +199,7 @@ export function personalizeRow(gift: Batch, event: Event, subject: Subject): Row
   for (const field of gift.personalization?.fields ?? []) {
     const mapping = mappings.get(field.key);
     if (!mapping) {
-      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_source", message: `${field.label} has no source` });
+      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_source", message: `${field.label} has not been requested from attendees` });
       continue;
     }
     let value = resolveSourceValue(mapping.source, event, subject);
@@ -213,7 +213,7 @@ export function personalizeRow(gift: Batch, event: Event, subject: Subject): Row
       value = transformed.value;
     }
     if (isMissing(value)) {
-      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_value", message: `${field.label} has no value` });
+      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_value", message: `${field.label} is not confirmed by the attendee yet` });
       resolved[field.key] = { value: null, source: mapping.source };
       continue;
     }
