@@ -1,11 +1,13 @@
 /**
  * WebMCP merchant tools for a Customily-personalized Shopify store.
  *
- * Registers two API-backed tools on `document.modelContext`, `get_customization` and
- * `add_customized_to_cart`, so an agent can read a product's customization fields and add configured
- * lines through Shopify's cart endpoint from any page on the shop's origin. The tools make no DOM
- * writes. Each supported product carries one entry in PRODUCT_ADAPTERS, keyed by the numeric Shopify
- * product id, so a new product needs a new entry or a product metafield the theme exposes.
+ * Registers three API-backed tools on `document.modelContext`, `get_customization`,
+ * `add_customized_to_cart`, and `get_order_updates`, so an agent can read a product's customization
+ * fields, add configured lines through Shopify's cart endpoint, and read what became of the order
+ * after checkout, from any page on the shop's origin. The tools make no DOM writes. Each supported
+ * product carries one entry in PRODUCT_ADAPTERS, keyed by the numeric Shopify product id, so a new
+ * product needs a new entry or a product metafield the theme exposes. A theme cannot read orders on
+ * its own, so the order tool calls the order-status route Tokuchu serves for the store (ORDER_STATUS_URL).
  *
  * Install: load this file after the theme's content (see README.md). The page must expose
  * `document.modelContext` natively or through the WebMCP polyfill.
@@ -58,6 +60,20 @@
 
   /** The tokenless Storefront GraphQL endpoint that answers a session cart's checkoutUrl. */
   const STOREFRONT_GRAPHQL = "/api/2026-04/graphql.json";
+
+  /**
+   * The order-status route Tokuchu serves for this store (#59): GET with checkout_url or cart_token
+   * or order_name answers the order the checkout produced. A theme points the tool elsewhere the
+   * way it exposes customization definitions: `window.__tokuchuOrderStatusUrl` or a
+   * `<meta name="tokuchu-order-status-url" content="...">` tag overrides this default.
+   */
+  const ORDER_STATUS_URL = "https://tokuchu.onrender.com/api/store/orders";
+
+  function orderStatusUrl() {
+    if (typeof window.__tokuchuOrderStatusUrl === "string" && window.__tokuchuOrderStatusUrl) return window.__tokuchuOrderStatusUrl;
+    const meta = document.querySelector('meta[name="tokuchu-order-status-url"]');
+    return meta && meta.content ? meta.content : ORDER_STATUS_URL;
+  }
 
   /** Value shapes per customization kind; a kind absent here accepts any non-empty string. */
   const KIND_SHAPES = {
@@ -395,6 +411,41 @@
           currency: cartAfter.currency,
           checkout_url: checkoutUrl
         }, ready.length === 0);
+      }
+    },
+
+    {
+      name: "get_order_updates",
+      description:
+        "Returns what became of a checkout add_customized_to_cart produced: the order's name and id, created_at, financial_status, fulfillment_status, one line item per cart line with its recipient_ref and the personalization values from its line properties, the fulfillments with tracking company, number, and url, and the last update time. A checkout with no order yet returns { status: \"not_ordered\" }. Pass checkout_url or cart_token or order_name; with none, this session's cart token is read from /cart.js.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          checkout_url: { type: "string", description: "The checkout_url add_customized_to_cart returned" },
+          cart_token: { type: "string", description: "The cart token the checkout URL names" },
+          order_name: { type: "string", description: "The order's name as the store shows it such as #1042" }
+        },
+        additionalProperties: false
+      },
+      execute: async function (args, options) {
+        const signal = options ? options.signal : undefined;
+        const params = new URLSearchParams();
+        if (args.checkout_url) params.set("checkout_url", String(args.checkout_url));
+        else if (args.cart_token) params.set("cart_token", String(args.cart_token));
+        else if (args.order_name) params.set("order_name", String(args.order_name));
+        else {
+          const cart = await fetchCart(signal);
+          if (!cart || !cart.token) return fail("the cart did not answer with a token; pass checkout_url or cart_token or order_name");
+          params.set("cart_token", cart.token);
+        }
+        try {
+          const res = await fetch(orderStatusUrl() + "?" + params.toString(), { headers: { Accept: "application/json" }, signal: signal });
+          const body = await res.json();
+          if (!res.ok) return fail(body.error || ("the order route answered " + res.status));
+          return result(body);
+        } catch (err) {
+          return fail("the order route at " + orderStatusUrl() + " did not answer with JSON");
+        }
       }
     }
   ];

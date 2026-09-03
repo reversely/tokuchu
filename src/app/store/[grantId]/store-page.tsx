@@ -3,6 +3,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { StoreView } from "../../../server/store-view";
 import type { ProcurementUpdateType } from "../../../server/procurement";
+import type { OrderState } from "../../../server/store-orders";
+import { OrderStateBlock } from "../../order-state";
 import { executeThroughMcp, registerStoreTools } from "../../../webmcp/register";
 import { useWebMcp, WebMcpPill } from "../../webmcp-provider";
 import { TraceList } from "../../events/[id]/trace";
@@ -31,8 +33,8 @@ function StoreWebMcp({ eventId, tokenId, tools }: { eventId: string; tokenId: st
   return <WebMcpPill status={status} />;
 }
 
-/** The store's page for one grant (#47): the Procurement, then each block the grant allows, and the update form when it may write; `agentNotes` adds the static-mode task block (#56). */
-export function StorePage({ view, agentNotes = false }: { view: StoreView; agentNotes?: boolean }) {
+/** The store's page for one grant (#47): the Procurement with the order behind its checkout (#59), then each block the grant allows, and the update form when it may write; `agentNotes` adds the static-mode task block (#56). */
+export function StorePage({ view, order = null, agentNotes = false }: { view: StoreView; order?: OrderState | null; agentNotes?: boolean }) {
   const { procurement, manifest, requirements, exceptions, updates, grant, event } = view;
   const keys = manifest ? [...new Set(manifest.attendees.flatMap((a) => Object.keys(a.values)))] : [];
   return (
@@ -67,6 +69,12 @@ export function StorePage({ view, agentNotes = false }: { view: StoreView; agent
                 <span data-testid="store-seen">{grant.acknowledged_revision ?? "none"}</span>
                 {view.tools.includes("acknowledge_changes") && <AcknowledgeButton eventId={event.id} tokenId={view.token_id} revision={procurement.current_revision} seen={grant.acknowledged_revision ?? null} />}
               </div>
+              {view.checkout_url && (
+                <div className="row store-row" style={{ gridTemplateColumns: "1fr" }} data-testid="store-checkout">
+                  <span><a href={view.checkout_url} target="_blank" rel="noreferrer" data-testid="store-checkout-link">Open the checkout at {procurement.store}</a></span>
+                  {order ? <OrderStateBlock state={order} /> : <p className="hint quiet" style={{ marginTop: 8 }} data-testid="order-state" data-status="unknown">The order behind this checkout has not been read</p>}
+                </div>
+              )}
             </div>
           </section>
 

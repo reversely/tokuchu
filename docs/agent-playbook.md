@@ -2,7 +2,7 @@
 
 This document gives a browser agent, or a terminal agent with a browser tool, the prompt and the steps to run one gift order through Tokuchu and the demo store. It applies to a Tokuchu server in static mode (`TOKUCHU_STATIC=1`), where the server makes no catalog search and opens no store page of its own; every capability is a WebMCP tool on a page, and the agent moves between Tokuchu's pages and the store's product page. `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model, so a judge can repeat either path.
 
-The whole run is thirteen arrows between three participants. The order of operations below numbers them the same way, and `README.md`, `docs/guide.md`, and `docs/prd.md` refer to the same numbers. The source is `docs/diagrams/agent-sequence.mmd`.
+The whole run is fourteen arrows between three participants. The order of operations below numbers them the same way, and `README.md`, `docs/guide.md`, and `docs/prd.md` refer to the same numbers. The source is `docs/diagrams/agent-sequence.mmd`; the rendered image under `public/media` predates the fourteenth arrow, `get_order_updates`, and shows the first thirteen.
 
 ```mermaid
 sequenceDiagram
@@ -22,6 +22,7 @@ sequenceDiagram
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+    A->>C: get_order_updates { checkout_url }
 ```
 
 ## The task
@@ -33,7 +34,7 @@ The organizer has published an event and the attendees have replied going. The a
 | Page | URL | Session | Tools |
 |---|---|---|---|
 | Tokuchu event page | `https://<tokuchu host>/events/<event id>` | An organizer session (sign in with an email address) or the demo guest link `https://<tokuchu host>/demo`, which creates a guest event and lands on it | `list_guests`, `set_gift_plan`, `set_gift_customization`, `get_requirements`, `set_personalization_mapping`, `request_from_attendees`, `list_missing`, `get_fulfillment_manifest`, `approve_specs`, `post_update`, `get_updates`, `get_changes` |
-| Customworks product page | `https://springbuilt.myshopify.com/products/1566-comfort-colors-garment-dyed-adult-crewneck-sweatshirt` | None | `get_customization`, `add_customized_to_cart`, and Shopify's storefront tools |
+| Customworks product page | `https://springbuilt.myshopify.com/products/1566-comfort-colors-garment-dyed-adult-crewneck-sweatshirt` | None | `get_customization`, `add_customized_to_cart`, `get_order_updates`, and Shopify's storefront tools |
 
 The Tokuchu page shows the store's URL, the product handle, the gift id, and the next tool on each side on its handoff card, and its Agent notes block and the `tokuchu-agent-task` meta tag carry the order below. The attendee's invite page (`/i/<code>?guest=<guest id>`) registers `submit_rsvp`, and the store-facing page a grant's signed link opens registers the grant's tools.
 
@@ -61,7 +62,7 @@ Each step is one arrow of the diagram, in the diagram's order and wording.
 
 1. **`getTools` on the Tokuchu tab.** On the Tokuchu event page, list the tools with `document.modelContext.getTools()`. The list carries every organizer tool the rest of this order names.
 2. **`list_guests { filter: "status:eq:going" }`.** Read the guests who replied going. Each row carries the guest id, the display name, and the answers the RSVP list already holds.
-3. **Open the product page and `getTools`.** Open the store's product page with the polyfill injected and list its tools. The list carries Shopify's storefront tools and the store's `get_customization` and `add_customized_to_cart`.
+3. **Open the product page and `getTools`.** Open the store's product page with the polyfill injected and list its tools. The list carries Shopify's storefront tools and the store's `get_customization`, `add_customized_to_cart`, and `get_order_updates`.
 4. **`get_customization { product_id }`.** Call it with `{ product_id: "10242071789817" }`. The payload carries the product id, the title, the fields (key, label, kind, required, constraints), the variants with their numeric ids, and the selected variant. Keep the whole payload.
 5. **Compare the fields with the guests.** Read the fields from step 4 against the rows from step 2: the name field matches the RSVP name, and the location, the time, and the size have no answer yet. Tokuchu makes the same comparison in step 8; this step tells the agent what to expect.
 6. **`set_gift_plan { rules, shop_domain, product_title, product_url }`.** Back on Tokuchu, call it without a `gift_id`: `{ rules: [{ filter: [{ field: "status", op: "eq", value: "going" }], product_id: "10242071789817" }], shop_domain: "springbuilt.myshopify.com", product_title: <the title>, product_url: <the product page URL> }`. The reply is the gift with its `id`.
@@ -72,10 +73,11 @@ Each step is one arrow of the diagram, in the diagram's order and wording.
 11. **`approve_specs { gift_id }`.** The reply carries `approved_at` and the revision the approval stands at; no cart job runs in static mode, so `cart_fill` and `checkout_url` stay empty. Read `get_fulfillment_manifest` once more and keep its `cart_items`.
 12. **`add_customized_to_cart { items: cart_items, idempotency_key }` on the store's product page.** Call it with the `cart_items` from step 11 and `idempotency_key: "<gift id>:<approved_at>"`. The reply lists the `ready` lines and a `checkout_url` that opens the cart at checkout in any browser. A repeated call with the same key adds nothing.
 13. **`post_update { gift_id, kind: "in_production", reference: checkout_url }`.** On Tokuchu, call it with `text: "The cart is ready to review"` and the `checkout_url` as `reference`, so the gift's progress log carries the link.
+14. **`get_order_updates { checkout_url }` on the store's product page.** Call it with the `checkout_url` from step 12 once the organizer has paid. The reply carries `order_name`, `order_id`, `created_at`, `updated_at`, `financial_status`, `fulfillment_status`, `line_items` with each line's `recipient_ref` and its personalization `values` keyed by the store's property labels, and `fulfillments` with `tracking` (`company`, `number`, `url`). Before payment the reply is `{ status: "not_ordered" }`. The tool calls the order route Tokuchu serves for the store (`/api/store/orders`), and Tokuchu's tick reads the same route to move the Procurement to `in_production` and `fulfilled`, so no `post_procurement_update` is needed for those two states.
 
 ## The store's side
 
-The store's side is a second sequence after the thirteenth arrow (`docs/diagrams/store-sequence.mmd`).
+The store's side is a second sequence after the fourteenth arrow (`docs/diagrams/store-sequence.mmd`).
 
 ```mermaid
 sequenceDiagram
@@ -87,6 +89,7 @@ sequenceDiagram
     S->>P: get_fulfillment_manifest { procurement_id }
     S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
     S->>P: get_changes { procurement_id, after_revision }
+    S->>S: get_order_updates { order_name } on the store's own page
 ```
 
 1. **The signed link.** The organizer creates store access on the Attendees tab (Share fulfilment data), or through `POST /api/events/<id>/grants` with `{ procurement_id: <gift id>, grantee_type: "agent", grantee_id: <store>, permissions: ["manifest:read", "requirements:read", "changes:read", "updates:read", "updates:write"], allowed_attribute_ids: [<definition ids>] }`. The reply's `link` is a signed path, `/s/<token>`, and the organizer sends it to the store.
@@ -94,6 +97,7 @@ sequenceDiagram
 3. **`get_fulfillment_manifest { procurement_id }`.** One row per attendee with the values the grant allows, at the approved revision.
 4. **`post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }`.** `type: "accepted"` with a `reference` moves the order on; `production_started` and `fulfilled` follow. `needs_information`, `invalid_value`, and `option_unavailable` with `attendee_ref` and `requirement_id` open an exception the organizer sees and ask the attendee again by email with the `message` quoted.
 5. **`get_changes { procurement_id, after_revision }`.** Lists what changed since the revision last read, and `acknowledge_changes` `{ revision: <the current revision> }` records how far the store has read.
+6. **`get_order_updates { order_name }` on the store's own page.** The store's agent reads the order by its name (or by the checkout URL) on any page of the store and gets the same statuses and fulfilments the organizer's Attendees tab shows; Tokuchu's tick records `production_started` and `fulfilled` from that answer on its own.
 
 ## What each error means
 
@@ -144,6 +148,7 @@ Follow this order and stop at the first error you cannot resolve by reading it:
 11. Tokuchu: approve_specs { gift_id }, then get_fulfillment_manifest again and keep cart_items.
 12. Store: add_customized_to_cart { items: cart_items, idempotency_key: "<gift id>:<approved_at>" }. Report the checkout_url.
 13. Tokuchu: post_update { gift_id, kind: "in_production", text: "The cart is ready to review", reference: <checkout_url> }.
+14. Store: get_order_updates { checkout_url: <checkout_url> }. Report the status; { status: "not_ordered" } is the answer until the organizer pays.
 
 Report each tool call you make and a one-line summary of its result, then the checkout link.
 ```

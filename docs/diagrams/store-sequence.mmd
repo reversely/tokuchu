@@ -7,3 +7,4 @@ sequenceDiagram
     S->>P: get_fulfillment_manifest { procurement_id }
     S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
     S->>P: get_changes { procurement_id, after_revision }
+    S->>S: get_order_updates { order_name } on the store's own page

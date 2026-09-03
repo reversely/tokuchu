@@ -8,6 +8,7 @@ import { state } from "../domain/store";
 import type { ChatMessage } from "../domain/types";
 import { getDatabase, hasDatabase } from "./db";
 import { llmEnabled, staticMode } from "./flags";
+import { ordersDue, syncOrders, type OrderLookup } from "./order-sync";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { dueSchedules, liveRunDeps, runSchedule, statusLine, type RunDeps } from "./schedules";
 
@@ -19,6 +20,8 @@ export type TickOptions = {
   model?: Model;
   /** Overrides for tests: the follow-up sender and the mailer. */
   deps?: Partial<Omit<RunDeps, "now" | "status">>;
+  /** The order reader for the store's checkouts (#59); a fake for tests. */
+  orders?: OrderLookup;
 };
 
 const STATUS_PROMPT = "Write the status now. Read the event, the missing answers, the requests, and the gifts through your tools and write the organizer a status of at most four short sentences: the reply counts, what is still missing, each cart's state, and the one next step. Do not search for products or select a gift.";
@@ -37,8 +40,9 @@ function statusWriter(options: TickOptions): RunDeps["status"] {
 const inFlight = new Map<string, Promise<void>>();
 
 /**
- * Runs every due schedule of one event in order and returns the lines they posted. A direct call
- * holds the event's in-flight slot while it runs, so a snapshot read made by a run starts nothing.
+ * Runs every due schedule of one event in order and returns the lines they posted, then asks the
+ * store about each due order (#59). A direct call holds the event's in-flight slot while it runs, so
+ * a snapshot read made by a run starts nothing.
  */
 export async function tick(eventId: string, options: TickOptions = {}): Promise<ChatMessage[]> {
   const now = options.now ?? new Date();
@@ -48,6 +52,7 @@ export async function tick(eventId: string, options: TickOptions = {}): Promise<
   try {
     const posted: ChatMessage[] = [];
     for (const row of dueSchedules(eventId, now)) posted.push(await runSchedule(eventId, row, deps));
+    await syncOrders(eventId, now, options.orders);
     return posted;
   } finally {
     if (holds) inFlight.delete(eventId);
@@ -55,14 +60,14 @@ export async function tick(eventId: string, options: TickOptions = {}): Promise<
 }
 
 /**
- * The snapshot's check: with a due schedule and no tick running for the event, one tick starts once
+ * The snapshot's check: with a due schedule or a due order and no tick running for the event, one tick starts once
  * the reading request has settled, in a persisted scope of its own so its posts land in the row.
  * The tick re-reads what is due, and each run moves its row on before acting, so a poll that lands
  * while a tick runs finds nothing to start.
  */
 export function tickAfterRead(eventId: string, now: Date = new Date()): void {
   // Static mode runs no schedules (#56).
-  if (staticMode() || inFlight.has(eventId) || !dueSchedules(eventId, now).length) return;
+  if (staticMode() || inFlight.has(eventId) || (!dueSchedules(eventId, now).length && !ordersDue(eventId, now).length)) return;
   const job = afterCommit()
     .then(() => withPersistedEvent(eventId, () => tick(eventId)))
     .then(() => undefined)

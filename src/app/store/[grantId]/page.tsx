@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { staticMode } from "../../../server/flags";
 import { withPersistedEvent } from "../../../server/persistence";
+import { adminConfigured } from "../../../server/shopify-admin";
+import { lookupOrder } from "../../../server/store-orders";
 import { STORE_COOKIE, storeSessionFrom } from "../../../server/store-session";
 import { storeView, type StoreView } from "../../../server/store-view";
 import { AGENT_TASK_META, agentTaskText } from "../../../webmcp/agent-task";
@@ -30,5 +32,7 @@ export default async function Page({ params }: Props) {
   } catch {
     notFound();
   }
-  return <StorePage view={view} agentNotes={staticMode()} />;
+  // The order behind the checkout (#59) comes from the store's Admin API; a store the app holds no credentials for shows the link alone.
+  const order = view.checkout_url && adminConfigured() ? await lookupOrder({ checkout_url: view.checkout_url }).catch(() => null) : null;
+  return <StorePage view={view} order={order} agentNotes={staticMode()} />;
 }

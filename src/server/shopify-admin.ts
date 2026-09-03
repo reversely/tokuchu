@@ -21,6 +21,11 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** True when the environment names the store and the app's credentials, so a caller can skip the Admin API where it is not set up. */
+export function adminConfigured(): boolean {
+  return Boolean(process.env.SHOPIFY_STORE_DOMAIN && process.env.SHOPIFY_API_KEY && process.env.SHOPIFY_API_SECRET);
+}
+
 function apiVersion(): string {
   return process.env.SHOPIFY_ADMIN_API_VERSION || "2025-01";
 }

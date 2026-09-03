@@ -13,6 +13,7 @@ import { dateTime } from "../../../lib/format";
 import { cellState, ExceptionsList, GridCell, GridLegend, ProcurementState, requirementKey, useFulfillmentManifest } from "./readiness";
 import { ReconcilePanels } from "./reconcile-panels";
 import { ProcurementExports } from "./procurement-exports";
+import { OrderStatus } from "../../order-state";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -454,7 +455,10 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           {approved && filling && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart</p>}
           {approved && fill?.status === "done" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filled">Cart filled</p>}
           {approved && gift.checkout_url && (
-            <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {store}</a></p>
+            <>
+              <p className="hint" style={{ marginTop: 12 }}><a href={gift.checkout_url} target="_blank" rel="noreferrer" data-testid="review-cart">Review the cart at {store}</a></p>
+              <OrderStatus checkoutUrl={gift.checkout_url} seq={snap.seq} />
+            </>
           )}
           {approved && fill?.status === "failed" && <p className="error" role="alert" data-testid="cart-failed">{fill.reason ?? "The cart did not fill"}</p>}
           {approved && (gift.cart_blocked?.length ?? 0) > 0 && (

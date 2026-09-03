@@ -15,3 +15,4 @@ sequenceDiagram
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+    A->>C: get_order_updates { checkout_url }

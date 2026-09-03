@@ -196,7 +196,7 @@ export default async function Page() {
                 <span className="eyebrow">Customworks</span>
                 <p>Customworks sells dropshipped customized merchandise. Its WebMCP tools describe what information each product needs for personalization and can return updates about the resulting order.</p>
                 <a className="shot" href="https://springbuilt.myshopify.com" target="_blank" rel="noreferrer"><img src="/media/customworks-store.webp" alt="The Customworks storefront with its banner and product offerings" loading="lazy" /></a>
-                <pre className="toolist" aria-label="Customworks' merchant WebMCP tools">{["get_customization", "add_customized_to_cart"].join("\n")}</pre>
+                <pre className="toolist" aria-label="Customworks' merchant WebMCP tools">{["get_customization", "add_customized_to_cart", "get_order_updates"].join("\n")}</pre>
               </div>
             </div>
           </div>
