@@ -258,7 +258,9 @@ export function updateGiftFromBody(eventId: string, giftId: string, body: unknow
   updateGift(giftId, patch as Partial<GiftInput>);
   // A re-read schema goes through the diff, so a changed requirement never continues silently against the old one.
   if (personalization) applyRequirementSchema(giftId, { schema_id: personalization.schema_id ?? deriveSchemaId(gift.shop_domain, gift.product_id), version: personalization.schema_version ?? deriveSchemaVersion(personalization.fields), product_id: gift.product_id, requirements: personalization.fields }, "organizer");
-  if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
+  // A replaced schema changes what the store asks for, so it leaves an approval stale like a plan edit (#44).
+  if (personalization) recordProcurementChange(giftId, "plan_changed", "organizer", "The product's customization schema changed");
+  else if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
   return giftView(eventId, giftId);
 }
 
