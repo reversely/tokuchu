@@ -11,6 +11,7 @@ import type { GrantPermission, VendorUpdate } from "../../../domain/types";
 import { slugValue } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
 import { cellState, ExceptionsList, GridCell, GridLegend, ProcurementState, requirementKey, useFulfillmentManifest } from "./readiness";
+import { ReconcilePanels } from "./reconcile-panels";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -328,6 +329,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
         ) : (
           <p className="hint" style={{ color: "var(--muted)" }}>{gift && !personalized ? "This product has no customization fields" : "No requirements yet"}</p>
         )}
+        {gift && <ReconcilePanels eventId={snap.event.id} giftId={gift.id} requirements={requirements} seq={snap.seq} onChanged={onChanged} />}
         {gift && (
           <div className="sendrow" style={{ marginTop: 16 }}>
             <div className="lead">

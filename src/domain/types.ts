@@ -278,13 +278,16 @@ export const PersonalizationTransform = z.enum(PERSONALIZATION_TRANSFORMS);
 export type PersonalizationTransform = z.infer<typeof PersonalizationTransform>;
 
 /** Where a vendor field's value comes from: an RSVP definition, an event field, the guest's own row, or a fixed value. */
-export const MappingSource = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("definition"), definition_id: z.string(), subject_scope: z.enum(["guest", "party", "event"]) }),
-  z.object({ type: z.literal("event"), key: z.enum(["title", "starts_at", "venue"]) }),
-  z.object({ type: z.literal("guest"), key: z.enum(["display_name"]) }),
-  z.object({ type: z.literal("literal"), value: z.unknown() })
-]);
+const DefinitionSource = z.object({ type: z.literal("definition"), definition_id: z.string(), subject_scope: z.enum(["guest", "party", "event"]) });
+const EventSource = z.object({ type: z.literal("event"), key: z.enum(["title", "starts_at", "venue"]) });
+const GuestSource = z.object({ type: z.literal("guest"), key: z.enum(["display_name"]) });
+const LiteralSource = z.object({ type: z.literal("literal"), value: z.unknown() });
+export const MappingSource = z.discriminatedUnion("type", [DefinitionSource, EventSource, GuestSource, LiteralSource]);
 export type MappingSource = z.infer<typeof MappingSource>;
+
+/** A source that needs no definition: the event, the guest's own row, or a fixed value. */
+export const DerivedSource = z.discriminatedUnion("type", [EventSource, GuestSource, LiteralSource]);
+export type DerivedSource = z.infer<typeof DerivedSource>;
 
 /** Where a mapping row stands when it is not settled: flagged for the organizer to confirm, or unresolved after the requirement's constraints changed. */
 export const MappingResolution = z.enum(["needs_confirmation", "unresolved"]);
@@ -469,6 +472,73 @@ export const ProcurementException = z.object({
   resolved_revision: z.number().int().nullable()
 });
 export type ProcurementException = z.infer<typeof ProcurementException>;
+
+/* ---- Reconciliation ---- */
+
+/** How a decision found the definition it maps: the requirement's own key, a row saved on the gift, the alias table, or the model. */
+export const MatchMethod = z.enum(["exact", "saved_mapping", "alias", "llm"]);
+export type MatchMethod = z.infer<typeof MatchMethod>;
+
+export const DeriveMethod = z.enum(["saved_mapping", "deterministic", "llm"]);
+export type DeriveMethod = z.infer<typeof DeriveMethod>;
+
+/** One attribute a decision could map to, with how it was found. */
+export const ReconciliationCandidate = z.object({ attribute_id: z.string(), label: z.string(), confidence: z.number(), method: MatchMethod });
+export type ReconciliationCandidate = z.infer<typeof ReconciliationCandidate>;
+
+/** The definition a request step creates for a requirement nothing fills. */
+export const ProposedDefinition = z.object({ key: z.string(), label: z.string(), scope: z.literal("guest"), value_type: ValueType, constraints: Constraints, required_rule: z.literal("going"), vendor_field: VendorField.optional() });
+export type ProposedDefinition = z.infer<typeof ProposedDefinition>;
+
+/** One decision of the reconciliation service per store requirement (#38): map, derive, create, or ask the organizer. */
+export const ReconciliationDecision = z.discriminatedUnion("decision", [
+  z.object({ requirement_id: z.string(), decision: z.literal("map_existing"), attribute_id: z.string(), confidence: z.number(), method: MatchMethod }),
+  z.object({ requirement_id: z.string(), decision: z.literal("derive"), source: DerivedSource, transform: PersonalizationTransform.optional(), confidence: z.number(), method: DeriveMethod }),
+  z.object({ requirement_id: z.string(), decision: z.literal("create_field"), proposed_definition: ProposedDefinition, confidence: z.number() }),
+  z.object({ requirement_id: z.string(), decision: z.literal("needs_confirmation"), candidates: z.array(ReconciliationCandidate), reason: z.string() })
+]);
+export type ReconciliationDecision = z.infer<typeof ReconciliationDecision>;
+
+/** Who settled a decision beyond the deterministic steps: the organizer through a confirmation or the model through a verdict. */
+export const DecisionConfirmer = z.enum(["organizer", "model"]);
+export type DecisionConfirmer = z.infer<typeof DecisionConfirmer>;
+
+/** A decision as stored: the decision and who confirmed it, when someone did. */
+export const StoredDecision = z.object({ decision: ReconciliationDecision, confirmed_by: DecisionConfirmer.nullable().default(null), confirmed_at: z.string().nullable().default(null) });
+export type StoredDecision = z.infer<typeof StoredDecision>;
+
+/** The organizer's answer to a confirmation: the attribute to map, or a new field. */
+export const Confirmation = z.union([z.object({ attribute_id: z.string() }), z.object({ create: z.literal(true) })]);
+export type Confirmation = z.infer<typeof Confirmation>;
+
+/** The model's verdict on one requirement and the definition ids it saw, so a definition added since asks again. */
+export const ModelVerdict = z.object({ attribute_id: z.string().nullable(), confidence: z.number(), reason: z.string(), seen: z.string(), recorded_at: z.string() });
+export type ModelVerdict = z.infer<typeof ModelVerdict>;
+
+/** Which requirement keys a new schema version added, removed, or changed. */
+export const SchemaDiffRecord = z.object({ added: z.array(z.string()), removed: z.array(z.string()), changed: z.array(z.string()) });
+export type SchemaDiffRecord = z.infer<typeof SchemaDiffRecord>;
+
+/**
+ * The reconciliation of one gift against one version of its store's requirement schema (#51): the
+ * decision per requirement with who confirmed it, the model's verdicts, the organizer's
+ * confirmations, and the change from the version before until the organizer continues past it.
+ */
+export const Reconciliation = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  gift_id: z.string(),
+  schema_id: z.string(),
+  schema_version: z.string(),
+  decisions: z.array(StoredDecision),
+  /** Keyed by requirement key. */
+  verdicts: z.record(z.string(), ModelVerdict),
+  confirmations: z.record(z.string(), z.object({ choice: Confirmation, confirmed_at: z.string() })),
+  /** Set when this version replaced another: the version before, what changed, when, and when the organizer continued past it. */
+  previous: z.object({ schema_version: z.string(), diff: SchemaDiffRecord, changed_at: z.string(), continued_at: z.string().nullable() }).nullable().default(null),
+  updated_at: z.string()
+});
+export type Reconciliation = z.infer<typeof Reconciliation>;
 
 /* ---- The event's chat and schedule ---- */
 

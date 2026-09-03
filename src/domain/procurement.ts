@@ -7,6 +7,7 @@
 import type { ActorType, Batch, ChangeEntry, PersonalizationMapping, Procurement, ProcurementChangeType, ProcurementException, ProcurementStatus } from "./types";
 import { getGift, manifest, updateGift, type GiftInput } from "./gifts";
 import { canMove, isCollecting } from "./procurement-status";
+import { adoptSchemaVersion, recordSchemaChange } from "./reconciliation";
 import { diffRequirements, isUnchanged, type SchemaDiff, type VendorRequirementSchema } from "./requirement-schema";
 import { actorOf, appendChange, definitionsFor, getGuest, newId, procurementFor, state, updateProcurement } from "./store";
 
@@ -159,9 +160,12 @@ export function applyRequirementSchema(giftId: string, schema: VendorRequirement
   const established = row.requirement_schema_id === schema.schema_id && row.requirement_schema_version !== undefined && gift.personalization?.fields;
   if (!established) {
     updateGift(giftId, { personalization } as Partial<GiftInput>);
+    adoptSchemaVersion(giftId, schema.schema_id, schema.version);
     return { procurement: updateProcurement(giftId, { requirement_schema_id: schema.schema_id, requirement_schema_version: schema.version }), diff: null, reused: false };
   }
   const diff = diffRequirements(gift.personalization?.fields ?? [], schema.requirements);
+  // The stored reconciliation for the new version opens with the diff, so the organizer sees the change before the request step runs again (#51).
+  recordSchemaChange(giftId, schema.schema_id, row.requirement_schema_version!, schema.version, diff);
   const removed = new Set(diff.removed);
   const changed = new Set(diff.changed);
   const mappings: PersonalizationMapping[] = (gift.personalization_mappings ?? []).filter((m) => !removed.has(m.vendor_field_key)).map((m) => (changed.has(m.vendor_field_key) ? { ...m, resolution: "unresolved" } : m));

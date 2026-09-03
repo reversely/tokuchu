@@ -7,11 +7,15 @@
  * mapping row and the question the request step stores, and computes completeness; the model only
  * proposes an attribute id, and a proposal naming an unknown or incompatible attribute is dropped.
  *
- * The model's verdicts and the organizer's confirmations live in this module, keyed by the gift and
- * the requirement, because the mapping row's schema stays with the sibling ticket that versions it.
+ * The model's verdicts, the organizer's confirmations, and the decisions they settle persist in the
+ * state document's reconciliations collection (domain/reconciliation.ts), one row per gift per
+ * schema version, so a confirmation survives a restart and a new schema version starts its own row.
  */
 import { CLOCK_TIME, fieldConstraints, KIND_VALUE_TYPES } from "../domain/personalization";
-import type { AttributeDefinition, Batch, Constraints, MappingSource, Option, PersonalizationField, PersonalizationKind, PersonalizationMapping, PersonalizationTransform, ValueType } from "../domain/types";
+import { reconciliationFor, updateReconciliation } from "../domain/reconciliation";
+import { deriveSchemaVersion } from "../domain/requirement-schema";
+import { state } from "../domain/store";
+import type { AttributeDefinition, Batch, Confirmation, Constraints, DecisionConfirmer, DeriveMethod, DerivedSource, MatchMethod, ModelVerdict, Option, PersonalizationField, PersonalizationKind, PersonalizationMapping, PersonalizationTransform, ProposedDefinition, Reconciliation, ReconciliationCandidate, ReconciliationDecision, StoredDecision, ValueType } from "../domain/types";
 import { canonicalRequirementKey, slugValue } from "../domain/values";
 import type { Requirement } from "./api";
 import { llmEnabled } from "./flags";
@@ -24,30 +28,13 @@ export type VendorRequirement = { key: string; label: string; kind: Personalizat
 /** The store's schema for one product: its id, its version, and its requirements. */
 export type VendorSchema = { id: string; version: string; requirements: VendorRequirement[] };
 
-export type MatchMethod = "exact" | "saved_mapping" | "alias" | "llm";
-export type DeriveMethod = "saved_mapping" | "deterministic" | "llm";
-export type DerivedSource = Exclude<MappingSource, { type: "definition" }>;
-
-/** The definition a request step creates for a requirement nothing fills. */
-export type ProposedDefinition = { key: string; label: string; scope: "guest"; value_type: ValueType; constraints: Constraints; required_rule: "going"; vendor_field?: AttributeDefinition["vendor_field"] };
-
-/** One attribute a decision could map to, with how it was found. */
-export type Candidate = { attribute_id: string; label: string; confidence: number; method: MatchMethod };
-
-export type ReconciliationDecision = { requirement_id: string } & (
-  | { decision: "map_existing"; attribute_id: string; confidence: number; method: MatchMethod }
-  | { decision: "derive"; source: DerivedSource; transform?: PersonalizationTransform; confidence: number; method: DeriveMethod }
-  | { decision: "create_field"; proposed_definition: ProposedDefinition; confidence: number }
-  | { decision: "needs_confirmation"; candidates: Candidate[]; reason: string }
-);
+export type { Confirmation, DeriveMethod, DerivedSource, MatchMethod, ProposedDefinition, ReconciliationDecision };
+export type Candidate = ReconciliationCandidate;
 
 /** What the model answers for one requirement: the attribute it proposes or null, with its confidence and reason. */
 export type LlmMatch = { attribute_id: string | null; confidence: number; reason: string };
 export type LlmMatchInput = { requirement: { key: string; label: string; type: string }; fields: { id: string; label: string; type: ValueType }[] };
 export type LlmMatcher = (input: LlmMatchInput) => Promise<LlmMatch>;
-
-/** The organizer's answer to a confirmation: the attribute to map, or a new field. */
-export type Confirmation = { attribute_id: string } | { create: true };
 
 export type ReconcileInput = { vendorSchema: VendorSchema; tokuchuAttributes: AttributeDefinition[]; savedMappings: PersonalizationMapping[] };
 export type ReconcileOptions = {
@@ -158,7 +145,8 @@ const confirm = (req: VendorRequirement, candidates: Candidate[], reason: string
 const confirmed: Step = (req, ctx) => {
   const choice = ctx.confirmations.get(req.key);
   if (!choice) return null;
-  if ("create" in choice) return { requirement_id: req.key, decision: "create_field", proposed_definition: proposedDefinition(req), confidence: 1 };
+  // A confirmation to create stands until the request step has created the question; from then on the exact step maps it.
+  if ("create" in choice) return ctx.defs.some((d) => d.vendor_field?.key === req.key) ? null : { requirement_id: req.key, decision: "create_field", proposed_definition: proposedDefinition(req), confidence: 1 };
   const def = ctx.byId.get(choice.attribute_id);
   return def && !incompatibility(req, def) ? map(req, def, "exact", 1) : null;
 };
@@ -289,59 +277,82 @@ function fieldRequirement(field: PersonalizationField): VendorRequirement {
   return { key: field.key, label: field.label, kind: field.kind, required: field.required, ...(max_length !== undefined ? { max_length } : {}), ...(options.length ? { allowed: options } : {}) };
 }
 
-/** The store's schema for a gift: the variant axis first, then each customization field. The id follows the manifest's requirement_schema_id. */
+/** The store's schema for a gift: the variant axis first, then each customization field. The id and the version follow the procurement's, derived the same way when the store gave none. */
 export function vendorSchemaFor(gift: Batch): VendorSchema {
   const axis = variantAxis(gift);
-  return { id: `${gift.shop_domain}/${gift.product_id}`, version: "1", requirements: [...(axis ? [axis] : []), ...(gift.personalization?.fields ?? []).map(fieldRequirement)] };
+  const fields = gift.personalization?.fields ?? [];
+  return { id: gift.personalization?.schema_id ?? `${gift.shop_domain}/${gift.product_id}`, version: gift.personalization?.schema_version ?? deriveSchemaVersion(fields), requirements: [...(axis ? [axis] : []), ...fields.map(fieldRequirement)] };
 }
 
-/** The module's records per gift: the model's verdicts keyed by requirement and the definitions it saw, and the organizer's confirmations. */
-type GiftRecord = { schema: string; proposals: Map<string, LlmMatch>; seen: Map<string, string>; confirmations: Map<string, Confirmation> };
-const records = new Map<string, GiftRecord>();
+/* ---- The stored reconciliation ---- */
 
-function recordFor(gift: Batch): GiftRecord {
+/** The stored row for a gift at its current schema version. */
+export function reconciliationOf(gift: Batch): Reconciliation {
   const schema = vendorSchemaFor(gift);
-  const id = `${schema.id}@${schema.version}`;
-  const existing = records.get(gift.id);
-  if (existing && existing.schema === id) return existing;
-  const fresh: GiftRecord = { schema: id, proposals: new Map(), seen: new Map(), confirmations: new Map() };
-  records.set(gift.id, fresh);
-  return fresh;
+  return reconciliationFor(gift.id, schema.id, schema.version);
 }
 
-/** Forgets every recorded verdict and confirmation; tests call it between cases. */
+/** Forgets every stored reconciliation; tests call it between cases. */
 export function resetReconcileState(): void {
-  records.clear();
+  state().reconciliations.clear();
 }
 
 /** The organizer confirms a requirement: the attribute to map or a new field to create. */
-export function confirmRequirement(gift: Batch, requirementKey: string, choice: Confirmation): void {
-  recordFor(gift).confirmations.set(requirementKey, choice);
+export function confirmRequirement(gift: Batch, requirementKey: string, choice: Confirmation): Reconciliation {
+  const row = reconciliationOf(gift);
+  return updateReconciliation(row, { confirmations: { ...row.confirmations, [requirementKey]: { choice, confirmed_at: new Date().toISOString() } } });
 }
 
 function inputFor(gift: Batch, defs: AttributeDefinition[]): ReconcileInput {
   return { vendorSchema: vendorSchemaFor(gift), tokuchuAttributes: defs, savedMappings: gift.personalization_mappings ?? [] };
 }
 
-/** The decisions for a gift from the deterministic steps and the module's records. */
+/** The row's confirmations and verdicts as the decision order reads them. */
+function optionsFrom(row: Reconciliation): Pick<ReconcileOptions, "confirmations" | "proposals"> {
+  const confirmations = new Map(Object.entries(row.confirmations).map(([key, c]) => [key, c.choice]));
+  const proposals = new Map(Object.entries(row.verdicts).map(([key, v]) => [key, { attribute_id: v.attribute_id, confidence: v.confidence, reason: v.reason }]));
+  return { confirmations, proposals };
+}
+
+/** Who settled a decision: the organizer when a confirmation stands behind it, the model when its verdict did, and nobody for a deterministic one. */
+function confirmerOf(decision: ReconciliationDecision, row: Reconciliation): { confirmed_by: DecisionConfirmer | null; confirmed_at: string | null } {
+  const confirmation = row.confirmations[decision.requirement_id];
+  if (confirmation && decision.decision !== "needs_confirmation") return { confirmed_by: "organizer", confirmed_at: confirmation.confirmed_at };
+  if ((decision.decision === "map_existing" || decision.decision === "derive") && decision.method === "llm") return { confirmed_by: "model", confirmed_at: row.verdicts[decision.requirement_id]?.recorded_at ?? null };
+  return { confirmed_by: null, confirmed_at: null };
+}
+
+/** Stores the decisions on the row when they differ from the ones it holds, so a read leaves an unchanged row alone. */
+function storeDecisions(row: Reconciliation, decisions: ReconciliationDecision[], verdicts: Record<string, ModelVerdict> = row.verdicts): Reconciliation {
+  const stored: StoredDecision[] = decisions.map((decision) => ({ decision, ...confirmerOf(decision, row) }));
+  const same = JSON.stringify(row.decisions) === JSON.stringify(stored) && JSON.stringify(row.verdicts) === JSON.stringify(verdicts);
+  return same ? row : updateReconciliation(row, { decisions: stored, verdicts });
+}
+
+/** The decisions for a gift from the deterministic steps and the stored row, written back to the row. */
 export function decisionsFor(gift: Batch, defs: AttributeDefinition[]): ReconciliationDecision[] {
-  const record = recordFor(gift);
-  return reconcileDeterministically(inputFor(gift, defs), { confirmations: record.confirmations, proposals: record.proposals });
+  const row = reconciliationOf(gift);
+  const decisions = reconcileDeterministically(inputFor(gift, defs), optionsFrom(row));
+  storeDecisions(row, decisions);
+  return decisions;
 }
 
 /**
- * Runs the whole order for a gift, the model included when the flag allows it, and records the
+ * Runs the whole order for a gift, the model included when the flag allows it, and stores the
  * model's verdicts so the next deterministic read agrees. A verdict is asked once per requirement
  * for a given set of definitions; a definition added since asks again.
  */
 export async function reconcileGift(gift: Batch, defs: AttributeDefinition[], options: Pick<ReconcileOptions, "llm" | "threshold"> = {}): Promise<{ decisions: ReconciliationDecision[]; completeness: Completeness }> {
-  const record = recordFor(gift);
+  const row = reconciliationOf(gift);
   const signature = defs.map((d) => d.id).sort().join(",");
-  for (const [key, seen] of record.seen) if (seen !== signature) { record.proposals.delete(key); record.seen.delete(key); }
+  const verdicts: Record<string, ModelVerdict> = Object.fromEntries(Object.entries(row.verdicts).filter(([, v]) => v.seen === signature));
   const llm = options.llm === undefined ? (llmEnabled() ? (await import("../agent/reconcile-llm")).openaiMatcher() : null) : options.llm;
-  const before = new Set(record.proposals.keys());
-  const decisions = await reconcileVendorRequirements(inputFor(gift, defs), { llm, threshold: options.threshold, confirmations: record.confirmations, proposals: record.proposals });
-  for (const key of record.proposals.keys()) if (!before.has(key)) record.seen.set(key, signature);
+  const { confirmations, proposals } = optionsFrom({ ...row, verdicts });
+  const decisions = await reconcileVendorRequirements(inputFor(gift, defs), { llm, threshold: options.threshold, confirmations, proposals });
+  const at = new Date().toISOString();
+  for (const [key, match] of proposals!) if (!verdicts[key]) verdicts[key] = { ...match, seen: signature, recorded_at: at };
+  // The row is read again: the model step awaited, and a write in between must not be lost.
+  storeDecisions(reconciliationOf(gift), decisions, verdicts);
   return { decisions, completeness: completeness(decisions) };
 }
 
