@@ -44,6 +44,8 @@ test("the organizer creates store access and copies a link a store opens until t
   for (const key of ["personalization", "manifest", "changes", "updates"]) await expect(page.getByTestId(`share-access-${key}`)).toBeChecked();
   await expect(page.getByTestId("share-expiry")).toHaveValue("fulfilment");
   await expect(page.getByTestId("share-grant")).toHaveCount(0);
+  // The field count follows the requirements the tab fetches; the chips show once they have arrived.
+  await expect(page.getByTestId("requested-field").first()).toBeVisible();
 
   await page.getByTestId("share-create").click();
   const grant = page.getByTestId("share-grant");
