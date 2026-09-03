@@ -120,8 +120,9 @@ async function main() {
     });
     transcript.outcome = { turns: outcome.turns, calls: outcome.calls, checkout_url: outcome.checkout_url, final_output: outcome.final_output, ended_at: new Date().toISOString() };
     save();
-    console.log(`\n${outcome.turns} model turns, ${outcome.calls} function calls; checkout link ${outcome.checkout_url ?? "not reached"}; transcript ${transcriptPath}`);
-    return outcome.checkout_url ? 0 : 1;
+    // A goal that ends before a cart (create the event, compare products) is complete without a checkout link; the model's final message says what it did.
+    console.log(`\n${outcome.turns} model turns, ${outcome.calls} function calls${outcome.checkout_url ? `; checkout link ${outcome.checkout_url}` : ""}; transcript ${transcriptPath}`);
+    return outcome.final_output ? 0 : 1;
   } finally {
     await stagehand.close();
   }
