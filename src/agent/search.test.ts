@@ -31,6 +31,16 @@ describe("searchCandidates", () => {
     const first = client.calls[0] as { filters: Record<string, unknown> };
     expect(first.filters).toMatchObject({ ships_to: { country: "CA", postal_code: "00000" }, ships_from: [{ country: "CA" }], categories: ["bu"], price: { max: 2000 }, available: true });
   });
+  it("sends no price ceiling for a budget of zero and records the ceiling it used", async () => {
+    const client = fakeClient({ "cookie favors": [product("p1", "a.myshopify.com", 1500)] });
+    const funnel = { searches: [], merged: 0, probed: 0, ranked: 0, excluded: {} };
+    const out = await searchCandidates(client, [{ query: "cookie favors", categories: ["fb"] }], { ...CTX, budget_cents: 0 }, { funnel });
+    expect(out).toHaveLength(1);
+    expect((client.calls[0] as { filters: Record<string, unknown> }).filters).not.toHaveProperty("price");
+    expect(funnel.searches[0]).toMatchObject({ query: "cookie favors", price_max: null, returned: 1 });
+    expect(eligibility(out[0], { ...CTX, budget_cents: 0 }).eligible).toBe(true);
+  });
+
   it("maps a sentence to itself plus the cards it names", () => {
     const searches = searchesForSentence("a small dessert box of food each guest can take home");
     expect(searches[0]).toEqual({ query: "a small dessert box of food each guest can take home" });

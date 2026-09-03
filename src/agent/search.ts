@@ -44,7 +44,7 @@ export type Candidate = {
 };
 
 /** What each search returned and how many products each stage kept, for the results screen and the ask bar. */
-export type Funnel = { searches: { query: string; categories?: string[]; returned: number; total: number | null; error?: string }[]; merged: number; probed: number; ranked: number; excluded: Record<string, number> };
+export type Funnel = { searches: { query: string; categories?: string[]; price_max?: number | null; returned: number; total: number | null; error?: string }[]; merged: number; probed: number; ranked: number; excluded: Record<string, number> };
 
 export type EventContext = {
   /** ISO date of the event. */
@@ -97,7 +97,9 @@ export async function searchCandidates(client: CatalogClient, searches: CardSear
     // The catalog reads the price ceiling in minor units (cents), the same unit it returns prices in.
     const filters: Record<string, unknown> = { ships_to: { country: ctx.venue.country, region: ctx.venue.region, postal_code: ctx.venue.postal_code }, ships_from: [{ country: ctx.venue.country }], available: true };
     if (s.categories?.length) filters.categories = s.categories;
-    if (ctx.budget_cents !== null) filters.price = { max: ctx.budget_cents };
+    // A budget of zero is no budget: a ceiling of 0 cents would empty every search.
+    const ceiling = ctx.budget_cents !== null && ctx.budget_cents > 0 ? ctx.budget_cents : null;
+    if (ceiling !== null) filters.price = { max: ceiling };
     let cursor: string | undefined;
     let returned = 0;
     let total: number | null = null;
@@ -117,7 +119,7 @@ export async function searchCandidates(client: CatalogClient, searches: CardSear
       if (!pg?.has_next_page || !cursor) break;
       if (options.sleepMs) await new Promise((r) => setTimeout(r, options.sleepMs));
     }
-    options.funnel?.searches.push({ query: s.query, categories: s.categories, returned, total });
+    options.funnel?.searches.push({ query: s.query, categories: s.categories, price_max: ceiling, returned, total });
     if (options.sleepMs) await new Promise((r) => setTimeout(r, options.sleepMs));
   }
   if (options.funnel) options.funnel.merged = merged.size;
@@ -188,7 +190,7 @@ export function eligibility(c: Candidate, ctx: EventContext, config = cardsConfi
     const latest = addCalendarDays(c.delivery.window.latest, config.delivery_buffer_days);
     if (!isOnOrBefore(latest, ctx.event_date)) return { eligible: false, rule: "delivery", reason: `Delivery by ${c.delivery.window.latest} plus ${config.delivery_buffer_days} days falls after the event.` };
   }
-  if (ctx.budget_cents !== null && c.price_cents !== null && c.price_cents > ctx.budget_cents) return { eligible: false, rule: "price", reason: `The unit price is above the budget of ${ctx.budget_cents} cents.` };
+  if (ctx.budget_cents !== null && ctx.budget_cents > 0 && c.price_cents !== null && c.price_cents > ctx.budget_cents) return { eligible: false, rule: "price", reason: `The unit price is above the budget of ${ctx.budget_cents} cents.` };
   if (!c.variants.some((v) => v.available)) return { eligible: false, rule: "availability", reason: "No variant is available." };
   return { eligible: true, rule: null, reason: null };
 }
