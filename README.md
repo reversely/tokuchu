@@ -2,8 +2,6 @@
 
 Tokuchu coordinates personalized purchases for events. It combines attendee and RSVP records with products from WebMCP-enabled Shopify storefronts, asks attendees only for information the selected product still needs, produces one fulfilment row per recipient, and gives the store a scoped channel for updates and exceptions.
 
-The project is a submission to The WebMCP Challenge and is built against a separately deployed demo store.
-
 ## The system in one picture
 
 Tokuchu connects three record owners. Each owns a different part of the transaction.
@@ -16,8 +14,6 @@ Tokuchu connects three record owners. Each owns a different part of the transact
 | Store / Tokuchu handoff | A permission-limited view of one approved procurement | The grant page at `/store/{grantId}` |
 
 The browser agent coordinates these surfaces. Tokuchu remains the system of record for the event and procurement; the store remains the system of record for the product and checkout.
-
-## Three concepts that should not be confused
 
 The application has two runtime modes, three actor-specific page surfaces, and two transports. These are independent concepts.
 
