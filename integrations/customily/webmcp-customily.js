@@ -63,7 +63,7 @@
 
   /**
    * The order-status route Tokuchu serves for this store (#59): GET with checkout_url or cart_token
-   * or order_name answers the order the checkout produced. A theme points the tool elsewhere the
+   * answers the order the checkout produced. A theme points the tool elsewhere the
    * way it exposes customization definitions: `window.__tokuchuOrderStatusUrl` or a
    * `<meta name="tokuchu-order-status-url" content="...">` tag overrides this default.
    */
@@ -423,7 +423,6 @@
         properties: {
           checkout_url: { type: "string", description: "The checkout_url add_customized_to_cart returned" },
           cart_token: { type: "string", description: "The cart token the checkout URL names" },
-          order_name: { type: "string", description: "The order's name as the store shows it such as #1042" }
         },
         additionalProperties: false
       },
@@ -432,10 +431,9 @@
         const params = new URLSearchParams();
         if (args.checkout_url) params.set("checkout_url", String(args.checkout_url));
         else if (args.cart_token) params.set("cart_token", String(args.cart_token));
-        else if (args.order_name) params.set("order_name", String(args.order_name));
         else {
           const cart = await fetchCart(signal);
-          if (!cart || !cart.token) return fail("the cart did not answer with a token; pass checkout_url or cart_token or order_name");
+          if (!cart || !cart.token) return fail("the cart did not answer with a token; pass checkout_url or cart_token");
           params.set("cart_token", cart.token);
         }
         try {

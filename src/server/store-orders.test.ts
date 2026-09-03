@@ -60,7 +60,7 @@ describe("the order lookup behind get_order_updates (#59)", () => {
     expect(cartTokenFrom(CHECKOUT)).toBe("demo-cart-token-01");
     expect(orderFilter({ checkout_url: CHECKOUT })).toBe('cart_token:"demo-cart-token-01"');
     expect(orderFilter({ cart_token: "abc123?key=k" })).toBe('cart_token:"abc123"');
-    expect(orderFilter({ order_name: "#1042" })).toBe('name:"1042"');
+    expect(() => orderFilter({ order_name: "#1042" } as never)).toThrow(BadRequestError);
     expect(() => orderFilter({})).toThrow(BadRequestError);
     expect(() => orderFilter({ checkout_url: "https://shop.example/checkouts/cn/abc" })).toThrow(BadRequestError);
     expect(() => orderFilter({ checkout_url: "not a url" })).toThrow(BadRequestError);
@@ -89,7 +89,7 @@ describe("the order lookup behind get_order_updates (#59)", () => {
 
   it("answers not_ordered while the checkout has no order", async () => {
     const f = fakeFetch([{ data: { orders: { nodes: [] } } }]);
-    expect(await lookupOrder({ order_name: "1043" }, { fetchImpl: f })).toEqual({ status: "not_ordered" });
+    expect(await lookupOrder({ cart_token: "no-order-yet" }, { fetchImpl: f })).toEqual({ status: "not_ordered" });
   });
 
   it("admits the demo store's origin and the configured shop's host and no other", () => {

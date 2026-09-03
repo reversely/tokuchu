@@ -185,6 +185,7 @@ The Customworks theme adapter registers:
 
 - `get_customization` — returns product fields, constraints, variants, availability, and prices.
 - `add_customized_to_cart` — validates a batch, adds one configured Shopify line per attendee, and returns ready and blocked rows plus a checkout URL.
+- `get_order_updates` — returns the order a checkout produced: financial and fulfilment status, one line per attendee with its personalization values, and any tracking, or `not_ordered` before payment.
 
 The adapter is under `integrations/customily/`. It reads customization metadata from a page-level definition or its product adapter map and writes customization values as Shopify line-item properties.
 

@@ -17,7 +17,7 @@ const RECIPIENT_PROPERTY = "_tokuchu_recipient";
 const LINE_ITEMS_FIRST = 50;
 const FULFILLMENTS_FIRST = 10;
 
-export type OrderQuery = { checkout_url?: string | null; cart_token?: string | null; order_name?: string | null };
+export type OrderQuery = { checkout_url?: string | null; cart_token?: string | null };
 export type OrderTracking = { company: string | null; number: string | null; url: string | null };
 export type OrderFulfillment = { id: string; status: string; updated_at: string; tracking: OrderTracking[] };
 /** One line of the order: `recipient_ref` from the adapter's hidden property and `values` keyed by the property labels Customily reads. */
@@ -97,14 +97,14 @@ const quoted = (value: string) => `"${value.replace(/["\\]/g, "\\$&")}"`;
  * the order name without its leading `#`.
  *
  * Raises:
- *   BadRequestError: when the query names none of the three.
+ *   BadRequestError: when the query carries neither a checkout URL nor a cart token. An order name is not
+ *   accepted: names are sequential and guessable and the route is unauthenticated, so a name would let anyone
+ *   read a stranger's line properties.
  */
 export function orderFilter(query: OrderQuery): string {
   const token = query.cart_token?.trim() || (query.checkout_url?.trim() ? cartTokenFrom(query.checkout_url.trim()) : "");
   if (token) return `cart_token:${quoted(token.split("?")[0])}`;
-  const name = query.order_name?.trim().replace(/^#/, "");
-  if (name) return `name:${quoted(name)}`;
-  throw new BadRequestError("Pass checkout_url or cart_token or order_name.");
+  throw new BadRequestError("Pass checkout_url or cart_token.");
 }
 
 const lower = (s: string | null) => (s ? s.toLowerCase() : null);

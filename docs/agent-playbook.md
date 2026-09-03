@@ -89,7 +89,7 @@ sequenceDiagram
     S->>P: get_fulfillment_manifest { procurement_id }
     S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
     S->>P: get_changes { procurement_id, after_revision }
-    S->>S: get_order_updates { order_name } on the store's own page
+    S->>S: get_order_updates { checkout_url } on the store's own page
 ```
 
 1. **The signed link.** The organizer creates store access on the Attendees tab (Share fulfilment data), or through `POST /api/events/<id>/grants` with `{ procurement_id: <gift id>, grantee_type: "agent", grantee_id: <store>, permissions: ["manifest:read", "requirements:read", "changes:read", "updates:read", "updates:write"], allowed_attribute_ids: [<definition ids>] }`. The reply's `link` is a signed path, `/s/<token>`, and the organizer sends it to the store.
@@ -97,7 +97,7 @@ sequenceDiagram
 3. **`get_fulfillment_manifest { procurement_id }`.** One row per attendee with the values the grant allows, at the approved revision.
 4. **`post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }`.** `type: "accepted"` with a `reference` moves the order on; `production_started` and `fulfilled` follow. `needs_information`, `invalid_value`, and `option_unavailable` with `attendee_ref` and `requirement_id` open an exception the organizer sees and ask the attendee again by email with the `message` quoted.
 5. **`get_changes { procurement_id, after_revision }`.** Lists what changed since the revision last read, and `acknowledge_changes` `{ revision: <the current revision> }` records how far the store has read.
-6. **`get_order_updates { order_name }` on the store's own page.** The store's agent reads the order by its name (or by the checkout URL) on any page of the store and gets the same statuses and fulfilments the organizer's Attendees tab shows; Tokuchu's tick records `production_started` and `fulfilled` from that answer on its own.
+6. **`get_order_updates { checkout_url }` on the store's own page.** The store's agent reads the order by the checkout URL the manifest carries on any page of the store and gets the same statuses and fulfilments the organizer's Attendees tab shows; Tokuchu's tick records `production_started` and `fulfilled` from that answer on its own.
 
 ## What each error means
 

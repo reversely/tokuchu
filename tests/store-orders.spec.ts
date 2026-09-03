@@ -59,7 +59,7 @@ async function checkoutFor(page: Page) {
 test("the route refuses a request naming no checkout and admits the store's origin alone", async ({ request }) => {
   const empty = await request.get("/api/store/orders");
   expect(empty.status()).toBe(400);
-  expect(((await empty.json()) as { error: string }).error).toContain("checkout_url or cart_token or order_name");
+  expect(((await empty.json()) as { error: string }).error).toContain("checkout_url or cart_token");
 
   const foreign = await request.get("/api/store/orders?checkout_url=https://shop.example/checkouts/cn/abc");
   expect(foreign.status()).toBe(400);
