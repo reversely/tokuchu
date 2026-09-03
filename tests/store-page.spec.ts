@@ -47,7 +47,7 @@ test("the signed link opens the grant's page with only the granted fields; a rev
 
   await expect(page.getByTestId("store-product")).toHaveText("Customized Crewneck");
   await expect(page.getByTestId("store-grantee")).toHaveText("example-store.myshopify.com");
-  await expect(page.getByTestId("store-status")).toHaveText("collecting");
+  await expect(page.getByTestId("store-status")).toHaveText("ready");
   await expect(page.getByTestId("store-schema")).toHaveText("example-store.myshopify.com/gid://shopify/Product/1");
   await expect(page.getByTestId("store-procurement-id")).toHaveText(giftId);
   await expect(page.getByTestId("store-manifest-row")).toHaveCount(1);
