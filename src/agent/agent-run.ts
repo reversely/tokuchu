@@ -63,7 +63,7 @@ export const RULES = `
 
 ## Rules for this runtime
 
-You operate the pages only through four functions: open_page, list_webmcp_tools, call_webmcp_tool, and switch_tab. There is no DOM access; the WebMCP tools a page registers are the whole interface. Call list_webmcp_tools on a tab before the first call_webmcp_tool on it, and read each tool's inputSchema before calling it. Pass call_webmcp_tool's arguments as one JSON object encoded as a string. A result with is_error true carries the error text; resolve it from the text when the playbook's error table says how, and stop at the first error you cannot resolve, reporting the call and the error. When add_customized_to_cart returns a checkout_url, record it on the gift with post_update and end your reply with the checkout link on its own line.`;
+You operate the pages only through five functions: open_page, list_webmcp_tools, call_webmcp_tool, record_checkout, and switch_tab. The checkout link a cart fill returns is held by the runtime and shown to you as a placeholder; record it with record_checkout and never type it. There is no DOM access; the WebMCP tools a page registers are the whole interface. Call list_webmcp_tools on a tab before the first call_webmcp_tool on it, and read each tool's inputSchema before calling it. Pass call_webmcp_tool's arguments as one JSON object encoded as a string. A result with is_error true carries the error text; resolve it from the text when the playbook's error table says how, and stop at the first error you cannot resolve, reporting the call and the error. When add_customized_to_cart returns a checkout_url, record it on the gift with post_update and end your reply with the checkout link on its own line.`;
 
 /** One line for the terminal: a payload cut to a readable width. */
 export function short(value: unknown, width = 160): string {
@@ -81,6 +81,9 @@ export function textOf(response: WebMcpToolResponse): { text: string; is_error: 
   }
   return { text: output === undefined ? "" : typeof output === "string" ? output : JSON.stringify(output), is_error: false };
 }
+
+/** What the model sees in place of a checkout URL; the runtime keeps the real one. */
+export const CHECKOUT_PLACEHOLDER = "[checkout link captured by the runtime; call record_checkout to store it]";
 
 /** A checkout link in a tool's text payload, if the payload carries one. */
 function checkoutUrlIn(text: string): string | null {
@@ -196,8 +199,28 @@ export async function runBrowserAgent(options: RunOptions): Promise<RunOutcome> 
           if ("error" in found) return { ok: false, summary: `no tool ${name} on ${tab_id}`, output: { text: JSON.stringify({ error: `The page in ${tab_id}: ${found.error}` }), is_error: true } };
           const invocation = await found.tool.invoke({ input });
           const result = textOf(await invocation.result({ timeout: 120_000 }));
-          checkoutUrl = checkoutUrlIn(result.text) ?? checkoutUrl;
-          return { ok: !result.is_error, summary: result.is_error ? `error: ${short(result.text)}` : short(result.text), output: result };
+          const captured = checkoutUrlIn(result.text);
+          if (captured) checkoutUrl = captured;
+          // The model never sees the checkout token, so it cannot mistype it; record_checkout carries the URL.
+          const shown = captured ? { ...result, text: result.text.split(captured).join(CHECKOUT_PLACEHOLDER) } : result;
+          return { ok: !result.is_error, summary: result.is_error ? `error: ${short(result.text)}` : short(result.text), output: shown };
+        })
+    }),
+    sdk.tool({
+      name: "record_checkout",
+      description: "Records the checkout link the store returned onto the gift in Tokuchu by calling that page's post_update with kind confirmed. The runtime holds the link from add_customized_to_cart; you never copy it. Call this after the cart fill succeeds.",
+      parameters: z.object({
+        tab_id: z.string().describe("The Tokuchu tab_id"),
+        gift_id: z.string().describe("The gift the checkout belongs to")
+      }),
+      execute: ({ tab_id, gift_id }) =>
+        traced("record_checkout", { tab_id, gift_id }, async () => {
+          if (!checkoutUrl) return { ok: false, summary: "no checkout link captured yet", output: { text: JSON.stringify({ error: "No checkout link has been captured; call add_customized_to_cart on the store's page first." }), is_error: true } };
+          const found = await toolNamed(pageOf(tab_id), "post_update", undefined);
+          if ("error" in found) return { ok: false, summary: `no post_update on ${tab_id}`, output: { text: JSON.stringify({ error: `The page in ${tab_id}: ${found.error}` }), is_error: true } };
+          const invocation = await found.tool.invoke({ input: { gift_id, kind: "confirmed", text: "The cart is ready to review", reference: checkoutUrl } });
+          const result = textOf(await invocation.result({ timeout: 120_000 }));
+          return { ok: !result.is_error, summary: result.is_error ? `error: ${short(result.text)}` : `checkout recorded on ${gift_id}`, output: result.is_error ? result : { ...result, text: result.text.split(checkoutUrl).join(CHECKOUT_PLACEHOLDER) } };
         })
     }),
     sdk.tool({

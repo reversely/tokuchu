@@ -95,7 +95,7 @@ describe("the browser agent runtime (#60)", () => {
         tools: [
           fakeTool("list_guests", () => mcp({ guests: [{ id: "g1", display_name: "Avery Chen" }] }), webmcpCalls),
           fakeTool("set_gift_plan", (input) => (input.product_title ? mcp({ id: "gift_1", product_title: input.product_title }) : mcp({ error: "product_id: Invalid input" }, true)), webmcpCalls),
-          fakeTool("post_update", (input) => mcp({ id: "upd_1", reference: input.reference }), webmcpCalls)
+          fakeTool("post_update", (input) => { expect(input).toMatchObject({ kind: "confirmed", reference: "https://store.test/checkouts/abc" }); return mcp({ id: "upd_1", reference: input.reference }); }, webmcpCalls)
         ]
       },
       [STORE]: {
@@ -135,7 +135,8 @@ describe("the browser agent runtime (#60)", () => {
           return [call("c10", "call_webmcp_tool", { tab_id: "tab2", name: "add_customized_to_cart", frame_id: null, arguments: JSON.stringify({ items: [{ recipient_ref: "g1" }], idempotency_key: "gift_1:now" }) })];
         case 9: {
           const cart = JSON.parse((results.c10 as { text: string }).text) as { checkout_url: string };
-          return [call("c11", "call_webmcp_tool", { tab_id: "tab1", name: "post_update", frame_id: null, arguments: JSON.stringify({ gift_id: "gift_1", kind: "in_production", reference: cart.checkout_url }) })];
+          expect(cart.checkout_url).not.toContain("checkouts/abc");
+          return [call("c11", "record_checkout", { tab_id: "tab1", gift_id: "gift_1" })];
         }
         default:
           return [say("Done. The cart is ready.\nhttps://store.test/checkouts/abc")];
@@ -148,7 +149,7 @@ describe("the browser agent runtime (#60)", () => {
     // The instructions are the playbook plus the runtime's rules, and only the four functions are offered.
     const first = model.requests[0];
     expect(first.systemInstructions).toBe(PLAYBOOK + RULES);
-    expect(first.tools.map((t) => t.name).sort()).toEqual(["call_webmcp_tool", "list_webmcp_tools", "open_page", "switch_tab"]);
+    expect(first.tools.map((t) => t.name).sort()).toEqual(["call_webmcp_tool", "list_webmcp_tools", "open_page", "record_checkout", "switch_tab"]);
 
     // The tabs opened in order, the switch brought the Tokuchu tab forward, and the pages saw the calls.
     expect(opened).toEqual([TOKUCHU, STORE]);
