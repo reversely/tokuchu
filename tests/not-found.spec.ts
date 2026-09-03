@@ -1,4 +1,4 @@
-/** #144: an unknown invite code renders the app's own branded not-found, not Next's default 404. */
+/** #144: an unknown invite code renders the app's own branded not-found, not Next's default 404 (whose h1 is the bare code). */
 import { expect, test } from "@playwright/test";
 
 test("an unknown invite code renders the branded not-found", async ({ page }) => {
@@ -6,5 +6,5 @@ test("an unknown invite code renders the branded not-found", async ({ page }) =>
   await expect(page.getByTestId("not-found-title")).toHaveText("Page not found");
   await expect(page.getByTestId("not-found-home")).toBeVisible();
   await expect(page.getByTestId("not-found-demo")).toHaveAttribute("href", "/demo");
-  await expect(page.locator("body")).not.toContainText("This page could not be found");
+  await expect(page.locator("h1")).not.toHaveText("404");
 });
