@@ -1,8 +1,10 @@
 /**
  * Tokuchu's MCP endpoint (PRD Sections 7, 8, 12): the same tool list the page registers, served
  * over HTTP as JSON-RPC to token holders. A token is a row naming who may call which tools on
- * which gifts and read which definitions; every call checks it. Results are MCP-shaped: text
- * content, isError on a refusal or a failure. Nothing here spends money for a store's token.
+ * which gifts and read which definitions; every call checks it. A token minted from an AccessGrant
+ * (grants.ts) takes its scope from the grant on every call, and a revoked or expired grant answers
+ * with an error and nothing else. Results are MCP-shaped: text content, isError on a refusal or a
+ * failure. Nothing here spends money for a store's token.
  */
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
@@ -11,6 +13,7 @@ import { changeReader, changes, counts, followUp, giftRequirements, guestList, g
 import { newId, state } from "../domain/store";
 import type { CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
+import { grantStatus, tokenScope } from "./grants";
 import { fulfillmentManifest, postProcurementUpdate } from "./procurement";
 import { cartOperations } from "./registry";
 
@@ -34,7 +37,7 @@ export function createToken(eventId: string, body: unknown): CallerToken {
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   const unknownTools = parsed.data.callable_tools.filter((t) => !TOOLS.some((x) => x.name === t));
   if (unknownTools.length) throw new BadRequestError(`Unknown tools: ${unknownTools.join(", ")}.`);
-  const token: CallerToken = { id: newId("tok"), event_id: eventId, ...parsed.data, last_profile_url: null };
+  const token: CallerToken = { id: newId("tok"), event_id: eventId, ...parsed.data, last_profile_url: null, grant_id: null };
   state().tokens.set(token.id, token);
   return token;
 }
@@ -56,6 +59,19 @@ export function tokenFrom(eventId: string, request: Request): CallerToken | null
 
 function allowed(token: CallerToken, tool: ToolDefinition): boolean {
   return token.callable_tools.includes(tool.name);
+}
+
+/**
+ * The token under its grant's scope as the grant stands now, or the refusal a revoked, expired, or
+ * missing grant answers with. A token without a grant keeps the scope it was minted with.
+ */
+function underGrant(token: CallerToken): { token: CallerToken } | { error: string } {
+  if (!token.grant_id) return { token };
+  const grant = state().grants.get(token.grant_id);
+  if (!grant || grant.event_id !== token.event_id) return { error: "The grant behind this token no longer exists." };
+  const status = grantStatus(grant);
+  if (status !== "active") return { error: status === "revoked" ? "The grant behind this token was revoked." : "The grant behind this token has expired." };
+  return { token: { ...token, ...tokenScope(grant) } };
 }
 
 /* ---- The dispatch: each tool runs the operation its page route runs, under the token's scope ---- */
@@ -165,8 +181,13 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       if (!organizer) requireGiftScope(token, giftId);
       return { updates: updatesFor(eventId, giftId, Number(args.since_seq ?? 0) || 0) };
     }
-    case "get_requirements":
-      return { requirements: giftRequirements(eventId, String(args.gift_id)) };
+    case "get_requirements": {
+      const giftId = strArg("gift_id") ?? strArg("procurement_id") ?? "";
+      if (organizer) return { requirements: giftRequirements(eventId, giftId) };
+      requireGiftScope(token, giftId);
+      // A store's holder sees a requirement only when it names no definition or one the holder may read.
+      return { requirements: giftRequirements(eventId, giftId).filter((r) => !r.definition_id || token.readable_definition_ids.includes(r.definition_id)) };
+    }
     case "request_from_attendees":
       return requestFromAttendees(eventId, String(args.gift_id));
     case "follow_up":
@@ -205,7 +226,7 @@ async function searchOperation(eventId: string, args: ToolArgs): Promise<unknown
 
 export type RpcRequest = { jsonrpc?: string; id?: string | number | null; method: string; params?: Record<string, unknown> };
 
-export async function handleRpc(eventId: string, token: CallerToken | null, rpc: RpcRequest): Promise<Record<string, unknown>> {
+export async function handleRpc(eventId: string, stored: CallerToken | null, rpc: RpcRequest): Promise<Record<string, unknown>> {
   // A non-object body (null, a number, a string) parses as JSON but carries no method, so it is a
   // malformed request, not a server fault (issue #132).
   if (rpc === null || typeof rpc !== "object" || Array.isArray(rpc)) return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "The request is not a JSON-RPC object." } };
@@ -217,7 +238,11 @@ export async function handleRpc(eventId: string, token: CallerToken | null, rpc:
     return error(-32004, `No event ${eventId}.`);
   }
   if (rpc.method === "initialize") return reply({ protocolVersion: "2025-06-18", serverInfo: { name: "tokuchu", version: "0.1.0" }, capabilities: { tools: {} } });
-  if (!token) return reply(text({ error: "A bearer token for this event is required." }, true));
+  if (!stored) return reply(text({ error: "A bearer token for this event is required." }, true));
+  // The grant is read on every call, so a revocation or an expiry answers the next request with an error and nothing else.
+  const scoped = underGrant(stored);
+  if ("error" in scoped) return reply(text({ error: scoped.error }, true));
+  const token = scoped.token;
   const visible = TOOLS.filter((t) => allowed(token, t));
   if (rpc.method === "tools/list") return reply({ tools: visible.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
   if (rpc.method === "tools/call") {
@@ -226,7 +251,7 @@ export async function handleRpc(eventId: string, token: CallerToken | null, rpc:
     if (!tool) return reply(text({ error: `The token may not call ${name || "an unnamed tool"}.` }, true));
     const args = ((rpc.params?.arguments as Record<string, unknown>) ?? {}) as ToolArgs;
     const profile = (args.meta as { "ucp-agent"?: { profile?: string } } | undefined)?.["ucp-agent"]?.profile;
-    if (profile) state().tokens.set(token.id, { ...token, last_profile_url: profile });
+    if (profile) state().tokens.set(stored.id, { ...stored, last_profile_url: profile });
     try {
       const result = await dispatch(eventId, token, tool, args);
       return reply({ ...text(result), structuredContent: result, seq: readLatestSeq() });

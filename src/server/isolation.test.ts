@@ -37,6 +37,7 @@ import * as guest from "../app/api/events/[id]/guests/[guestId]/route";
 import * as guestImport from "../app/api/events/[id]/guests/import/route";
 import * as guests from "../app/api/events/[id]/guests/route";
 import * as mcp from "../app/api/events/[id]/mcp/route";
+import * as grants from "../app/api/events/[id]/grants/route";
 import * as missing from "../app/api/events/[id]/missing/route";
 import * as publish from "../app/api/events/[id]/publish/route";
 import * as rsvpGuest from "../app/api/events/[id]/rsvp/[guestId]/route";
@@ -89,6 +90,8 @@ const ROUTES: Route[] = [
   { name: "POST updates", handler: updates.POST, method: "POST", body: { kind: "note", text: "hi" } },
   { name: "GET gifts", handler: gifts.GET },
   { name: "POST gifts", handler: gifts.POST, method: "POST", body: GIFT },
+  { name: "GET grants", handler: grants.GET },
+  { name: "POST grants", handler: grants.POST, method: "POST", body: { procurement_id: "gift_1", grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read"] } },
   { name: "GET guest", handler: guest.GET },
   { name: "POST guests import", handler: guestImport.POST, method: "POST", body: { lines: ["Eve"] } },
   { name: "GET guests", handler: guests.GET },

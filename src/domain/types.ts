@@ -165,9 +165,43 @@ export const CallerToken = z.object({
   readable_definition_ids: z.array(z.string()),
   callable_tools: z.array(z.string()),
   expires_at: z.string().nullable(),
-  last_profile_url: z.string().nullable()
+  last_profile_url: z.string().nullable(),
+  /** The AccessGrant that authorizes the token; a token minted before grants existed reads as null and keeps its own scope. */
+  grant_id: z.string().nullable().default(null)
 });
 export type CallerToken = z.infer<typeof CallerToken>;
+
+/* ---- Access grants ---- */
+
+/** Who an outside party is: a person at the store, the store itself, or an agent acting for either. */
+export const GranteeType = z.enum(["user", "vendor", "agent"]);
+export type GranteeType = z.infer<typeof GranteeType>;
+
+/** What a grant lets its holder retrieve or post on one procurement. */
+export const GrantPermission = z.enum(["manifest:read", "requirements:read", "changes:read", "updates:read", "updates:write"]);
+export type GrantPermission = z.infer<typeof GrantPermission>;
+
+/**
+ * The relationship that authorizes a CallerToken: which outside party may reach which procurement
+ * and what it may retrieve. A revoked or expired grant retrieves nothing; the data a holder sees
+ * derives from the permissions and the allowed attributes.
+ */
+export const AccessGrant = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  /** The gift's id until a Procurement record exists. */
+  procurement_id: z.string(),
+  grantee_type: GranteeType,
+  grantee_id: z.string(),
+  permissions: z.array(GrantPermission),
+  /** The definition ids the holder may read; absent means every definition the procurement maps. */
+  allowed_attribute_ids: z.array(z.string()).optional(),
+  created_by: z.string(),
+  created_at: z.string(),
+  expires_at: z.string().nullable().default(null),
+  revoked_at: z.string().nullable().default(null)
+});
+export type AccessGrant = z.infer<typeof AccessGrant>;
 
 /** Who made a change: the attendee on the invite page, the organizer, a store's token holder, an agent acting for one of them, or Tokuchu itself. */
 export const ActorType = z.enum(["attendee", "organizer", "vendor", "agent", "system"]);

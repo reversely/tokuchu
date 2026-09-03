@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift } from "./gifts";
 import { createEvent, createGuest, createParty, deserializeState, freshState, newId, recordFollowUp, resetState, runWithState, serializeState, setGuestStatus, setRequestDelivery, state, transactionally, upsertDefinition, upsertRequest, writeValue, type EventInput, type State } from "./store";
-import type { CallerToken, VendorUpdate } from "./types";
+import type { AccessGrant, CallerToken, VendorUpdate } from "./types";
 
 const EVENT: EventInput = {
   type: "event",
@@ -34,7 +34,9 @@ function populate(): void {
   s.updates.set(update.id, update);
   s.changes.push({ kind: "update", seq: update.seq, at: update.created_at, event_id: event.id, update_id: update.id, gift_id: gift.id, update_kind: update.kind, caller: update.caller });
   s.seq = update.seq;
-  const token: CallerToken = { id: newId("tok"), event_id: event.id, holder: "vendor", gift_ids: [gift.id], readable_definition_ids: [name.id], callable_tools: ["list_guests"], expires_at: null, last_profile_url: null };
+  const grant: AccessGrant = { id: newId("grant"), event_id: event.id, procurement_id: gift.id, grantee_type: "vendor", grantee_id: "vendor", permissions: ["manifest:read"], created_by: "organizer", created_at: "2030-01-01T00:00:00Z", expires_at: null, revoked_at: null };
+  s.grants.set(grant.id, grant);
+  const token: CallerToken = { id: newId("tok"), event_id: event.id, holder: "vendor", gift_ids: [gift.id], readable_definition_ids: [name.id], callable_tools: ["list_guests"], expires_at: null, last_profile_url: null, grant_id: grant.id };
   s.tokens.set(token.id, token);
   recordFollowUp(upsertRequest(event.id, guest.id, gift.id, [name.id]));
   setRequestDelivery(guest.id, gift.id, "failed", "Resend answered 422.");
@@ -72,7 +74,7 @@ describe("state serialization", () => {
   it("round-trips a populated State through JSON", () => {
     populate();
     const s = state();
-    for (const key of ["events", "parties", "guests", "definitions", "values", "updates", "gifts", "tokens", "requests"] as const) expect(s[key].size).toBeGreaterThan(0);
+    for (const key of ["events", "parties", "guests", "definitions", "values", "updates", "gifts", "tokens", "grants", "requests"] as const) expect(s[key].size).toBeGreaterThan(0);
     expect(s.changes.length).toBeGreaterThan(0);
     const restored = deserializeState(JSON.parse(JSON.stringify(serializeState(s))));
     expect(restored).toEqual(s);

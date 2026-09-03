@@ -11,6 +11,7 @@ import { currentRevision, openException, openExceptionsFor, recordProcurementCha
 import { definitionsFor, getGuest, state, transactionally, upsertRequest } from "../domain/store";
 import type { AttributeDefinition, Batch, ExceptionType, ProcurementException, VendorProcurementStatus, VendorUpdate } from "../domain/types";
 import { BadRequestError, postUpdate, requireEvent, requireGift, requireGuest } from "./api";
+import { expireGrantsFor } from "./grants";
 import { deliverAll, type Outgoing } from "./request-mail";
 
 export type ProcurementStatus = "draft" | "collecting" | "approved" | "filling_cart" | "cart_ready" | "locked" | "ordered" | VendorProcurementStatus;
@@ -133,7 +134,8 @@ type Posted = { update: VendorUpdate; exception: ProcurementException | null; ou
  * what the type means for state. accepted, production_started, and fulfilled move the gift's
  * procurement_status. needs_information, invalid_value, option_unavailable, and exception open a
  * ProcurementException; one on an attendee's requirement the event asks that attendee for records
- * a request and emails the attendee a correction with the store's message quoted.
+ * a request and emails the attendee a correction with the store's message quoted. fulfilled also
+ * expires every grant on the procurement.
  *
  * Raises:
  *   BadRequestError: when the body is not a typed update, or invalid_value names no attendee or requirement.
@@ -154,6 +156,8 @@ export async function postProcurementUpdate(eventId: string, giftId: string, cal
     if (move) {
       updateGift(giftId, { procurement_status: move } as Partial<GiftInput>);
       recordProcurementChange(giftId, "status_changed", caller, `The store moved the order to ${move.replace(/_/g, " ")}`);
+      // A fulfilled order needs no further access: every grant on the procurement expires with it (#41).
+      if (move === "fulfilled") expireGrantsFor(eventId, giftId);
       return { update, exception: null, outgoing: [] };
     }
     const exception = openException(giftId, { attendee_ref: data.attendee_ref, requirement_id: data.requirement_id, type: EXCEPTION_TYPE[data.type]!, message: data.message, unavailable_value: data.unavailable_value, allowed_values: data.allowed_values }, caller);

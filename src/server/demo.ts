@@ -44,7 +44,7 @@ function removeEvent(s: State, eventId: string): void {
   for (const map of [s.parties, s.guests]) {
     for (const [id, row] of map) if (row.event_id === eventId) subjects.add(id);
   }
-  for (const map of [s.parties, s.guests, s.definitions, s.updates, s.gifts, s.tokens, s.requests]) {
+  for (const map of [s.parties, s.guests, s.definitions, s.updates, s.gifts, s.tokens, s.grants, s.requests]) {
     for (const [id, row] of map) if (row.event_id === eventId) map.delete(id);
   }
   for (const [key, value] of s.values) if (subjects.has(value.subject_id)) s.values.delete(key);

@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { matches, type Filter, type Subject } from "./filter";
 import * as T from "./types";
-import type { ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, ProcurementException, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
+import type { AccessGrant, ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, ProcurementException, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
 
@@ -23,6 +23,8 @@ export type State = {
   updates: Map<string, VendorUpdate>;
   gifts: Map<string, Batch>;
   tokens: Map<string, CallerToken>;
+  /** Keyed by grant id. */
+  grants: Map<string, AccessGrant>;
   /** Keyed by guest id and gift id joined with `|`: one request per attendee per gift. */
   requests: Map<string, Request>;
   messages: Map<string, ChatMessage>;
@@ -42,7 +44,7 @@ declare global {
 }
 
 export function freshState(): State {
-  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), requests: new Map(), messages: new Map(), schedules: new Map(), exceptions: new Map(), changes: [], seq: 0, ids: 0, consumed_guests: new Set() };
+  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), grants: new Map(), requests: new Map(), messages: new Map(), schedules: new Map(), exceptions: new Map(), changes: [], seq: 0, ids: 0, consumed_guests: new Set() };
 }
 
 const scopedState = new AsyncLocalStorage<State>();
@@ -83,6 +85,7 @@ const StateDocument = z.object({
   updates: entries(T.VendorUpdate),
   gifts: entries(T.Batch),
   tokens: entries(T.CallerToken),
+  grants: entries(T.AccessGrant).default([]),
   requests: entries(T.Request),
   messages: entries(T.ChatMessage).default([]),
   schedules: entries(T.Schedule).default([]),
@@ -94,7 +97,7 @@ const StateDocument = z.object({
 export type StateDocument = z.infer<typeof StateDocument>;
 
 export function serializeState(s: State): StateDocument {
-  return { events: [...s.events], parties: [...s.parties], guests: [...s.guests], definitions: [...s.definitions], values: [...s.values], updates: [...s.updates], gifts: [...s.gifts], tokens: [...s.tokens], requests: [...s.requests], messages: [...s.messages], schedules: [...s.schedules], exceptions: [...s.exceptions], changes: s.changes, seq: s.seq, ids: s.ids };
+  return { events: [...s.events], parties: [...s.parties], guests: [...s.guests], definitions: [...s.definitions], values: [...s.values], updates: [...s.updates], gifts: [...s.gifts], tokens: [...s.tokens], grants: [...s.grants], requests: [...s.requests], messages: [...s.messages], schedules: [...s.schedules], exceptions: [...s.exceptions], changes: s.changes, seq: s.seq, ids: s.ids };
 }
 
 /**
@@ -105,7 +108,7 @@ export function serializeState(s: State): StateDocument {
  */
 export function deserializeState(doc: unknown): State {
   const d = StateDocument.parse(doc);
-  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), requests: new Map(d.requests), messages: new Map(d.messages), schedules: new Map(d.schedules), exceptions: new Map(d.exceptions), changes: d.changes, seq: d.seq, ids: d.ids, consumed_guests: new Set() };
+  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), grants: new Map(d.grants), requests: new Map(d.requests), messages: new Map(d.messages), schedules: new Map(d.schedules), exceptions: new Map(d.exceptions), changes: d.changes, seq: d.seq, ids: d.ids, consumed_guests: new Set() };
 }
 
 /**
@@ -116,7 +119,7 @@ export function deserializeState(doc: unknown): State {
  */
 export function transactionally<T>(fn: () => T): T {
   const s = state();
-  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), requests: new Map(s.requests), messages: new Map(s.messages), schedules: new Map(s.schedules), exceptions: new Map(s.exceptions), changes: [...s.changes], seq: s.seq, ids: s.ids, consumed_guests: s.consumed_guests };
+  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), grants: new Map(s.grants), requests: new Map(s.requests), messages: new Map(s.messages), schedules: new Map(s.schedules), exceptions: new Map(s.exceptions), changes: [...s.changes], seq: s.seq, ids: s.ids, consumed_guests: s.consumed_guests };
   try {
     return fn();
   } catch (e) {
