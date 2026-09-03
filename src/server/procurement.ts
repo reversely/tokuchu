@@ -7,14 +7,15 @@
 import { z } from "zod";
 import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domain/gifts";
 import type { PersonalizationIssue } from "../domain/personalization";
-import { currentRevision, openException, openExceptionsFor, recordProcurementChange, requirementKeys } from "../domain/procurement";
-import { definitionsFor, getGuest, state, transactionally, upsertRequest } from "../domain/store";
-import type { AttributeDefinition, Batch, ExceptionType, ProcurementException, VendorProcurementStatus, VendorUpdate } from "../domain/types";
+import { currentRevision, moveProcurement, openException, openExceptionsFor, requirementKeys } from "../domain/procurement";
+import { VENDOR_MOVES } from "../domain/procurement-status";
+import { definitionsFor, getGuest, procurementFor, state, transactionally, upsertRequest } from "../domain/store";
+import type { AttributeDefinition, Batch, ExceptionType, ProcurementException, ProcurementStatus, VendorProcurementStatus, VendorUpdate } from "../domain/types";
 import { BadRequestError, postUpdate, requireEvent, requireGift, requireGuest } from "./api";
 import { expireGrantsFor } from "./grants";
 import { deliverAll, type Outgoing } from "./request-mail";
 
-export type ProcurementStatus = "draft" | "collecting" | "approved" | "filling_cart" | "cart_ready" | "locked" | "ordered" | VendorProcurementStatus;
+export type { ProcurementStatus };
 export type AttendeeStatus = "ready" | "incomplete" | "invalid" | "exception";
 export type IssueStatus = "incomplete" | "invalid" | "vendor_rejected" | "exception";
 export type FulfillmentIssue = { requirement_id: string; status: IssueStatus; message: string };
@@ -30,16 +31,22 @@ export type FulfillmentManifest = {
   attendees: FulfillmentAttendee[];
 };
 
-/** Where the gift stands: the store's own status once it posted one, and otherwise the fields each step writes. */
+/** Where the gift stands: the status its Procurement holds. */
 export function procurementStatus(gift: Batch): ProcurementStatus {
-  if (gift.procurement_status) return gift.procurement_status;
-  if (gift.order_id) return "ordered";
-  if (gift.locked_at) return "locked";
-  if (gift.cart_fill?.status === "running") return "filling_cart";
-  if (gift.cart_fill?.status === "done" || gift.checkout_url) return "cart_ready";
-  if (gift.approved_at) return "approved";
-  if (gift.requested_at) return "collecting";
-  return "draft";
+  return procurementFor(gift.id).status;
+}
+
+/** The schema fields the Procurement carries, when the product has requirements. */
+function schemaFields(gift: Batch): Pick<FulfillmentManifest, "requirement_schema_id" | "requirement_schema_version"> {
+  const row = procurementFor(gift.id);
+  if (!gift.personalization?.fields.length) return {};
+  return { requirement_schema_id: row.requirement_schema_id ?? `${gift.shop_domain}/${gift.product_id}`, ...(row.requirement_schema_version ? { requirement_schema_version: row.requirement_schema_version } : {}) };
+}
+
+/** The revision the organizer approved, from the Procurement or the gift's own field. */
+function approvedRevision(gift: Batch): number | null {
+  const row = procurementFor(gift.id);
+  return row.approved_revision ?? (typeof gift.approved_seq === "number" ? gift.approved_seq : null);
 }
 
 const ISSUE_STATUS: Record<PersonalizationIssue["code"], IssueStatus> = { missing_source: "incomplete", missing_value: "incomplete", invalid_type: "invalid", too_long: "invalid", unsupported_value: "invalid" };
@@ -92,8 +99,8 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
     procurement_id: giftId,
     gift_id: giftId,
     revision: currentRevision(giftId, readable),
-    approved_revision: typeof gift.approved_seq === "number" ? gift.approved_seq : null,
-    ...(gift.personalization?.fields.length ? { requirement_schema_id: `${gift.shop_domain}/${gift.product_id}` } : {}),
+    approved_revision: approvedRevision(gift),
+    ...schemaFields(gift),
     status: procurementStatus(gift),
     attendees
   };
@@ -120,6 +127,7 @@ export type ProcurementSummary = {
   current_revision: number;
   approved_revision: number | null;
   requirement_schema_id?: string;
+  requirement_schema_version?: string;
   attendees: number;
   open_exceptions: number;
 };
@@ -133,8 +141,8 @@ export function procurementSummary(eventId: string, giftId: string, readable?: s
     store: gift.shop_domain,
     status: procurementStatus(gift),
     current_revision: currentRevision(giftId, readable),
-    approved_revision: typeof gift.approved_seq === "number" ? gift.approved_seq : null,
-    ...(gift.personalization?.fields.length ? { requirement_schema_id: `${gift.shop_domain}/${gift.product_id}` } : {}),
+    approved_revision: approvedRevision(gift),
+    ...schemaFields(gift),
     attendees: manifest(gift).filter((row) => row.unit_status !== "excluded").length,
     open_exceptions: visibleExceptions(eventId, giftId, readable).length
   };
@@ -196,7 +204,7 @@ export async function postProcurementUpdate(eventId: string, giftId: string, cal
     const move = STATUS_MOVE[data.type];
     if (move) {
       updateGift(giftId, { procurement_status: move } as Partial<GiftInput>);
-      recordProcurementChange(giftId, "status_changed", caller, `The store moved the order to ${move.replace(/_/g, " ")}`);
+      moveProcurement(giftId, VENDOR_MOVES[move], caller, { patch: data.reference && move === "accepted" ? { external_order_id: data.reference } : {}, summary: `The store moved the order to ${move.replace(/_/g, " ")}` });
       // A fulfilled order needs no further access: every grant on the procurement expires with it (#41).
       if (move === "fulfilled") expireGrantsFor(eventId, giftId);
       return { update, exception: null, outgoing: [] };
@@ -210,5 +218,5 @@ export async function postProcurementUpdate(eventId: string, giftId: string, cal
     return { update, exception, outgoing: [{ guest, gift_id: giftId, definition_ids: [def.id], kind: "correction", message: data.message }] };
   });
   await deliverAll(event, posted.outgoing);
-  return { update: posted.update, exception: posted.exception, procurement_status: requireGift(eventId, giftId).procurement_status ?? null, current_revision: currentRevision(giftId) };
+  return { update: posted.update, exception: posted.exception, procurement_status: procurementFor(giftId).status, current_revision: currentRevision(giftId) };
 }

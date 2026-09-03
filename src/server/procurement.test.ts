@@ -112,9 +112,10 @@ describe("a store's structured update", () => {
     const { event, gift } = await seed();
     const before = changesAfter(gift.id, 0).current_revision;
     const accepted = await postProcurementUpdate(event.id, gift.id, "token:tok_1", { type: "accepted", reference: "PO-7" });
-    expect(accepted).toMatchObject({ procurement_status: "accepted", update: { kind: "confirmed", reference: "PO-7", caller: "token:tok_1" }, exception: null });
+    expect(accepted).toMatchObject({ procurement_status: "ordered", update: { kind: "confirmed", reference: "PO-7", caller: "token:tok_1" }, exception: null });
     expect(accepted.current_revision).toBeGreaterThan(before);
-    expect(fulfillmentManifest(event.id, gift.id).status).toBe("accepted");
+    expect(fulfillmentManifest(event.id, gift.id).status).toBe("ordered");
+    expect(snapshot(event.id).procurements[0]).toMatchObject({ gift_id: gift.id, status: "ordered", external_order_id: "PO-7" });
     await postProcurementUpdate(event.id, gift.id, "token:tok_1", { type: "production_started" });
     expect(fulfillmentManifest(event.id, gift.id).status).toBe("in_production");
     await postProcurementUpdate(event.id, gift.id, "token:tok_1", { type: "fulfilled", message: "Shipped by courier." });
@@ -184,11 +185,12 @@ describe("a store's structured update", () => {
     expect(resolved).toMatchObject({ id: posted.exception!.id, status: "resolved" });
     expect(resolved.resolved_revision).toBeGreaterThan(resolved.created_revision);
     expect(resolved.resolved_at).not.toBeNull();
-    expect(changesAfter(gift.id, posted.current_revision).changes.map((c) => c.type)).toEqual(["answer_changed", "answer_changed", "exception_resolved"]);
-    expect(changesAfter(gift.id, 0).current_revision).toBe(resolved.resolved_revision);
+    // The resolving answer completes every row, so the procurement moves to ready right after the exception closes.
+    expect(changesAfter(gift.id, posted.current_revision).changes.map((c) => c.type)).toEqual(["answer_changed", "answer_changed", "exception_resolved", "status_changed"]);
+    expect(changesAfter(gift.id, 0).current_revision).toBe(resolved.resolved_revision! + 1);
     const row = fulfillmentManifest(event.id, gift.id).attendees.find((a) => a.attendee_ref === avery)!;
     expect(row).toMatchObject({ status: "ready", values: { star_map_location: "Vancouver BC" }, issues: [] });
-    expect(fulfillmentManifest(event.id, gift.id).status).toBe("collecting");
+    expect(fulfillmentManifest(event.id, gift.id).status).toBe("ready");
   });
 
   it("stores exceptions in the state document and a document without them loads", async () => {

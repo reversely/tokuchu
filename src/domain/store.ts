@@ -9,7 +9,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { matches, type Filter, type Subject } from "./filter";
 import * as T from "./types";
-import type { AccessGrant, ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, ProcurementException, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
+import type { AccessGrant, ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, Procurement, ProcurementException, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
+import { derivedStatus } from "./procurement-status";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
 
@@ -31,6 +32,8 @@ export type State = {
   schedules: Map<string, Schedule>;
   /** Keyed by exception id. */
   exceptions: Map<string, ProcurementException>;
+  /** Keyed by gift id: one procurement per gift. */
+  procurements: Map<string, Procurement>;
   changes: ChangeEntry[];
   seq: number;
   ids: number;
@@ -44,7 +47,7 @@ declare global {
 }
 
 export function freshState(): State {
-  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), grants: new Map(), requests: new Map(), messages: new Map(), schedules: new Map(), exceptions: new Map(), changes: [], seq: 0, ids: 0, consumed_guests: new Set() };
+  return { events: new Map(), parties: new Map(), guests: new Map(), definitions: new Map(), values: new Map(), updates: new Map(), gifts: new Map(), tokens: new Map(), grants: new Map(), requests: new Map(), messages: new Map(), schedules: new Map(), exceptions: new Map(), procurements: new Map(), changes: [], seq: 0, ids: 0, consumed_guests: new Set() };
 }
 
 const scopedState = new AsyncLocalStorage<State>();
@@ -90,6 +93,7 @@ const StateDocument = z.object({
   messages: entries(T.ChatMessage).default([]),
   schedules: entries(T.Schedule).default([]),
   exceptions: entries(T.ProcurementException).default([]),
+  procurements: entries(T.Procurement).default([]),
   changes: z.array(T.ChangeEntry),
   seq: z.number().int(),
   ids: z.number().int()
@@ -97,7 +101,7 @@ const StateDocument = z.object({
 export type StateDocument = z.infer<typeof StateDocument>;
 
 export function serializeState(s: State): StateDocument {
-  return { events: [...s.events], parties: [...s.parties], guests: [...s.guests], definitions: [...s.definitions], values: [...s.values], updates: [...s.updates], gifts: [...s.gifts], tokens: [...s.tokens], grants: [...s.grants], requests: [...s.requests], messages: [...s.messages], schedules: [...s.schedules], exceptions: [...s.exceptions], changes: s.changes, seq: s.seq, ids: s.ids };
+  return { events: [...s.events], parties: [...s.parties], guests: [...s.guests], definitions: [...s.definitions], values: [...s.values], updates: [...s.updates], gifts: [...s.gifts], tokens: [...s.tokens], grants: [...s.grants], requests: [...s.requests], messages: [...s.messages], schedules: [...s.schedules], exceptions: [...s.exceptions], procurements: [...s.procurements], changes: s.changes, seq: s.seq, ids: s.ids };
 }
 
 /**
@@ -108,7 +112,10 @@ export function serializeState(s: State): StateDocument {
  */
 export function deserializeState(doc: unknown): State {
   const d = StateDocument.parse(doc);
-  return { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), grants: new Map(d.grants), requests: new Map(d.requests), messages: new Map(d.messages), schedules: new Map(d.schedules), exceptions: new Map(d.exceptions), changes: d.changes, seq: d.seq, ids: d.ids, consumed_guests: new Set() };
+  const s: State = { events: new Map(d.events), parties: new Map(d.parties), guests: new Map(d.guests), definitions: new Map(d.definitions), values: new Map(d.values), updates: new Map(d.updates), gifts: new Map(d.gifts), tokens: new Map(d.tokens), grants: new Map(d.grants), requests: new Map(d.requests), messages: new Map(d.messages), schedules: new Map(d.schedules), exceptions: new Map(d.exceptions), procurements: new Map(d.procurements), changes: d.changes, seq: d.seq, ids: d.ids, consumed_guests: new Set() };
+  // A document stored before procurements existed gets one per gift, at the status the gift's own fields derive.
+  for (const gift of s.gifts.values()) if (!s.procurements.has(gift.id)) s.procurements.set(gift.id, procurementOf(s, gift, derivedStatus(gift)));
+  return s;
 }
 
 /**
@@ -119,7 +126,7 @@ export function deserializeState(doc: unknown): State {
  */
 export function transactionally<T>(fn: () => T): T {
   const s = state();
-  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), grants: new Map(s.grants), requests: new Map(s.requests), messages: new Map(s.messages), schedules: new Map(s.schedules), exceptions: new Map(s.exceptions), changes: [...s.changes], seq: s.seq, ids: s.ids, consumed_guests: s.consumed_guests };
+  const snapshot: State = { events: new Map(s.events), parties: new Map(s.parties), guests: new Map(s.guests), definitions: new Map(s.definitions), values: new Map(s.values), updates: new Map(s.updates), gifts: new Map(s.gifts), tokens: new Map(s.tokens), grants: new Map(s.grants), requests: new Map(s.requests), messages: new Map(s.messages), schedules: new Map(s.schedules), exceptions: new Map(s.exceptions), procurements: new Map(s.procurements), changes: [...s.changes], seq: s.seq, ids: s.ids, consumed_guests: s.consumed_guests };
   try {
     return fn();
   } catch (e) {
@@ -254,6 +261,69 @@ export function upsertDefinition(eventId: string, def: Omit<AttributeDefinition,
   s.definitions.set(row.id, row);
   if (!event.definition_ids.includes(row.id)) s.events.set(eventId, { ...event, definition_ids: [...event.definition_ids, row.id] });
   return row;
+}
+
+/* ---- Procurements ---- */
+
+/** The procurement row for a gift: its product and store, its cart and checkout, and the approval the gift already carries. */
+function procurementOf(s: State, gift: Batch, status: Procurement["status"]): Procurement {
+  s.ids += 1;
+  const at = now();
+  const lastSeq = s.changes.reduce((max, c) => (c.event_id === gift.event_id ? Math.max(max, c.seq) : max), 0);
+  return {
+    id: `proc_${s.ids}`,
+    event_id: gift.event_id,
+    gift_id: gift.id,
+    vendor_id: gift.shop_domain,
+    product_id: gift.product_id,
+    ...(gift.product_url ? { product_url: gift.product_url } : {}),
+    ...(gift.personalization?.fields.length ? { requirement_schema_id: `${gift.shop_domain}/${gift.product_id}` } : {}),
+    status,
+    current_revision: lastSeq,
+    ...(typeof gift.approved_seq === "number" ? { approved_revision: gift.approved_seq } : {}),
+    ...(gift.cart_id ? { external_cart_id: gift.cart_id } : {}),
+    ...(gift.checkout_url ? { checkout_url: gift.checkout_url } : {}),
+    ...(gift.order_id ? { external_order_id: gift.order_id } : {}),
+    created_at: at,
+    updated_at: at
+  };
+}
+
+/** Creates the draft procurement for a gift; a gift that already has one keeps it. */
+export function createProcurement(gift: Batch): Procurement {
+  const s = state();
+  const existing = s.procurements.get(gift.id);
+  if (existing) return existing;
+  const row = procurementOf(s, gift, "draft");
+  s.procurements.set(gift.id, row);
+  return row;
+}
+
+/**
+ * The procurement of a gift; a gift stored before procurements existed gets one at the status its own fields derive.
+ *
+ * Raises:
+ *   Error: when no gift has the id.
+ */
+export function procurementFor(giftId: string): Procurement {
+  const s = state();
+  const existing = s.procurements.get(giftId);
+  if (existing) return existing;
+  const gift = s.gifts.get(giftId);
+  if (!gift) throw new Error(`No gift ${giftId}.`);
+  const row = procurementOf(s, gift, derivedStatus(gift));
+  s.procurements.set(giftId, row);
+  return row;
+}
+
+export function updateProcurement(giftId: string, patch: Partial<Omit<Procurement, "id" | "event_id" | "gift_id" | "created_at">>): Procurement {
+  const row: Procurement = { ...procurementFor(giftId), ...patch, updated_at: now() };
+  state().procurements.set(giftId, row);
+  return row;
+}
+
+export function procurementsFor(eventId: string): Procurement[] {
+  return [...state().procurements.values()].filter((p) => p.event_id === eventId);
 }
 
 /* ---- Parties and guests ---- */

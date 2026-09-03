@@ -376,6 +376,37 @@ export const Batch = z.object({
 });
 export type Batch = z.infer<typeof Batch>;
 
+/* ---- Procurement ---- */
+
+/** Where a procurement stands, from the gift's creation to the store's fulfilment; procurement-status.ts states the allowed moves. */
+export const ProcurementStatus = z.enum(["draft", "collecting", "ready", "approved", "ordered", "in_production", "fulfilled", "cancelled"]);
+export type ProcurementStatus = z.infer<typeof ProcurementStatus>;
+
+/**
+ * The relationship between the event, the gift, the store, the requirement schema, the attendee
+ * fulfilment data, the approval, and the external order. One exists per gift; the gift keeps
+ * describing the product. The revisions are change-log sequence numbers.
+ */
+export const Procurement = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  gift_id: z.string(),
+  vendor_id: z.string().optional(),
+  product_id: z.string().optional(),
+  product_url: z.string().optional(),
+  requirement_schema_id: z.string().optional(),
+  requirement_schema_version: z.string().optional(),
+  status: ProcurementStatus,
+  current_revision: z.number().int(),
+  approved_revision: z.number().int().optional(),
+  external_cart_id: z.string().optional(),
+  checkout_url: z.string().optional(),
+  external_order_id: z.string().optional(),
+  created_at: z.string(),
+  updated_at: z.string()
+});
+export type Procurement = z.infer<typeof Procurement>;
+
 /* ---- Procurement exceptions ---- */
 
 export const ExceptionSource = z.enum(["vendor", "organizer", "system"]);

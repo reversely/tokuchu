@@ -69,8 +69,8 @@ test("the store page registers the grant's tools and each call runs under the gr
 
   const posted = await execute(page, "post_procurement_update", { procurement_id: giftId, type: "accepted", reference: "PO-7" });
   expect(posted.isError).toBe(false);
-  expect(JSON.parse(posted.text)).toMatchObject({ procurement_status: "accepted", update: { kind: "confirmed", reference: "PO-7" } });
-  await expect(page.getByTestId("store-status")).toHaveText("accepted");
+  expect(JSON.parse(posted.text)).toMatchObject({ procurement_status: "ordered", update: { kind: "confirmed", reference: "PO-7" } });
+  await expect(page.getByTestId("store-status")).toHaveText("ordered");
   await expect(page.getByTestId("store-update")).toHaveAttribute("data-kind", "confirmed");
   const changes = await execute(page, "get_changes", { procurement_id: giftId, after_revision: 0 });
   expect((JSON.parse(changes.text).changes as { type: string; actor_type: string }[]).at(-1)).toMatchObject({ type: "status_changed", actor_type: "vendor" });

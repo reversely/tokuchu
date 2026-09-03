@@ -8,6 +8,7 @@
 import { CatalogError } from "@webmcp/shopify-ucp";
 import { approveGift, lockAndCheckout, sendGift, syncGift, type CartDeps } from "../agent/cart";
 import { getGift, updateGift, type GiftInput } from "../domain/gifts";
+import { moveProcurement } from "../domain/procurement";
 import { getEvent } from "../domain/store";
 import type { CartBuyer } from "../domain/types";
 import { postUpdate, requireGift } from "./api";
@@ -49,6 +50,7 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
   return withPersistedEvent(eventId, () => {
     postUpdate(eventId, giftId, "tokuchu", { kind, text, reference });
     updateGift(giftId, patch);
+    if (patch.checkout_url) moveProcurement(giftId, "ordered", "tokuchu", { patch: { checkout_url: patch.checkout_url }, summary: "The store's checkout is ready" });
   });
 }
 

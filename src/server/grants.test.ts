@@ -74,7 +74,7 @@ describe("an access grant", () => {
     const token = tokenForGrant(event.id, grant.id);
     expect(await listed(event.id, token.id)).toEqual(["get_manifest", "get_procurement", "get_fulfillment_manifest", "get_changes", "get_requirements"]);
     const summary = payload(await call(event.id, token.id, "get_procurement", { procurement_id: gift.id }));
-    expect(summary).toMatchObject({ procurement_id: gift.id, product: { title: "Customized Crewneck" }, store: "springbuilt.myshopify.com", status: "collecting", approved_revision: null, attendees: 1, open_exceptions: 0 });
+    expect(summary).toMatchObject({ procurement_id: gift.id, product: { title: "Customized Crewneck" }, store: "springbuilt.myshopify.com", status: "ready", approved_revision: null, attendees: 1, open_exceptions: 0 });
     const manifest = payload(await call(event.id, token.id, "get_fulfillment_manifest", { procurement_id: gift.id }));
     expect(manifest.attendees).toHaveLength(1);
     expect(manifest.attendees[0]).toMatchObject({ attendee_ref: avery, values: { variant_size: "l", caption: "Avery Chen" } });

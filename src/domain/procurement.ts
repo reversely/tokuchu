@@ -4,9 +4,10 @@
  * reader lists the changes after a revision in the shape get_changes returns. The store's
  * requirement key (a vendor field key or the variant question's key) names each requirement.
  */
-import type { ActorType, Batch, ChangeEntry, ProcurementChangeType, ProcurementException } from "./types";
-import { getGift } from "./gifts";
-import { actorOf, appendChange, definitionsFor, getGuest, newId, state } from "./store";
+import type { ActorType, Batch, ChangeEntry, Procurement, ProcurementChangeType, ProcurementException, ProcurementStatus } from "./types";
+import { getGift, manifest } from "./gifts";
+import { canMove, isCollecting } from "./procurement-status";
+import { actorOf, appendChange, definitionsFor, getGuest, newId, procurementFor, state, updateProcurement } from "./store";
 
 /** One change as get_changes returns it. */
 export type ChangeView = { revision: number; timestamp: string; actor_type: NonNullable<ChangeEntry["actor_type"]>; actor_id?: string; type: string; attendee_ref?: string; requirement_id?: string; summary: string };
@@ -96,6 +97,46 @@ export function changesAfter(giftId: string, after: number, readable?: string[])
   const keys = requirementKeys(getGift(giftId));
   const entries = procurementChanges(giftId, 0, readable);
   return { procurement_id: giftId, gift_id: giftId, from_revision: after, current_revision: entries.at(-1)?.seq ?? 0, changes: entries.filter((c) => c.seq > after).map((c) => changeView(c, keys)) };
+}
+
+/* ---- Status moves ---- */
+
+/**
+ * Moves a gift's procurement to a status, records the move in the change log, and stores the entry's
+ * seq as the current revision. A move the machine does not allow, or to the status already held,
+ * changes nothing and returns the row as it stands. `patch` carries the fields the step also writes,
+ * such as the approved revision or the checkout link.
+ */
+export type MoveOptions = {
+  patch?: Partial<Pick<Procurement, "approved_revision" | "external_cart_id" | "checkout_url" | "external_order_id">>;
+  summary?: string;
+  /** An entry already recorded for the move, such as the approval's own, so the move stands at that revision. */
+  entry?: ChangeEntry;
+};
+
+export function moveProcurement(giftId: string, to: ProcurementStatus, source: string, { patch = {}, summary, entry }: MoveOptions = {}): Procurement {
+  const row = procurementFor(giftId);
+  if (!canMove(row.status, to)) return Object.keys(patch).length ? updateProcurement(giftId, patch) : row;
+  const recorded = entry ?? recordProcurementChange(giftId, "status_changed", source, summary ?? `The procurement moved from ${row.status.replace(/_/g, " ")} to ${to.replace(/_/g, " ")}`);
+  return updateProcurement(giftId, { ...patch, status: to, current_revision: recorded.seq });
+}
+
+/** True when every counted manifest row has a variant, every personalization value resolves, and no exception is open on the gift. */
+export function rowsResolved(gift: Batch): boolean {
+  if (openExceptionsFor(gift.id).length) return false;
+  return manifest(gift).every((row) => row.unit_status === "excluded" || (row.unit_status !== "held" && row.unit_status !== "unservable" && (row.personalization_status ?? "ready") === "ready"));
+}
+
+/**
+ * Moves a collecting procurement to ready once every row resolves, and back to collecting when a
+ * row stops resolving. A procurement at any other status keeps it, so an approval or an order is
+ * never undone by a value write; a schema change undoes an approval on its own path.
+ */
+export function syncReadiness(giftId: string, source: string): Procurement {
+  const row = procurementFor(giftId);
+  if (!isCollecting(row.status)) return row;
+  const target: ProcurementStatus = rowsResolved(getGift(giftId)) ? "ready" : "collecting";
+  return target === row.status ? row : moveProcurement(giftId, target, source, { summary: target === "ready" ? "Every attendee row resolves" : "An attendee row no longer resolves" });
 }
 
 /* ---- Exceptions ---- */

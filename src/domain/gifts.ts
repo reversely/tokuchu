@@ -6,7 +6,7 @@
  */
 import { matches, type Subject } from "./filter";
 import { personalized, personalizeRow, type RowPersonalization } from "./personalization";
-import { getDefinition, getEvent, guestsFor, newId, state, subjectFor } from "./store";
+import { createProcurement, getDefinition, getEvent, guestsFor, newId, state, subjectFor } from "./store";
 import type { AttributeDefinition, Batch, GiftOverride, Option, SynonymRow, UnitStatus, Variant, VariantMappingRow } from "./types";
 import synonymData from "./synonyms.json";
 
@@ -22,6 +22,7 @@ export function createGift(eventId: string, input: GiftInput): Batch {
   const s = state();
   const gift: Batch = { ...input, id: newId("gift"), event_id: eventId, overrides: {}, locked_at: null };
   s.gifts.set(gift.id, gift);
+  createProcurement(gift);
   return gift;
 }
 

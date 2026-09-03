@@ -28,6 +28,7 @@ import {
   listMissing,
   newEventId,
   newId,
+  procurementsFor,
   publishEvent,
   recordFollowUp,
   requestsFor,
@@ -47,7 +48,7 @@ import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { validateMappings } from "../domain/personalization";
-import { changesAfter, exceptionsFor, recordProcurementChange, resolveExceptionsByAnswer } from "../domain/procurement";
+import { changesAfter, exceptionsFor, moveProcurement, recordProcurementChange, resolveExceptionsByAnswer, syncReadiness } from "../domain/procurement";
 import { slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { approvalState } from "./approval";
@@ -191,7 +192,7 @@ export function snapshot(eventId: string) {
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   tickAfterRead(eventId);
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), exceptions: exceptionsFor(eventId), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, procurements: procurementsFor(eventId), requests: requestViews(eventId), exceptions: exceptionsFor(eventId), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
 }
 
 /* ---- Gifts ---- */
@@ -261,6 +262,7 @@ export function deleteGift(eventId: string, giftId: string) {
   // A placed order or a checkout is a committed record; removing it would drop the local trace of a real order.
   if (gift.order_id) throw new BadRequestError("An ordered gift cannot be removed.");
   if (gift.locked_at || gift.cutoff) throw new BadRequestError("A checked-out gift cannot be removed.");
+  moveProcurement(giftId, "cancelled", "organizer");
   removeGift(giftId);
   return { id: giftId };
 }
@@ -280,6 +282,7 @@ export function approveSpecs(eventId: string, giftId: string, now = new Date()) 
   // The approval's own entry is the approved revision, so a manifest read at that revision reads as approved.
   const approved = recordProcurementChange(giftId, "approved", "organizer", "The organizer approved the attendee values");
   updateGift(giftId, { approved_at: now.toISOString(), approved_seq: approved.seq, checkout_url: null, cart_fill: null, cart_lines: null, cart_blocked: null } as Partial<GiftInput>);
+  moveProcurement(giftId, "approved", "organizer", { patch: { approved_revision: approved.seq }, entry: approved });
   return giftView(eventId, giftId);
 }
 
@@ -358,6 +361,8 @@ export async function requestFromAttendees(eventId: string, giftId: string) {
     updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows, requested_at: gift.requested_at ?? new Date().toISOString() } as Partial<GiftInput>);
     const created = resolved.filter((r) => !gift.personalization_mappings?.some((m) => m.vendor_field_key === r.key) && r.definition_id);
     if (created.length) recordProcurementChange(giftId, "mapping_changed", "organizer", `Questions requested from attendees for ${created.map((r) => r.key).join(", ")}`);
+    moveProcurement(giftId, "collecting", "organizer");
+    syncReadiness(giftId, "organizer");
     const asked = askedDefinitionIds(resolved, definitionsFor(eventId));
     return recordRequests(eventId, giftId, asked, new Set());
   });
@@ -451,6 +456,7 @@ export function setPersonalizationMappings(eventId: string, giftId: string, body
   if (errors.length) throw new BadRequestError(errors.map((e) => `${e.code}: ${e.message}`).join("; "));
   updateGift(giftId, { personalization_mappings: data.mappings } as Partial<GiftInput>);
   recordProcurementChange(giftId, "mapping_changed", "organizer", `The mappings for ${data.mappings.map((m) => m.vendor_field_key).join(", ") || "no field"} changed`);
+  syncReadiness(giftId, "organizer");
   return giftView(eventId, giftId);
 }
 
@@ -549,6 +555,7 @@ export function submitRsvp(eventId: string, body: unknown) {
     return guest;
   });
   requestFromLateAttendees(eventId);
+  for (const gift of giftsFor(eventId)) syncReadiness(gift.id, "guest");
   afterRsvpWrite(eventId);
   return { party_id: created.party?.id ?? guests[0]?.party_id ?? null, guest_ids: guests.map((g) => g.id) };
   });
@@ -583,6 +590,7 @@ export function patchRsvp(eventId: string, guestId: string, body: unknown) {
   if (parsed.data.status) guest = setGuestStatus(guestId, parsed.data.status, parsed.data.source);
   if (parsed.data.email) setPartyEmail(guest.party_id, parsed.data.email);
   requestFromLateAttendees(eventId);
+  for (const gift of giftsFor(eventId)) syncReadiness(gift.id, parsed.data.source);
   afterRsvpWrite(eventId);
   return { ...guest, email: partyEmail(guest.party_id), values: valuesFor(guest) };
   });
