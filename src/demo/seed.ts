@@ -44,10 +44,18 @@ export const DEMO_GIFT_ORDER: DemoGiftKey[] = ["crewneck", "mug", "food"];
 /**
  * The replies the tour loads: the name on the shirt, the size choice, the star map's place and
  * time, and the photo the mug carries. Each photo is an image on the store's own CDN, so the store's
- * cart tool accepts the address and the page shows the picture.
+ * cart tool accepts the address and the page shows the picture. The third attendee's place is the
+ * bare "Cambridge", which the store's agent sends back as a question (#53).
  */
 export const DEMO_ATTENDEES = [
   { display_name: "Avery Chen", size: "M", location: "Toronto", time: "21:00", photo: "https://cdn.shopify.com/s/files/1/0832/1322/2137/files/1f55e5cb-9041-4c81-ac8b-c3ff16fed99c.jpg" },
   { display_name: "Blake Rivera", size: "L", location: "Vancouver", time: "22:30", photo: "https://cdn.shopify.com/s/files/1/0832/1322/2137/files/98b0ef2e-030f-4228-820a-813972a3c509.png" },
-  { display_name: "Carmen Diaz", size: "XL", location: "Montreal", time: "20:15", photo: "https://cdn.shopify.com/s/files/1/0832/1322/2137/files/4c45e795-0cf3-42c0-907b-af95e7f94dcc.png" }
+  { display_name: "Carmen Diaz", size: "XL", location: "Cambridge", time: "20:15", photo: "https://cdn.shopify.com/s/files/1/0832/1322/2137/files/4c45e795-0cf3-42c0-907b-af95e7f94dcc.png" }
 ];
+
+/**
+ * The store's exception and its correction (#53): the attendee whose star map location the store's
+ * agent questions, the value given, the store's message, and the value the attendee saves through
+ * the reply link.
+ */
+export const DEMO_CORRECTION = { attendee: "Carmen Diaz", requirement: "star_map_location", given: "Cambridge", message: "Which Cambridge is the star map for", corrected: "Cambridge, Massachusetts, USA" };

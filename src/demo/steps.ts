@@ -5,10 +5,10 @@
  * finished, and its `wire` to list the WebMCP calls the step makes with the data they carry. A step
  * that concerns one of the three gifts names it, and the tour selects that gift on the Attendees tab.
  */
-import { DEMO_ATTENDEES, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "./seed";
+import { DEMO_ATTENDEES, DEMO_CORRECTION, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "./seed";
 
 export type TourTab = "overview" | "experience" | "attendees";
-export type TourAction = "search" | "pick" | "pick_mug" | "pick_food" | "request" | "answer" | "approve" | "cart";
+export type TourAction = "search" | "pick" | "pick_mug" | "pick_food" | "request" | "answer" | "approve" | "cart" | "share" | "read_store" | "post_exception" | "correct" | "reapprove";
 export type TourPhase = "entering" | "ready" | "running" | "failed";
 
 /** A `data-testid` on the page; `shop` narrows a result card to the one from that store, and `gift` selects that gift on the Attendees tab first. */
@@ -26,21 +26,40 @@ export type TourGift = {
   checkout_url?: string | null;
   cart_fill?: { status: string } | null;
   cart_lines?: { guest_id: string }[] | null;
+  approval?: { approved_revision: number | null; current_revision: number; stale: boolean } | null;
 };
+
+/** A grant on a gift as the snapshot lists it: the store's access and the signed link while it is active. */
+export type TourGrant = { procurement_id: string; status: string; link: string | null };
+/** An exception a store raised on a gift, open until the attendee's next answer resolves it. */
+export type TourException = { procurement_id: string; requirement_id: string | null; status: string; resolved_revision?: number | null };
 
 /** What the tour reads from the dashboard's snapshot to decide which steps the event already shows finished. */
 export type TourState = {
   guests: { status: string }[];
   requests: { gift_id: string; complete: boolean }[];
   gifts: TourGift[];
+  grants?: TourGrant[];
+  exceptions?: TourException[];
 };
 
 /** The snapshot fields the wire reads; the dashboard's snapshot satisfies it. */
-export type WireSnapshot = TourState & {
+export type WireSnapshot = Omit<TourState, "guests"> & {
   event: { id: string; invite_code?: string | null };
-  guests: { status: string; display_name: string }[];
+  guests: { id: string; status: string; display_name: string }[];
   definitions: { scope: string; label: string }[];
 };
+
+/** One attendee row of the manifest the store's agent read: the reference, the grade, and the values by the store's requirement key. */
+export type StoreManifestRow = { attendee_ref: string; status: string; values: Record<string, unknown> };
+/** One change get_changes listed after the approved revision. */
+export type StoreChange = { revision: number; type: string; summary: string };
+/**
+ * What the store's side of the tour read and posted through the store page's tools in the inline
+ * frame: the tools the page registered, the manifest, the exception's revision, and the changes.
+ */
+export type StoreWire = { tools: string[]; manifest: { revision: number; approved_revision: number | null; attendees: StoreManifestRow[] } | null; posted: { revision: number } | null; changes: StoreChange[] | null };
+export const EMPTY_STORE: StoreWire = { tools: [], manifest: null, posted: null, changes: null };
 
 /** What the tour reads off the page for the wire: the search funnel rows, the ranked cards, the requested labels, and the records rows. */
 export type WirePage = { funnelRows: string[]; rankedCount: number; askedLabels: string[]; attendeeRows: number };
@@ -49,7 +68,7 @@ export type WirePage = { funnelRows: string[]; rankedCount: number; askedLabels:
 export type WireUpdate = { text: string; reference?: string | null };
 
 /** The three gifts by key, `null` where the event does not hold one yet; `updates` holds each gift's progress log by gift id. */
-export type WireContext = { snap: WireSnapshot; gifts: Record<DemoGiftKey, TourGift | null>; page: WirePage; updates: Record<string, WireUpdate[]>; phase: TourPhase };
+export type WireContext = { snap: WireSnapshot; gifts: Record<DemoGiftKey, TourGift | null>; page: WirePage; updates: Record<string, WireUpdate[]>; phase: TourPhase; store: StoreWire };
 
 /** One line of the wire; `working` marks a call in flight and `done` a result that arrived. */
 export type WireLine = { text: string; state?: "working" | "done" };
@@ -67,6 +86,8 @@ export type TourStep = {
   wire?: (ctx: WireContext) => WireLine[];
   /** The step's wire reads the gifts' progress logs, so the tour polls them while the step runs. */
   readsThread?: boolean;
+  /** The step shows the store's page in an inline frame opened through the grant's signed link. */
+  frame?: boolean;
 };
 
 const bareHost = (shop: string) => shop.replace(/^https?:\/\//, "");
@@ -89,6 +110,21 @@ const hasRequests = (key: DemoGiftKey) => (s: TourState) => Boolean(demoGift(s.g
 const hasAnswers = (s: TourState) => s.guests.filter((g) => g.status === "going").length >= DEMO_ATTENDEES.length && s.requests.every((r) => r.complete);
 const allApproved = (s: TourState) => DEMO_GIFT_ORDER.every((key) => Boolean(demoGift(s.gifts, key)?.approved_at));
 const allCheckedOut = (s: TourState) => DEMO_GIFT_ORDER.every((key) => Boolean(demoGift(s.gifts, key)?.checkout_url));
+const hasGrant = (key: DemoGiftKey) => (s: TourState) => {
+  const gift = demoGift(s.gifts, key);
+  return Boolean(gift && s.grants?.some((g) => g.procurement_id === gift.id && g.status === "active"));
+};
+const giftExceptions = (s: TourState, key: DemoGiftKey) => {
+  const gift = demoGift(s.gifts, key);
+  return gift ? (s.exceptions ?? []).filter((e) => e.procurement_id === gift.id && e.requirement_id === DEMO_CORRECTION.requirement) : [];
+};
+const hasException = (key: DemoGiftKey) => (s: TourState) => giftExceptions(s, key).length > 0;
+const exceptionResolved = (key: DemoGiftKey) => (s: TourState) => giftExceptions(s, key).some((e) => e.status === "resolved");
+/** The approval stands again once no fulfilment change follows it and the refilled cart returned its link. */
+const reapproved = (key: DemoGiftKey) => (s: TourState) => {
+  const gift = demoGift(s.gifts, key);
+  return Boolean(gift?.approval && !gift.approval.stale && gift.checkout_url) && exceptionResolved(key)(s);
+};
 
 const CATALOG_ENDPOINT = "catalog.shopify.com/api/ucp/mcp";
 const storeEndpoint = (shop: string) => `${shop}/api/ucp/mcp`;
@@ -197,6 +233,58 @@ function giftCartWire(key: DemoGiftKey, { snap, gifts, updates, phase }: WireCon
 /** The approve step and the cart step share one wire: every gift's hops in order. */
 function cartWire(ctx: WireContext): WireLine[] {
   return DEMO_GIFT_ORDER.flatMap((key) => giftCartWire(key, ctx));
+}
+
+const STORE_TOOLS = "get_procurement get_fulfillment_manifest get_requirements get_changes get_updates post_procurement_update";
+/** The values a manifest row carries, in the wire's one-line form. */
+const rowValues = (row: StoreManifestRow) => Object.entries(row.values).map(([k, v]) => `${k}=${v === null || v === undefined || v === "" ? "missing" : String(v)}`).join("  ");
+
+/** The grant's creation and the link the store opens. */
+function shareWire({ snap, gifts, phase }: WireContext): WireLine[] {
+  const gift = gifts.crewneck;
+  const grant = gift ? snap.grants?.find((g) => g.procurement_id === gift.id && g.status === "active") : undefined;
+  const lines = [line(`Tokuchu  POST /api/events/${snap.event.id}/grants  ${DEMO_STORE.shop_domain}`, working(phase === "running" && !grant)), line("→ manifest:read requirements:read changes:read updates:read updates:write")];
+  if (!grant) return lines;
+  return [...lines, result(`grant active  signed link ${grant.link?.slice(0, 22) ?? ""}…`), line(`store page tools  ${STORE_TOOLS}`)];
+}
+
+/** The store's page in the frame: its tools and the manifest its agent read. */
+function storeWire({ gifts, store, phase }: WireContext): WireLine[] {
+  const gift = gifts.crewneck;
+  const lines = [line(`store page  ${DEMO_STORE.shop_domain} opens the signed link`), line(`store page tools  ${store.tools.length ? store.tools.join(" ") : "registering"}`, working(phase === "running" && store.tools.length === 0)), line(`store page tool  get_fulfillment_manifest  ${gift?.product_title ?? DEMO_GIFTS.crewneck.label}`, working(phase === "running" && store.tools.length > 0 && !store.manifest))];
+  const m = store.manifest;
+  if (!m) return lines;
+  return [...lines, result(`revision ${m.revision}  approved ${m.approved_revision ?? "none"}  ${plural(m.attendees.length, "attendee")}`), ...m.attendees.map((a) => line(`• ${a.attendee_ref}  ${a.status}  ${rowValues(a)}`))];
+}
+
+/** The store's needs_information post and what it did to the procurement. */
+function exceptionWire({ snap, gifts, store, phase }: WireContext): WireLine[] {
+  const gift = gifts.crewneck;
+  const attendee = store.manifest?.attendees.find((a) => a.values[DEMO_CORRECTION.requirement] === DEMO_CORRECTION.given)?.attendee_ref ?? snap.guests.find((g) => g.display_name === DEMO_CORRECTION.attendee)?.id ?? "";
+  const open = gift ? (snap.exceptions ?? []).find((e) => e.procurement_id === gift.id && e.requirement_id === DEMO_CORRECTION.requirement) : undefined;
+  const lines = [line("store page tool  post_procurement_update  needs_information", working(phase === "running" && !store.posted && !open)), line(`→ attendee_ref ${attendee}  requirement_id ${DEMO_CORRECTION.requirement}`), line(`→ "${DEMO_CORRECTION.message}"`)];
+  if (!store.posted && !open) return lines;
+  return [...lines, result(`exception opened  revision ${store.posted?.revision ?? "moved on"}`), result("attendee incomplete  correction emailed with the store's question")];
+}
+
+/** The attendee's corrected answer through the invite route and the changes the store's agent read after its approved revision. */
+function correctionWire({ snap, gifts, store, phase }: WireContext): WireLine[] {
+  const gift = gifts.crewneck;
+  const guest = snap.guests.find((g) => g.display_name === DEMO_CORRECTION.attendee);
+  const resolved = gift ? (snap.exceptions ?? []).find((e) => e.procurement_id === gift.id && e.requirement_id === DEMO_CORRECTION.requirement && e.status === "resolved") : undefined;
+  const lines = [line(`invite page tool  submit_rsvp  PATCH /api/events/${snap.event.id}/rsvp/${guest?.id ?? ""}`, working(phase === "running" && !resolved)), line(`→ ${DEMO_CORRECTION.requirement} "${DEMO_CORRECTION.corrected}"`)];
+  if (!resolved) return lines;
+  const after = gift?.approval?.approved_revision ?? 0;
+  const changes = [result(`exception resolved  revision ${resolved.resolved_revision ?? ""}`), line(`store page tool  get_changes  after_revision ${after}`, working(phase === "running" && !store.changes))];
+  if (!store.changes) return [...lines, ...changes];
+  return [...lines, ...changes, result(plural(store.changes.length, "change")), ...store.changes.map((c) => line(`• ${c.revision}  ${c.type}  ${c.summary}`))];
+}
+
+/** The second approval and the refilled cart. */
+function reapproveWire(ctx: WireContext): WireLine[] {
+  const approval = ctx.gifts.crewneck?.approval;
+  const head = approval ? line(`Tokuchu page tool  approve_specs  approved at ${approval.approved_revision ?? "none"}  current ${approval.current_revision}${approval.stale ? "  stale" : ""}`) : line("Tokuchu page tool  approve_specs");
+  return [head, ...giftCartWire("crewneck", ctx)];
 }
 
 function checkoutWire({ gifts }: WireContext): WireLine[] {
@@ -332,6 +420,62 @@ export const STEPS: TourStep[] = [
     action: "cart",
     done: allCheckedOut,
     wire: cartWire,
+    readsThread: true
+  },
+  {
+    id: "share",
+    tab: "attendees",
+    target: { testId: "share-create", gift: "crewneck" },
+    waitTarget: "share-block",
+    title: "Give the store access",
+    narration: `${DEMO_STORE.shop_name} fills the crewneck order and its agent needs the manifest. I create store access here: a grant that names the store and what it may read and post, with a signed link the store opens. No store account stands behind the link and I can revoke it at any time.`,
+    action: "share",
+    done: hasGrant("crewneck"),
+    wire: shareWire
+  },
+  {
+    id: "store",
+    tab: "attendees",
+    target: { testId: "tour-store-frame", gift: "crewneck" },
+    frame: true,
+    title: "The store's agent reads the manifest",
+    narration: "The store's agent opens the signed link. The page registers the grant's tools over WebMCP and the agent calls get_fulfillment_manifest. The answer carries the attendee reference and each attendee's size and star map values and printed name at the revision I approved. No email address and no other answer leaves Tokuchu.",
+    action: "read_store",
+    wire: storeWire
+  },
+  {
+    id: "exception",
+    tab: "attendees",
+    target: { testId: "tour-store-frame", gift: "crewneck" },
+    frame: true,
+    title: "The store finds a gap",
+    narration: `${DEMO_CORRECTION.attendee} gave "${DEMO_CORRECTION.given}" for the star map location and there is a Cambridge in Ontario and in Massachusetts and in England. The store's agent posts needs_information on that attendee and that requirement through post_procurement_update. Tokuchu marks the attendee incomplete, opens an exception, moves the revision on, and emails the attendee the store's question with a link to the reply form.`,
+    action: "post_exception",
+    done: hasException("crewneck"),
+    wire: exceptionWire
+  },
+  {
+    id: "correction",
+    tab: "attendees",
+    target: { testId: "exceptions", gift: "crewneck" },
+    waitTarget: "exceptions",
+    frame: true,
+    title: "The attendee corrects the value",
+    narration: `The exception sits under the grid with the store's question and the correction request's state. The attendee opens the reply link from the email and saves "${DEMO_CORRECTION.corrected}"; in this demo the answer loads through the invite page's submit_rsvp route. The answer resolves the exception, and the store's agent reads what changed through get_changes after the revision I approved.`,
+    action: "correct",
+    done: exceptionResolved("crewneck"),
+    wire: correctionWire
+  },
+  {
+    id: "reapprove",
+    tab: "attendees",
+    target: { testId: "re-approve", gift: "crewneck" },
+    waitTarget: "approve-block",
+    title: "Approve the new revision",
+    narration: "My approval stands at the earlier revision and the corrected value came after it, so the approve block shows the stale approval with both revisions. I approve again through approve_specs. The app calls the store's add_customized_to_cart again with the corrected line and the store returns a fresh checkout link.",
+    action: "reapprove",
+    done: reapproved("crewneck"),
+    wire: reapproveWire,
     readsThread: true
   },
   {

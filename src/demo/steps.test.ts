@@ -4,8 +4,8 @@
  * logs; the three gifts are told apart by store and title.
  */
 import { describe, expect, it } from "vitest";
-import { DEMO_STORE } from "./seed";
-import { demoGifts, startIndex, STEPS, type TourGift, type TourState, type WireContext } from "./steps";
+import { DEMO_CORRECTION, DEMO_STORE } from "./seed";
+import { demoGifts, EMPTY_STORE, startIndex, STEPS, type TourGift, type TourState, type WireContext } from "./steps";
 
 const going = (n: number) => Array.from({ length: n }, () => ({ status: "going" }));
 const id = (i: number) => STEPS[i].id;
@@ -30,8 +30,8 @@ const withAll = (over: Partial<TourGift>) => ALL.map((g) => ({ ...g, ...over }))
 
 /** A fake context: three going attendees, no requests, the given gifts, and whatever the test overrides. */
 function context(over: Partial<WireContext> = {}, gifts: TourGift[] = [CREWNECK]): WireContext {
-  const guests = [{ status: "going", display_name: "Avery Chen" }, { status: "going", display_name: "Blake Rivera" }, { status: "going", display_name: "Carmen Diaz" }];
-  return { snap: { event: { id: "evt_1", invite_code: "abc" }, guests, requests: [], definitions: [], gifts }, gifts: demoGifts(gifts), page: { funnelRows: [], rankedCount: 0, askedLabels: [], attendeeRows: 0 }, updates: {}, phase: "running", ...over };
+  const guests = [{ id: "g_a", status: "going", display_name: "Avery Chen" }, { id: "g_b", status: "going", display_name: "Blake Rivera" }, { id: "g_c", status: "going", display_name: "Carmen Diaz" }];
+  return { snap: { event: { id: "evt_1", invite_code: "abc" }, guests, requests: [], definitions: [], gifts, grants: [], exceptions: [] }, gifts: demoGifts(gifts), page: { funnelRows: [], rankedCount: 0, askedLabels: [], attendeeRows: 0 }, updates: {}, phase: "running", store: EMPTY_STORE, ...over };
 }
 
 describe("demoGifts", () => {
@@ -91,6 +91,32 @@ describe("wire", () => {
     expect(ready.filter((l) => l.text === "← checkout_url  springbuilt.myshopify.com")).toHaveLength(3);
     expect(ready.some((l) => l.state === "working")).toBe(false);
   });
+  it("lists the store page's tools and the manifest rows the store's agent read", () => {
+    const registering = step("store").wire!(context());
+    expect(registering.map((l) => l.text)).toEqual(["store page  springbuilt.myshopify.com opens the signed link", "store page tools  registering", "store page tool  get_fulfillment_manifest  Customized Crewneck"]);
+    expect(registering[1].state).toBe("working");
+    const read = step("store").wire!(context({ store: { ...EMPTY_STORE, tools: ["get_fulfillment_manifest", "post_procurement_update"], manifest: { revision: 12, approved_revision: 12, attendees: [{ attendee_ref: "g_c", status: "ready", values: { variant_size: "xl", star_map_location: "Cambridge", caption: "Carmen Diaz" } }] } } }));
+    expect(read.map((l) => l.text)).toEqual(["store page  springbuilt.myshopify.com opens the signed link", "store page tools  get_fulfillment_manifest post_procurement_update", "store page tool  get_fulfillment_manifest  Customized Crewneck", "← revision 12  approved 12  1 attendee", "• g_c  ready  variant_size=xl  star_map_location=Cambridge  caption=Carmen Diaz"]);
+    expect(read.some((l) => l.state === "working")).toBe(false);
+  });
+  it("names the questioned attendee from the manifest and the exception's revision once posted", () => {
+    const manifest = { revision: 12, approved_revision: 12, attendees: [{ attendee_ref: "g_c", status: "ready", values: { star_map_location: "Cambridge" } }] };
+    const posting = step("exception").wire!(context({ store: { ...EMPTY_STORE, manifest } }));
+    expect(posting.map((l) => l.text)).toEqual(["store page tool  post_procurement_update  needs_information", "→ attendee_ref g_c  requirement_id star_map_location", `→ "${DEMO_CORRECTION.message}"`]);
+    expect(posting[0].state).toBe("working");
+    const posted = step("exception").wire!(context({ store: { ...EMPTY_STORE, manifest, posted: { revision: 13 } } }));
+    expect(posted.slice(3).map((l) => l.text)).toEqual(["← exception opened  revision 13", "← attendee incomplete  correction emailed with the store's question"]);
+  });
+  it("shows the corrected answer and then the changes read after the approved revision", () => {
+    const base = context();
+    const resolved = { procurement_id: "gift_c", requirement_id: "star_map_location", status: "resolved", resolved_revision: 15 };
+    const gifts = [{ ...CREWNECK, approval: { approved_revision: 12, current_revision: 15, stale: true } }];
+    const waiting = step("correction").wire!({ ...base, snap: { ...base.snap, gifts, exceptions: [resolved] }, gifts: demoGifts(gifts) });
+    expect(waiting.map((l) => l.text)).toEqual(["invite page tool  submit_rsvp  PATCH /api/events/evt_1/rsvp/g_c", `→ star_map_location "${DEMO_CORRECTION.corrected}"`, "← exception resolved  revision 15", "store page tool  get_changes  after_revision 12"]);
+    expect(waiting[3].state).toBe("working");
+    const read = step("correction").wire!({ ...base, snap: { ...base.snap, gifts, exceptions: [resolved] }, gifts: demoGifts(gifts), store: { ...EMPTY_STORE, changes: [{ revision: 13, type: "exception_opened", summary: "The store asked" }, { revision: 15, type: "exception_resolved", summary: "star_map_location answered again" }] } });
+    expect(read.slice(4).map((l) => l.text)).toEqual(["← 2 changes", "• 13  exception_opened  The store asked", "• 15  exception_resolved  star_map_location answered again"]);
+  });
 });
 
 describe("startIndex", () => {
@@ -113,9 +139,18 @@ describe("startIndex", () => {
   it("opens on approval once three attendees answered", () => {
     expect(id(startIndex(state({ guests: going(3), requests: [{ gift_id: "gift_c", complete: true }], gifts: withAll({ requested_at: "2026-09-01T00:00:00Z", approved_at: null }) })))).toBe("approve");
   });
-  it("opens on the cart wait after every approval and on the checkout once every link exists", () => {
+  it("opens on the cart wait after every approval and on the store access once every link exists", () => {
     const answered = { guests: going(3), requests: [{ gift_id: "gift_c", complete: true }] };
     expect(id(startIndex(state({ ...answered, gifts: withAll({ requested_at: "2026-09-01T00:00:00Z", approved_at: "2026-09-02T00:00:00Z" }) })))).toBe("cart");
-    expect(id(startIndex(state({ ...answered, gifts: withAll({ requested_at: "2026-09-01T00:00:00Z", approved_at: "2026-09-02T00:00:00Z", checkout_url: "https://store/cart/c/1" }) })))).toBe("checkout");
+    expect(id(startIndex(state({ ...answered, gifts: withAll({ requested_at: "2026-09-01T00:00:00Z", approved_at: "2026-09-02T00:00:00Z", checkout_url: "https://store/cart/c/1" }) })))).toBe("share");
+  });
+  it("walks the store's side: the store page once the grant exists, the correction once the exception is open, the re-approval once it resolved, and the checkout once re-approved", () => {
+    const approval = (stale: boolean) => ({ approved_revision: 12, current_revision: stale ? 15 : 16, stale });
+    const filled = (stale: boolean) => withAll({ requested_at: "2026-09-01T00:00:00Z", approved_at: "2026-09-02T00:00:00Z", checkout_url: "https://store/cart/c/1", approval: approval(stale) });
+    const answered = { guests: going(3), requests: [{ gift_id: "gift_c", complete: true }], grants: [{ procurement_id: "gift_c", status: "active", link: "/s/x" }] };
+    expect(id(startIndex(state({ ...answered, gifts: filled(false) })))).toBe("store");
+    expect(id(startIndex(state({ ...answered, gifts: filled(true), exceptions: [{ procurement_id: "gift_c", requirement_id: "star_map_location", status: "open" }] })))).toBe("correction");
+    expect(id(startIndex(state({ ...answered, gifts: filled(true), exceptions: [{ procurement_id: "gift_c", requirement_id: "star_map_location", status: "resolved" }] })))).toBe("reapprove");
+    expect(id(startIndex(state({ ...answered, gifts: filled(false), exceptions: [{ procurement_id: "gift_c", requirement_id: "star_map_location", status: "resolved" }] })))).toBe("checkout");
   });
 });

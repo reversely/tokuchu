@@ -1,6 +1,6 @@
 # Using Tokuchu
 
-This guide walks an organizer through Tokuchu from sign-in to a filled store cart, and names the WebMCP tool each screen calls. WebMCP is the browser standard that lets a page register tools an agent can call through `document.modelContext`. Tokuchu sits between two sets of those tools: the storefront's and its own.
+This guide walks an organizer through Tokuchu from sign-in to a filled store cart and through the store's side of the order, and names the WebMCP tool each screen calls. WebMCP is the browser standard that lets a page register tools an agent can call through `document.modelContext`. Tokuchu sits between two sets of those tools: the storefront's and its own.
 
 | Who exposes it | Tool | What Tokuchu does with it |
 |---|---|---|
@@ -9,8 +9,9 @@ This guide walks an organizer through Tokuchu from sign-in to a filled store car
 | Customworks, on its product pages | `add_customized_to_cart` | Adds one configured unit per attendee to the store's cart and returns the checkout link |
 | Tokuchu, on the organizer's event page | `list_guests`, `list_missing`, `get_requirements`, `request_from_attendees`, `follow_up`, `approve` and eleven more | Lets an agent read the RSVP list and run the same steps this guide clicks through |
 | Tokuchu, on the attendee's invite page | `submit_rsvp` | Lets an attendee's agent reply and answer the product's questions |
+| Tokuchu, on the store-facing page a grant's signed link opens | `get_procurement`, `get_fulfillment_manifest`, `get_requirements`, `get_changes`, `get_updates`, `post_procurement_update` | Lets a store's agent read the manifest at the approved revision and post an exception on a value it cannot use |
 
-The screens below come from `scripts/capture-guide.mjs`, which drives a local server through the whole flow against the live demo store.
+The screens below come from `scripts/capture-guide.mjs`, which drives a local server through the whole flow against the live demo store, and from the acceptance run in `tests/acceptance.spec.ts` for the store's side (sections 12 to 15).
 
 ## 1. Sign in
 
@@ -131,6 +132,38 @@ A row that is not ready is listed under the button with the reason. When attende
 Three gifts from two stores give three links. The crewneck's and the mug's open the store's cart in any browser, with a personalized line per attendee; the food's opens its store's checkout with the going count. Checkout happens at each store, with the store's own payment.
 
 ![The store's cart with one line per attendee](media/guide/16-store-cart.png)
+
+## 12. Give the store access to the fulfilment data
+
+The store that fills a personalized order needs the manifest, and its agent may find a value it cannot use. Share fulfilment data, under Fill the cart on the Attendees tab, creates that access for the gift shown. The store name is read from the gift. The four checkboxes are the kinds of access the grant carries: the attendee fields the gift's requirements map, the fulfilment manifest, the change log, and the updates thread with the right to post. Access ends when the order is fulfilled, or on a date you pick.
+
+![The Share fulfilment data block with the grant just created](media/guide/17-store-access.png)
+
+Create store access records the grant and lists it as Active with what it reaches: the fields, the fulfilment records, and the gift. Copy access link copies a signed link. The link is the store's only credential; there is no store account. Revoke ends it at once, and a store page open at that moment gets the revocation on its next call.
+
+## 13. What the store's agent sees
+
+The signed link opens Tokuchu's store-facing page for the grant: the Procurement with its status and its current and approved revisions, the requirement schema, the requirements, the fulfilment manifest, the open exceptions, the updates, and a form to post an update. The page registers the grant's tools over WebMCP, so a store's agent calls them through `document.modelContext` the way the organizer's agent calls the event page's.
+
+![The store-facing page with the manifest](media/guide/18-store-manifest.png)
+
+`get_fulfillment_manifest` returns one row per attendee with the attendee reference, the row's status, the variant, and the values keyed by the store's own requirement keys: for the crewneck the size, the star map location and time, and the printed name. Nothing else about the person leaves Tokuchu; the manifest carries no email address and no answer the grant does not name. The rows read at the revision the organizer approved, and the manifest states both revisions.
+
+## 14. The store raises an exception
+
+When a value cannot be used, the store's agent posts a typed update through `post_procurement_update`: `needs_information` names the attendee and the requirement with a question, `invalid_value` sends a value back, and `option_unavailable` names the value the store cannot supply and what it offers. In the demo one attendee gave "Cambridge" for the star map location, and the store's agent asks which one.
+
+![The grid with the exception and the correction request](media/guide/19-exception.png)
+
+The post opens an exception on the Procurement and moves its revision on. On the Attendees tab the attendee's cell reads missing with the store's question under it, the exceptions list under the grid carries the attendee, the requirement, the message, and the correction request's state, and the attendee gets an email with the store's question quoted and a link to their reply form.
+
+## 15. The correction and the new revision
+
+The attendee opens the reply link and saves the full place name. The answer resolves the exception, the correction reads answered, and the cell reads changed after approval, because the organizer's approval stands at the earlier revision. The store's agent reads what changed through `get_changes` with the revision it approved at: the exception, the attendee's answer, and the resolution, each with its revision.
+
+![The corrected value with the exception answered](media/guide/20-corrected.png)
+
+Re-approve records the approval at the new revision and runs the cart job again: `add_customized_to_cart` fills the store's cart with the corrected line and returns a fresh checkout link. The demo tour walks the same store steps after the approvals, with the store's page in a frame beside the callout.
 
 ## When something looks wrong
 

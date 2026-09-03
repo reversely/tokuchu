@@ -314,7 +314,7 @@ test("3: the organizer requests the products' fields, the responses fill the rec
 
   await selectGift(gifts.crewneck);
   await expect(page.getByTestId("attendee-row")).toHaveCount(ATTENDEES.length, { timeout: 10_000 });
-  await expect(page.locator('[data-state="missing"]')).toHaveCount(0);
+  await expect(page.getByTestId("attendees-grid").locator('[data-state="missing"]')).toHaveCount(0);
   await tut("Step 4 of 5", "Review the responses and the routing", "Each response fills a row in the records grid with one column per answer. The panel below names the WebMCP tools that carry the order to the store.", 6000);
   await caption("4. The records grid and the WebMCP routing to the store");
   await page.getByTestId("webmcp-routing").scrollIntoViewIfNeeded();

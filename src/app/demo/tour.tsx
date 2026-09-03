@@ -1,10 +1,10 @@
 "use client";
 import { replyError } from "../../lib/reply-error";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
-import { DEMO_ATTENDEES, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "../../demo/seed";
+import { DEMO_ATTENDEES, DEMO_CORRECTION, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "../../demo/seed";
 import { Intro } from "./intro";
-import { STEPS, demoGift, demoGifts, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
+import { EMPTY_STORE, STEPS, demoGift, demoGifts, startIndex, type StoreChange, type StoreManifestRow, type StoreWire, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
 import { withDemoHeaders } from "../../demo/token";
 
 /** The pause between a step settling and autoplay moving on, so the result reads before the next callout. */
@@ -23,8 +23,10 @@ type Phase = TourPhase;
 type Rect = { top: number; left: number; width: number; height: number };
 type Viewport = { width: number; height: number };
 type Note = (text: string | null) => void;
-/** What an action reads: the event, the note setter, the step's gift, and the latest snapshot. */
-type ActionContext = { eventId: string; setNote: Note; gift?: DemoGiftKey; snap: () => Snapshot };
+/** What an action reads: the event, the note setter, the step's gift, the latest snapshot, and what the store's side read so far. */
+type ActionContext = { eventId: string; setNote: Note; gift?: DemoGiftKey; snap: () => Snapshot; store: () => StoreWire; setStore: (next: (prev: StoreWire) => StoreWire) => void };
+/** How long the store's page in the frame may take to register its tools. */
+const FRAME_MS = 30_000;
 
 const EMPTY_PAGE: WirePage = { funnelRows: [], rankedCount: 0, askedLabels: [], attendeeRows: 0 };
 const CHECKOUT_LABEL: Record<DemoGiftKey, string> = { crewneck: "Crewneck checkout", mug: "Mug checkout", food: "Food checkout" };
@@ -211,7 +213,8 @@ async function answer({ eventId, setNote }: ActionContext): Promise<void> {
   const res = await fetch(`/api/events/${eventId}/rsvp`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests }) }));
   if (!res.ok) throw new Error(await replyError(res));
   changed();
-  await waitFor(() => document.querySelectorAll('[data-testid="attendee-row"]').length >= DEMO_ATTENDEES.length && document.querySelector('[data-state="missing"]') === null, "Filling the records grid", PAGE_MS, setNote);
+  // The legend under the grid names the missing state too, so only a cell counts.
+  await waitFor(() => document.querySelectorAll('[data-testid="attendee-row"]').length >= DEMO_ATTENDEES.length && document.querySelector('[data-testid="attendees-grid"] [data-state="missing"]') === null, "Filling the records grid", PAGE_MS, setNote);
 }
 
 /** Approves every gift in order, selecting each on the tab; a gift already approved is left as it is. */
@@ -235,8 +238,113 @@ async function cart(ctx: ActionContext): Promise<void> {
   if (ctx.gift) await selectGift(ctx.gift, ctx);
 }
 
+/** Creates the store's access from the Share block with the access it offers by default. */
+async function share(ctx: ActionContext): Promise<void> {
+  await selectGift("crewneck", ctx);
+  click({ testId: "share-create" });
+  await waitFor(() => {
+    if (find({ testId: "share-error" })) throw new Error(find({ testId: "share-error" })!.textContent || "The access was not created");
+    return document.querySelector('[data-testid="share-grant"][data-status="active"]');
+  }, "Creating the store access", PAGE_MS, ctx.setNote);
+  changed();
+}
+
+/* ---- The store's side, through the store page's own WebMCP tools in the inline frame ---- */
+
+type FrameContext = { getTools(): Promise<{ name: string }[]>; executeTool(tool: unknown, args: unknown): Promise<{ content: { text: string }[]; isError?: boolean }> };
+type StoreManifest = NonNullable<StoreWire["manifest"]>;
+
+const storeFrame = () => find<HTMLIFrameElement>({ testId: "tour-store-frame" });
+
+/** The store page's model context once the page in the frame registered its tools; the frame is same-origin, so its document is readable. */
+async function storeContext(setNote: Note): Promise<FrameContext> {
+  return waitFor(() => {
+    const doc = storeFrame()?.contentDocument as (Document & { modelContext?: FrameContext }) | null | undefined;
+    if (!doc?.querySelector('[data-testid="webmcp-status"][data-status="ready"]')) return null;
+    return doc.modelContext ?? null;
+  }, "Opening the store's page", FRAME_MS, setNote);
+}
+
+/** Runs one of the store page's tools the way an agent would; an error result throws with the store's words. */
+async function storeCall<T>(store: FrameContext, name: string, args: Record<string, unknown>): Promise<T> {
+  const tool = (await store.getTools()).find((t) => t.name === name);
+  if (!tool) throw new Error(`The store's page has no ${name} tool`);
+  const result = await store.executeTool(tool, args);
+  const text = result.content[0]?.text ?? "";
+  if (result.isError) throw new Error((JSON.parse(text) as { error?: string }).error ?? `${name} failed`);
+  return JSON.parse(text) as T;
+}
+
+/** The store page shows the state its tools changed after a reload; the reload keeps the polyfill's query. */
+function reloadStoreFrame(): void {
+  storeFrame()?.contentWindow?.location.reload();
+}
+
+const crewneckId = (ctx: ActionContext) => {
+  const gift = demoGift(ctx.snap().gifts, "crewneck");
+  if (!gift) throw new Error("The event has no crewneck yet");
+  return gift.id;
+};
+
+/** Reads the manifest through get_fulfillment_manifest and keeps it for the wire. */
+async function readManifest(ctx: ActionContext, store: FrameContext): Promise<StoreManifest> {
+  const read = await storeCall<{ revision: number; approved_revision: number | null; attendees: StoreManifestRow[] }>(store, "get_fulfillment_manifest", { procurement_id: crewneckId(ctx) });
+  const manifest = { revision: read.revision, approved_revision: read.approved_revision, attendees: read.attendees.map((a) => ({ attendee_ref: a.attendee_ref, status: a.status, values: a.values })) };
+  ctx.setStore((prev) => ({ ...prev, manifest }));
+  return manifest;
+}
+
+/** The store's agent lists the page's tools and reads the manifest. */
+async function readStore(ctx: ActionContext): Promise<void> {
+  const store = await storeContext(ctx.setNote);
+  const tools = (await store.getTools()).map((t) => t.name);
+  ctx.setStore((prev) => ({ ...prev, tools }));
+  await readManifest(ctx, store);
+}
+
+/** The store's agent questions the bare place name through post_procurement_update; the grid then shows the exception. */
+async function postException(ctx: ActionContext): Promise<void> {
+  const store = await storeContext(ctx.setNote);
+  const manifest = ctx.store().manifest ?? (await readManifest(ctx, store));
+  const attendee = manifest.attendees.find((a) => a.values[DEMO_CORRECTION.requirement] === DEMO_CORRECTION.given);
+  if (!attendee) throw new Error(`No attendee gave "${DEMO_CORRECTION.given}" for the star map location`);
+  ctx.setNote("Posting the store's question");
+  const posted = await storeCall<{ current_revision: number }>(store, "post_procurement_update", { procurement_id: crewneckId(ctx), type: "needs_information", attendee_ref: attendee.attendee_ref, requirement_id: DEMO_CORRECTION.requirement, message: DEMO_CORRECTION.message });
+  ctx.setStore((prev) => ({ ...prev, posted: { revision: posted.current_revision } }));
+  changed();
+  reloadStoreFrame();
+  await waitFor(() => document.querySelector(`[data-testid="exception"][data-attendee="${attendee.attendee_ref}"]`), "Waiting for the exception on the grid", PAGE_MS, ctx.setNote);
+}
+
+/** The attendee's corrected answer through the invite route, then the changes the store's agent reads after the approved revision. */
+async function correct(ctx: ActionContext): Promise<void> {
+  const snap = ctx.snap();
+  const guest = snap.guests.find((g) => g.display_name === DEMO_CORRECTION.attendee);
+  const def = snap.definitions.find((d) => d.scope === "guest" && (d.vendor_field?.key ?? d.key) === DEMO_CORRECTION.requirement);
+  if (!guest || !def) throw new Error("The attendee or the star map location question is not on the event");
+  ctx.setNote("Saving the attendee's corrected answer");
+  const res = await fetch(`/api/events/${ctx.eventId}/rsvp/${guest.id}`, withDemoHeaders({ method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers: { [def.id]: DEMO_CORRECTION.corrected } }) }));
+  if (!res.ok) throw new Error(await replyError(res));
+  changed();
+  await waitFor(() => document.querySelector(`[data-testid="exception"][data-attendee="${guest.id}"][data-status="resolved"]`), "Waiting for the exception to resolve", PAGE_MS, ctx.setNote);
+  const store = await storeContext(ctx.setNote);
+  const after = demoGift(ctx.snap().gifts, "crewneck")?.approval?.approved_revision ?? 0;
+  const read = await storeCall<{ changes: StoreChange[] }>(store, "get_changes", { procurement_id: crewneckId(ctx), after_revision: after });
+  ctx.setStore((prev) => ({ ...prev, changes: read.changes.map((c) => ({ revision: c.revision, type: c.type, summary: c.summary })) }));
+  reloadStoreFrame();
+}
+
+/** Approves the crewneck again and waits for the refilled cart's link. */
+async function reapprove(ctx: ActionContext): Promise<void> {
+  await selectGift("crewneck", ctx);
+  click({ testId: "re-approve" });
+  await waitFor(orFailure({ testId: "approval-revision" }, "approve-error"), "Recording the new approval", 30_000, ctx.setNote);
+  changed();
+  await waitFor(orFailure({ testId: "review-cart" }, "cart-failed"), "The store is filling the cart again", STORE_MS, ctx.setNote);
+}
+
 /** Each action drives the page's own controls and settles when the page shows the result. */
-const ACTIONS: Record<TourAction, (ctx: ActionContext) => Promise<void>> = { search, pick, pick_mug: pickMug, pick_food: pickFood, request, answer, approve, cart };
+const ACTIONS: Record<TourAction, (ctx: ActionContext) => Promise<void>> = { search, pick, pick_mug: pickMug, pick_food: pickFood, request, answer, approve, cart, share, read_store: readStore, post_exception: postException, correct, reapprove };
 
 function currentTab(): string | null {
   return document.querySelector('.tabs button[aria-current="page"]')?.getAttribute("data-testid")?.replace("tab-", "") ?? null;
@@ -262,6 +370,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
   const [rect, setRect] = useState<Rect | null>(null);
   const [page, setPage] = useState<WirePage>(EMPTY_PAGE);
   const [updates, setUpdates] = useState<Record<string, WireUpdate[]>>({});
+  const [store, setStore] = useState<StoreWire>(EMPTY_STORE);
   const [completed, setCompleted] = useState<Set<string>>(() => new Set());
   const [height, setHeight] = useState(0);
   // The viewport is read after mount so the server and the first client render agree on the callout's place.
@@ -270,11 +379,28 @@ export function Tour({ snap }: { snap: Snapshot }) {
   const busyRef = useRef<string | null>(null);
   const snapRef = useRef(snap);
   snapRef.current = snap;
+  const storeRef = useRef(store);
+  storeRef.current = store;
 
   const step = STEPS[index];
   const last = index === STEPS.length - 1;
   const isComplete = useCallback((s: TourStep) => !s.action || completed.has(s.id) || Boolean(s.done?.(snapRef.current)), [completed]);
-  const context = useCallback((): ActionContext => ({ eventId: snap.event.id, setNote, gift: step.target.gift, snap: () => snapRef.current }), [snap.event.id, step]);
+  const context = useCallback((): ActionContext => ({ eventId: snap.event.id, setNote, gift: step.target.gift, snap: () => snapRef.current, store: () => storeRef.current, setStore }), [snap.event.id, step]);
+
+  /** The store's page lands on `/store/{grant}` from the signed link; the tour then adds the polyfill's query so the page registers its tools in this browser. */
+  const onFrameLoad = useCallback((e: SyntheticEvent<HTMLIFrameElement>) => {
+    const win = e.currentTarget.contentWindow;
+    if (!win) return;
+    try {
+      const url = new URL(win.location.href);
+      if (url.pathname.startsWith("/store/") && url.searchParams.get("webmcp") !== "polyfill") {
+        url.searchParams.set("webmcp", "polyfill");
+        win.location.replace(url.toString());
+      }
+    } catch {
+      /* a cross-origin frame has no readable location; the page then registers nothing */
+    }
+  }, []);
 
   useEffect(() => {
     setAutoplay(new URLSearchParams(window.location.search).get("autoplay") === "1");
@@ -414,7 +540,9 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
   const gifts = demoGifts(snap.gifts);
   const checkouts = last ? DEMO_GIFT_ORDER.flatMap((key) => (gifts[key]?.checkout_url ? [{ key, url: gifts[key]!.checkout_url! }] : [])) : [];
-  const box = viewport ? calloutPosition(rect, height, viewport) : { top: 0, left: 0, visibility: "hidden" as const };
+  // The frame opens the crewneck's active grant through its signed link; it stays mounted across the store's steps so the page loads once.
+  const grantLink = step.frame ? (snap.grants.find((g) => g.procurement_id === gifts.crewneck?.id && g.status === "active")?.link ?? null) : null;
+  const box = viewport ? calloutPosition(rect, height, viewport, Boolean(grantLink)) : { top: 0, left: 0, visibility: "hidden" as const };
   const closeIntro = useCallback(() => {
     setIntro(false);
     try {
@@ -424,12 +552,17 @@ export function Tour({ snap }: { snap: Snapshot }) {
     }
   }, [introKey]);
 
-  const wire = markWorking(step.wire?.({ snap, gifts, page, updates, phase }) ?? [], phase);
+  const wire = markWorking(step.wire?.({ snap, gifts, page, updates, phase, store }) ?? [], phase);
 
   return (
     <div className="tour" data-testid="tour" data-step={step.id} data-phase={phase} data-intro={intro ? "open" : "done"}>
       {intro && <Intro autoplay={autoplay} onDone={closeIntro} />}
       {!intro && rect && <div className="tour-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} aria-hidden="true" />}
+      {!intro && grantLink && (
+        <div className="tour-stage" data-testid="tour-stage">
+          <iframe data-testid="tour-store-frame" title="The store's page" src={grantLink} onLoad={onFrameLoad} />
+        </div>
+      )}
       <div className="tour-callout" ref={calloutRef} style={intro ? { ...box, visibility: "hidden" } : box} role="dialog" aria-labelledby="tour-title" data-testid="tour-step" data-step={index + 1}>
         <div className="tour-count">Step {index + 1} of {STEPS.length}</div>
         <h2 id="tour-title">{step.title}</h2>
@@ -460,11 +593,12 @@ export function Tour({ snap }: { snap: Snapshot }) {
   );
 }
 
-/** The callout sits below its target when there is room and above it otherwise; with no target it centers. */
-function calloutPosition(rect: Rect | null, height: number, viewport: Viewport): { top: number; left: number } {
+/** The callout sits below its target when there is room and above it otherwise; with no target it centers, and beside the store's frame it takes the left column. */
+function calloutPosition(rect: Rect | null, height: number, viewport: Viewport, beside: boolean): { top: number; left: number } {
   const width = Math.min(CALLOUT_WIDTH, viewport.width - 2 * 16);
   const margin = 16;
   const maxLeft = viewport.width - width - margin;
+  if (beside && viewport.width > 900) return { top: 76, left: margin };
   if (!rect) return { top: Math.max(margin, (viewport.height - height) / 2), left: Math.max(margin, (viewport.width - width) / 2) };
   const below = rect.top + rect.height + 14;
   const top = below + height + margin <= viewport.height ? below : Math.max(margin, rect.top - 14 - height);
