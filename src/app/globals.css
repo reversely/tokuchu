@@ -353,55 +353,13 @@ table.records .cellwhy { font-size: 12px; }
 .home .hero { padding: 8px 0 36px; }
 .home .banner { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 22px; }
 /* The hero banner shares the field's cream, so it carries no frame and its edges fade into the page. */
-.home .hero-banner { max-width: 600px; margin: -20px auto -56px; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
-.home .hero .sub { margin-left: auto; margin-right: auto; text-align: center; }
-.home .hero h1 { text-align: center; font-size: clamp(28px, 3.1vw, 40px); line-height: 1.1; margin: 0 auto; max-width: 34ch; position: relative; }
-.home .chain { list-style: none; margin: 30px auto 0; padding: 0; max-width: 1040px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: stage; }
-.home .chain li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 14px; display: grid; gap: 6px; align-content: start; text-align: left; }
-.home .chain li + li::before { content: "→"; position: absolute; left: -14px; top: 18px; color: var(--ink-3); font-size: 16px; }
-.home .chain .stage { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--navy); }
-.home .chain code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
-.home .chain .by { font-size: 12.5px; font-weight: 600; color: var(--sky-dark); }
-.home .chain .what { font-size: 14px; color: var(--ink-2); line-height: 1.4; }
-.home .contract-line { margin: 20px auto 0; max-width: 62ch; text-align: center; font-size: 16px; color: var(--ink-2); }
-.home .scale { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 32px; max-width: 760px; }
-.home .scale .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: grid; gap: 6px; }
-.home .scale strong { font-family: var(--font-display), "Zilla Slab", serif; font-size: 24px; line-height: 1.2; color: var(--ink); }
-.home .scale p { font-size: 15px; color: var(--ink-2); }
+.home .hero-banner { max-width: 600px; margin: -20px auto -16px; border-radius: 0; -webkit-mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); mask-image: radial-gradient(ellipse 78% 74% at 50% 50%, #000 60%, transparent 96%); }
 /* Each column sizes to its own rows so a shorter list ends at its last row instead of stretching to the tallest column. */
-.home .contract { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 0.9fr); gap: 18px; align-items: start; margin-top: 36px; }
-.home .contract-col { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; display: grid; gap: 12px; align-content: start; }
-.home .contract-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.home .contract-col li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 15.5px; color: var(--ink); border-bottom: 1px solid var(--line-2); padding-bottom: 8px; }
-.home .contract-col code { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); text-align: right; }
-.home .contract-col code.ask { color: var(--sky-dark); }
-.home .contract-col code.have { color: var(--navy); }
-.home .contract-arrow { align-self: center; font-size: 28px; color: var(--ink-3); }
-.home .formmock label { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
-.home .formmock i { display: block; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--ground); }
-.home .formmock small { justify-self: end; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
-.home .formmock label.chips { grid-template-columns: 1fr; }
-.home .formmock label.chips span { display: flex; gap: 6px; }
-.home .formmock b { display: inline-grid; place-items: center; width: 40px; height: 30px; margin-right: 6px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 13px; color: var(--ink); background: var(--ground); }
-.home .parties { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 36px; }
-.home .parties .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: grid; gap: 12px; align-content: start; }
-.home .parties h3 { font-size: 20px; line-height: 1.2; }
-.home .parties p { font-size: 15px; color: var(--ink-2); }
-.home .parties .shot { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
-.home .parties .shot img { display: block; width: 100%; height: auto; }
 .home .toolist { margin: 0; padding: 12px 14px; background: var(--ground); border: 1px solid var(--line); border-radius: 10px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink); white-space: pre; overflow-x: auto; }
-@media (max-width: 900px) { .home .parties { grid-template-columns: 1fr; } }
-.home .why .by { display: block; font-size: 12.5px; font-weight: 600; color: var(--sky-dark); margin-top: 6px; }
-@media (max-width: 900px) { .home .chain { grid-template-columns: 1fr; } .home .chain li + li::before { display: none; } .home .contract { grid-template-columns: 1fr; } .home .contract-arrow { transform: rotate(90deg); justify-self: center; } .home .scale { grid-template-columns: 1fr; } }
 .home .hero .cta { justify-content: center; }
-.home .hero .note { text-align: center; }
 .home .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.home .hero h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.04; }
-.home .hero .sub { margin-top: 16px; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 40ch; }
+.home .hero .sub { margin: 16px auto 0; text-align: center; font-size: 19px; line-height: 1.5; color: var(--ink-2); max-width: 62ch; display: grid; gap: 12px; }
 .home .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
-.home .hero .note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
-.home .hero .note b { color: var(--ink-2); font-weight: 600; }
-@media (max-width: 900px) { .home .hero .sub { max-width: none; } }
 .home .window { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; }
 .home .window .chrome { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); background: color-mix(in srgb, var(--pale) 60%, var(--card)); }
 .home .window .dots { display: flex; gap: 6px; }
@@ -409,11 +367,53 @@ table.records .cellwhy { font-size: 12px; }
 .home .window .ttl { font-size: 12.5px; color: var(--ink-3); font-weight: 500; margin-left: 6px; }
 .home .window img { display: block; width: 100%; height: auto; }
 .home section { padding: 84px 0; }
-.home .story-interlude { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 44px 0; border-top: 1px solid var(--line); }
-.home .usecase-copy h3 { font-size: clamp(24px, 2.8vw, 32px); line-height: 1.1; margin-top: 10px; }
-.home .usecase-copy p { margin-top: 12px; font-size: 16.5px; color: var(--ink-2); }
-@media (max-width: 900px) { .home .story-interlude { grid-template-columns: 1fr; gap: 24px; } }
 .home section.tint { background: var(--pale); border-block: 1px solid var(--line); }
+/* The intent and the result: the script's paragraphs in the display size under a label. */
+.home .sec-head p + p { margin-top: 14px; }
+/* Two websites: one card per site with its paragraph and its tool list. */
+.home .sites { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 36px; }
+.home .sites .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: grid; gap: 12px; align-content: start; }
+.home .sites p { font-size: 15.5px; color: var(--ink-2); }
+.home .sites .shot { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.home .sites .shot img { display: block; width: 100%; height: auto; }
+@media (max-width: 900px) { .home .sites { grid-template-columns: 1fr; } }
+/* The sequence: the diagram beside one row per arrow, the tool in mono and the tab it lands on in the accent. */
+.home .diagram { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
+.home .diagram img { display: block; width: 100%; height: auto; }
+.home .sequence { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 36px; align-items: start; margin-top: 28px; }
+.home .arrows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.home .arrows li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 16px; border-top: 1px solid var(--line-2); }
+.home .arrows li:first-child { border-top: 0; }
+.home .arrows .no { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--navy); background: var(--soft); width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; }
+.home .arrows .arrow-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; }
+.home .arrows code { font-family: var(--mono); font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+.home .arrows .on { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; color: var(--sky-dark); }
+.home .arrows .on-customworks { color: var(--navy); }
+.home .arrows .on-agent { color: var(--ink-3); }
+.home .arrows .what { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink-2); line-height: 1.35; }
+@media (max-width: 900px) { .home .sequence { grid-template-columns: 1fr; gap: 24px; } }
+/* The story: each beat names its arrows and its tools above the script's sentences. */
+.home .arrows-ref { display: inline-block; font-family: var(--mono); font-size: 12px; color: var(--sky-dark); margin-bottom: 8px; }
+.home .beat-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.home .beat-tools code { font-family: var(--mono); font-size: 13px; color: var(--navy); background: var(--soft); padding: 3px 8px; border-radius: 6px; }
+.home .story-step .copy p:first-of-type { font-size: clamp(19px, 2vw, 23px); line-height: 1.3; color: var(--ink); }
+.home .compare { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.home .compare li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+.home .compare .field { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.home .compare .held { color: var(--ink-2); position: relative; padding-left: 22px; }
+.home .compare .held::before { content: "→"; position: absolute; left: 0; color: var(--ink-3); }
+.home .compare .outcome { font-weight: 600; color: var(--navy); text-align: right; }
+.home .compare .held.ask + .outcome { color: var(--sky-dark); }
+.home .revisions { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.home .revisions li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 16px; display: grid; gap: 6px; }
+.home .revisions li + li::before { content: "→"; position: absolute; left: -14px; top: 18px; color: var(--ink-3); font-size: 16px; }
+.home .revisions .rev { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+.home .revisions .mark { font-size: 13px; color: var(--ink-2); }
+.home .revisions .approved { border-color: var(--sky-dark); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sky-dark) 25%, transparent); }
+.home .revisions .approved .mark { color: var(--sky-dark); font-weight: 600; }
+.home .runline { margin-top: 28px; font-size: 16px; }
+.home .runline a { color: var(--sky-dark); text-decoration: underline; }
+@media (max-width: 900px) { .home .compare li { grid-template-columns: 1fr; gap: 4px; } .home .compare .outcome { text-align: left; } .home .revisions { grid-template-columns: 1fr; } .home .revisions li + li::before { display: none; } }
 .home .sec-head { max-width: 62ch; }
 .home .sec-head h2 { font-size: clamp(28px, 3.6vw, 40px); line-height: 1.08; margin-top: 12px; }
 .home .sec-head p { margin-top: 16px; font-size: 18px; color: var(--ink-2); }
@@ -424,18 +424,6 @@ table.records .cellwhy { font-size: 12px; }
 .home .story-step h3 { font-size: clamp(23px, 2.6vw, 30px); line-height: 1.12; }
 .home .story-step .copy p { margin-top: 14px; font-size: 16.5px; color: var(--ink-2); max-width: 46ch; }
 @media (max-width: 900px) { .home .story-step { grid-template-columns: 1fr; gap: 24px; padding: 40px 0; } .home .story-step:nth-of-type(even) .copy { order: 0; } .home .story-step .copy p { max-width: none; } }
-.home .why-lead { max-width: 68ch; }
-.home .why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 40px; }
-.home .why .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px; box-shadow: var(--shadow); }
-.home .why .tag { font-family: var(--mono); font-size: 12px; color: var(--navy); background: transparent; padding: 0; }
-.home .why h3 { font-size: 20px; margin-top: 8px; }
-.home .why p { margin-top: 9px; font-size: 15.5px; color: var(--ink-2); }
-.home .whyfoot { margin-top: 26px; font-size: 15px; color: var(--ink-3); max-width: 70ch; }
-@media (max-width: 820px) { .home .why { grid-template-columns: 1fr; } }
-.home .cta-band { background: var(--night); color: var(--on-night); border-radius: 22px; padding: 60px; text-align: center; box-shadow: var(--shadow-lg); }
-.home .cta-band h2 { color: var(--on-night); font-size: clamp(28px, 4vw, 44px); line-height: 1.06; }
-.home .cta-band p { margin: 16px auto 0; max-width: 52ch; color: var(--on-night-2); font-size: 18px; }
-.home .cta-band .cta { margin-top: 30px; justify-content: center; }
 .home footer { padding: 44px 0 60px; border-top: 1px solid var(--line); }
 .home footer .row { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--ink-3); font-size: 14px; padding: 0; border: 0; }
 .home footer .links { display: flex; gap: 22px; }
@@ -459,9 +447,7 @@ table.records .cellwhy { font-size: 12px; }
   .home .nav .btn { white-space: nowrap; padding: 8px 12px; font-size: 14px; }
   .home .hero { padding: 16px 0 28px; }
   .home .hero-banner { margin: 0 auto; max-width: 100%; -webkit-mask-image: none; mask-image: none; }
-  .home .hero h1 { font-size: 26px; margin-top: 12px; }
   .home .hero .sub { font-size: 17px; }
-  .home .chain { margin-top: 20px; }
   .home .cta { flex-wrap: wrap; }
 }
 
