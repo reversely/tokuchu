@@ -393,10 +393,11 @@ table.records .quiet { color: var(--muted); }
 .intro-copy { display: grid; gap: 22px; }
 .intro-count { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #d9612f; }
 .intro-text { margin: 0; font-family: var(--font-display), "Zilla Slab", serif; font-size: clamp(26px, 3.2vw, 44px); line-height: 1.22; text-wrap: balance; min-height: 4.8em; }
-.intro-caret { display: inline-block; width: 0.5em; height: 1em; margin-left: 4px; vertical-align: -0.1em; background: #d9612f; animation: intro-blink 900ms steps(2, start) infinite; }
+.intro-word { opacity: 0; transition: opacity 320ms ease; }
+.intro-word.on { opacity: 1; }
 @keyframes intro-blink { to { visibility: hidden; } }
 .intro-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .intro .btn.primary { background: #d9612f; color: #fff; }
 .intro .btn.ghost { border-color: rgba(233, 216, 191, 0.4); color: #e9d8bf; }
 @media (max-width: 900px) { .intro { grid-template-columns: 1fr; align-content: start; gap: 20px; padding: 24px 20px; overflow-y: auto; } .intro-art { width: min(100%, 260px); } .intro-text { font-size: 24px; min-height: 0; } }
-@media (prefers-reduced-motion: reduce) { .intro-caret { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .intro-word { transition: none; } }

@@ -8,18 +8,20 @@ export const INTRO_BEATS = [
   "Tokuchu can help. Using WebMCP across Shopify's catalog of stores it finds a full suite of personalized merchandise and fills every unit in from one source of truth: Tokuchu's RSVP list."
 ];
 
-const TYPE_MS = 22;
-const BEAT_PAUSE_MS = 1400;
+/** One word every WORD_MS: a paragraph settles in a few seconds instead of ticking in letter by letter. */
+const WORD_MS = 110;
+const BEAT_PAUSE_MS = 2200;
 
 type Props = { autoplay: boolean; onDone: () => void };
 
-/** The opening screen of the tour: the character beside a telescope and the story typed out beat by beat. */
+/** The opening screen of the tour: the portrait and the story, each paragraph settling in a word at a time. */
 export function Intro({ autoplay, onDone }: Props) {
   const [beat, setBeat] = useState(0);
   const [shown, setShown] = useState(0);
   const [reduced, setReduced] = useState(false);
   const text = INTRO_BEATS[beat];
-  const typed = shown >= text.length;
+  const words = text.split(" ");
+  const typed = shown >= words.length;
   const last = beat === INTRO_BEATS.length - 1;
 
   useEffect(() => {
@@ -28,13 +30,13 @@ export function Intro({ autoplay, onDone }: Props) {
 
   useEffect(() => {
     if (reduced) {
-      setShown(text.length);
+      setShown(words.length);
       return;
     }
     setShown(0);
-    const timer = setInterval(() => setShown((n) => (n >= text.length ? n : n + 1)), TYPE_MS);
+    const timer = setInterval(() => setShown((n) => (n >= words.length ? n : n + 1)), WORD_MS);
     return () => clearInterval(timer);
-  }, [beat, text, reduced]);
+  }, [beat, words.length, reduced]);
 
   useEffect(() => {
     if (!autoplay || !typed) return;
@@ -42,7 +44,7 @@ export function Intro({ autoplay, onDone }: Props) {
     return () => clearTimeout(timer);
   }, [autoplay, typed, last, onDone]);
 
-  const next = () => (typed ? (last ? onDone() : setBeat((b) => b + 1)) : setShown(text.length));
+  const next = () => (typed ? (last ? onDone() : setBeat((b) => b + 1)) : setShown(words.length));
 
   return (
     <div className="intro" data-testid="intro" data-beat={beat} role="dialog" aria-label="The story behind this walkthrough">
@@ -50,8 +52,7 @@ export function Intro({ autoplay, onDone }: Props) {
       <div className="intro-copy">
         <span className="intro-count">{beat + 1} of {INTRO_BEATS.length}</span>
         <p className="intro-text" data-testid="intro-text" aria-live="polite">
-          {text.slice(0, shown)}
-          {!typed && <span className="intro-caret" aria-hidden="true" />}
+          {words.map((w, i) => <span key={i} className={`intro-word${i < shown ? " on" : ""}`}>{w} </span>)}
         </p>
         <div className="intro-actions">
           <button type="button" className="btn primary" onClick={next} data-testid="intro-next">{typed ? (last ? "Start the walkthrough" : "Next") : "Show the rest"}</button>
