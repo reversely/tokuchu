@@ -1,11 +1,11 @@
-/** The landing page at the root: the walkthrough names the three WebMCP tools and the primary action opens the draft at /events/new. */
+/** The landing page at the root: the Why WebMCP cards name a tool on each page and the primary action opens the draft at /events/new. */
 import { expect, test } from "@playwright/test";
 
-const TOOLS = ["search_catalog", "get_customization", "add_customized_to_cart"];
+const TOOLS = ["get_customization", "set_gift_customization", "add_customized_to_cart"];
 
 test("the root renders the walkthrough and its clips and the primary action leads to the draft", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByTestId("walkthrough-step")).toHaveCount(5);
+  await expect(page.getByTestId("walkthrough-step")).toHaveCount(9);
   for (const tool of TOOLS) await expect(page.getByTestId("tools").getByText(tool, { exact: true })).toBeVisible();
   for (const src of await page.getByTestId("walkthrough").locator("img").evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src")))) {
     expect(src).toMatch(/^\/media\//);
