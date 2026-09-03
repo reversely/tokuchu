@@ -3,6 +3,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { StoreView } from "../../../server/store-view";
 import type { ProcurementUpdateType } from "../../../server/procurement";
+import { executeThroughMcp, registerStoreTools } from "../../../webmcp/register";
+import { useWebMcp, WebMcpPill } from "../../webmcp-provider";
 
 const UPDATE_TYPES: { value: ProcurementUpdateType; label: string }[] = [
   { value: "accepted", label: "Accepted" },
@@ -17,17 +19,14 @@ const UPDATE_TYPES: { value: ProcurementUpdateType; label: string }[] = [
 const words = (s: string) => s.replace(/_/g, " ");
 const when = (iso: string) => new Date(iso).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" });
 
-/** One JSON-RPC call to the event's MCP endpoint under the grant's token; the result is MCP-shaped. */
-export async function callStoreTool(eventId: string, tokenId: string, name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{ text: string; isError: boolean }> {
-  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/mcp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenId}` },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
-    signal
-  });
-  const body = (await response.json()) as { result?: { content: { text: string }[]; isError?: boolean }; error?: { message: string } };
-  if (body.error) return { text: JSON.stringify({ error: body.error.message }), isError: true };
-  return { text: body.result?.content[0]?.text ?? "", isError: body.result?.isError === true };
+/**
+ * Registers the grant's tools while the store page is open (#48): a write through a tool changes
+ * the page's data, so the page re-reads its view afterwards.
+ */
+function StoreWebMcp({ eventId, tokenId, tools }: { eventId: string; tokenId: string; tools: string[] }) {
+  const router = useRouter();
+  const status = useWebMcp((signal) => registerStoreTools({ eventId, tokenId, toolNames: tools, signal, onToolCall: (call) => call.ok && call.name.startsWith("post_") && router.refresh() }), [eventId, tokenId, tools]);
+  return <WebMcpPill status={status} />;
 }
 
 /** The store's page for one grant (#47): the Procurement, then each block the grant allows, and the update form when it may write. */
@@ -39,6 +38,7 @@ export function StorePage({ view }: { view: StoreView }) {
       <header className="band">
         <a className="brand" href="/">Tokuchu</a>
         <div className="right">
+          <StoreWebMcp eventId={event.id} tokenId={view.token_id} tools={view.tools} />
           <span className="pill" data-testid="store-grantee">{grant.grantee_id}</span>
         </div>
       </header>
@@ -167,10 +167,10 @@ function UpdateForm({ eventId, tokenId, procurementId, attendees, requirements }
     if (attendee) args.attendee_ref = attendee;
     if (requirement) args.requirement_id = requirement;
     if (message.trim()) args.message = message.trim();
-    const result = await callStoreTool(eventId, tokenId, "post_procurement_update", args);
+    const result = await executeThroughMcp(eventId, tokenId, "post_procurement_update", args, fetch);
     setBusy(false);
     if (result.isError) {
-      setError((JSON.parse(result.text) as { error?: string }).error ?? "The update was not posted");
+      setError((JSON.parse(result.content[0].text) as { error?: string }).error ?? "The update was not posted");
       return;
     }
     setMessage("");

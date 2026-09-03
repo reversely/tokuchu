@@ -25,7 +25,7 @@ export const GrantBody = z.object({
 
 /** The tools each permission lets a token call; the order of TOOLS decides the token's list. */
 const TOOLS_FOR: Record<GrantPermission, readonly string[]> = {
-  "manifest:read": ["get_manifest", "get_fulfillment_manifest"],
+  "manifest:read": ["get_procurement", "get_manifest", "get_fulfillment_manifest"],
   "requirements:read": ["get_requirements"],
   "changes:read": ["get_changes"],
   "updates:read": ["get_updates"],

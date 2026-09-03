@@ -58,7 +58,7 @@ describe("an access grant", () => {
     const grant = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["manifest:read", "updates:write"] });
     expect(grant).toMatchObject({ event_id: event.id, procurement_id: gift.id, created_by: "organizer", expires_at: null, revoked_at: null });
     expect(grant.allowed_attribute_ids).toBeUndefined();
-    expect(callableTools(grant)).toEqual(["get_manifest", "get_fulfillment_manifest", "post_update", "post_procurement_update"]);
+    expect(callableTools(grant)).toEqual(["get_manifest", "get_procurement", "get_fulfillment_manifest", "post_update", "post_procurement_update"]);
     const token = tokenForGrant(event.id, grant.id);
     expect(token).toMatchObject({ grant_id: grant.id, holder: "springbuilt.myshopify.com", gift_ids: [gift.id], expires_at: null });
     expect(token.readable_definition_ids.sort()).toEqual([size.id, location.id].sort());
@@ -72,7 +72,9 @@ describe("an access grant", () => {
     const { event, gift, other, size, avery } = await seed();
     const grant = createGrant(event.id, { procurement_id: gift.id, grantee_type: "agent", grantee_id: "store-agent", permissions: ["manifest:read", "requirements:read", "changes:read"], allowed_attribute_ids: [size.id] });
     const token = tokenForGrant(event.id, grant.id);
-    expect(await listed(event.id, token.id)).toEqual(["get_manifest", "get_fulfillment_manifest", "get_changes", "get_requirements"]);
+    expect(await listed(event.id, token.id)).toEqual(["get_manifest", "get_procurement", "get_fulfillment_manifest", "get_changes", "get_requirements"]);
+    const summary = payload(await call(event.id, token.id, "get_procurement", { procurement_id: gift.id }));
+    expect(summary).toMatchObject({ procurement_id: gift.id, product: { title: "Customized Crewneck" }, store: "springbuilt.myshopify.com", status: "collecting", approved_revision: null, attendees: 1, open_exceptions: 0 });
     const manifest = payload(await call(event.id, token.id, "get_fulfillment_manifest", { procurement_id: gift.id }));
     expect(manifest.attendees).toHaveLength(1);
     expect(manifest.attendees[0]).toMatchObject({ attendee_ref: avery, values: { variant_size: "l", caption: "Avery Chen" } });

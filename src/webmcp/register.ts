@@ -1,7 +1,8 @@
 /**
  * Registers Tokuchu's tools on `document.modelContext` and routes each call to the API with the
- * organizer's identity (the page's own session). A result is MCP-shaped: text content, isError on
- * a failed request. Aborting `signal` unregisters every tool.
+ * organizer's identity (the page's own session), or, on the store-facing page, to the MCP endpoint
+ * under the grant's token. A result is MCP-shaped: text content, isError on a failed request.
+ * Aborting `signal` unregisters every tool.
  */
 import type { AttributeDefinition, GuestStatus } from "../domain/types";
 import { sendRsvp } from "../app/i/[code]/send-rsvp";
@@ -61,6 +62,52 @@ export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolC
     );
   }
   return { supported: true, toolNames: organizerTools.map((t) => t.name) };
+}
+
+/** One JSON-RPC call to the event's MCP endpoint under a grant's token; the endpoint's result is already MCP-shaped. */
+export async function executeThroughMcp(eventId: string, tokenId: string, name: string, args: ToolArgs, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<ToolResult> {
+  try {
+    const response = await fetchImpl(`/api/events/${encodeURIComponent(eventId)}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenId}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
+      signal
+    });
+    const body = (await response.json()) as { result?: ToolResult; error?: { message: string } };
+    if (body.error || !body.result) return textResult({ error: body.error?.message ?? response.statusText }, true);
+    return body.result.isError ? { content: body.result.content, isError: true } : { content: body.result.content };
+  } catch (cause) {
+    return textResult({ error: cause instanceof Error ? cause.message : String(cause) }, true);
+  }
+}
+
+/**
+ * Registers the store-scoped tools on the store-facing page (#48): each vendor-scope tool the
+ * grant's token may call, bound to the MCP endpoint under that token. A tool the grant lacks is
+ * never registered, and an organizer-only tool never registers here whatever the token lists.
+ */
+export async function registerStoreTools({ eventId, tokenId, toolNames, fetchImpl, signal, onToolCall }: { eventId: string; tokenId: string; toolNames: string[]; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
+  const modelContext = document.modelContext;
+  if (!modelContext) return { supported: false };
+  const doFetch = fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const storeTools = TOOLS.filter((t) => t.scopes.includes("vendor") && toolNames.includes(t.name));
+  for (const tool of storeTools) {
+    await modelContext.registerTool(
+      {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        execute: async (args, options) => {
+          const started = Date.now();
+          const result = await executeThroughMcp(eventId, tokenId, tool.name, (args ?? {}) as ToolArgs, doFetch, options?.signal);
+          onToolCall?.({ name: tool.name, args: (args ?? {}) as ToolArgs, result, ok: !result.isError, duration_ms: Date.now() - started });
+          return result;
+        }
+      },
+      { signal }
+    );
+  }
+  return { supported: true, toolNames: storeTools.map((t) => t.name) };
 }
 
 /**

@@ -105,6 +105,20 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/manifest" }
   },
   {
+    name: "get_procurement",
+    description: "Returns the Procurement summary: the product and its store, where the order stands, the current and approved revision, the requirement schema id, the attendee count, and the open exception count. Call it first to see which procurement a session opens. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procurement_id: { type: "string", description: "The procurement's id; the gift's id until a Procurement record exists" },
+        gift_id: { type: "string", description: "The gift's id; the same record as procurement_id" }
+      },
+      additionalProperties: false
+    },
+    scopes: ["organizer", "vendor"],
+    route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/procurement" }
+  },
+  {
     name: "get_fulfillment_manifest",
     description: "Returns the fulfillment manifest of a procurement: its revision and approved revision, its status, and one row per attendee with a status (ready, incomplete, invalid, or exception), the values keyed by the store's requirement key, and the issues per requirement. A store's agent sees only the requirements its token may read. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record.",
     inputSchema: {
@@ -165,9 +179,9 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_requirements",
-    description: "Returns the requirements of a gift's product with the source that fills each: the guest's own row, an event field, a literal, an existing question, or a question a request would create. Call it before request_from_attendees to see what attendees will be asked.",
-    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" } }, required: ["gift_id"], additionalProperties: false },
-    scopes: ["organizer"],
+    description: "Returns the requirements of a gift's product with the source that fills each: the guest's own row, an event field, a literal, an existing question, or a question a request would create. Call it before request_from_attendees to see what attendees will be asked. A store's holder sees the requirements its grant allows. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record.",
+    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id; the same record as procurement_id" }, procurement_id: { type: "string", description: "The procurement's id; the gift's id until a Procurement record exists" } }, additionalProperties: false },
+    scopes: ["organizer", "vendor"],
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/request-fields" }
   },
   {
