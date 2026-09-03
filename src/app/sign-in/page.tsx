@@ -1,10 +1,13 @@
 import { AuthError } from "next-auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { signIn } from "../../server/auth";
 
 type Props = { searchParams: Promise<{ sent?: string; error?: string; next?: string }> };
 
-const sendsEmail = process.env.NODE_ENV === "production" && !!process.env.RESEND_API_KEY;
+const production = process.env.NODE_ENV === "production";
+const sendsEmail = production && !!process.env.RESEND_API_KEY;
+/** A dev server delivers the link to its own log; a production server without a mail key delivers it nowhere. */
+const delivers = sendsEmail || !production;
 
 /** The page the link returns to: a path on this site, or the root for anything else. */
 function returnPath(next: FormDataEntryValue | string | null | undefined): string {
@@ -12,7 +15,7 @@ function returnPath(next: FormDataEntryValue | string | null | undefined): strin
   return path.startsWith("/") && !path.startsWith("//") ? path : "/";
 }
 
-/** Sends the link and lands on the confirmation; a denied address lands back here with the reason. */
+/** Sends the link and lands on the confirmation; a denied address lands on the not-found page. */
 async function sendLink(formData: FormData): Promise<void> {
   "use server";
   try {
@@ -23,9 +26,10 @@ async function sendLink(formData: FormData): Promise<void> {
   }
 }
 
-/** One field and one button: the address gets a magic link and the confirmation says where it went; a first sign-in creates the account. */
+/** One field and one button: the address gets a magic link and the confirmation says where it went; a first sign-in creates the account. A denied address, or a production server with no mail key, shows the not-found page and its demo link instead of a message. */
 export default async function Page({ searchParams }: Props) {
   const { sent, error, next } = await searchParams;
+  if (error || (sent && !delivers)) notFound();
   return (
     <>
       <header className="band">
@@ -46,7 +50,6 @@ export default async function Page({ searchParams }: Props) {
                   <label htmlFor="email">Email</label>
                   <input id="email" name="email" type="email" autoComplete="email" required data-testid="sign-in-email" />
                 </div>
-                {error && <p className="error" role="alert" data-testid="sign-in-error">{error === "AccessDenied" ? "This address is not on the organizer list" : "The sign-in link did not work"}</p>}
                 <button className="btn primary" type="submit" data-testid="sign-in-submit">Send the link</button>
               </form>
             )}

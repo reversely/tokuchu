@@ -5,5 +5,6 @@ test("an unknown invite code renders the branded not-found", async ({ page }) =>
   await page.goto("/i/ZZZZZZ");
   await expect(page.getByTestId("not-found-title")).toHaveText("Page not found");
   await expect(page.getByTestId("not-found-home")).toBeVisible();
+  await expect(page.getByTestId("not-found-demo")).toHaveAttribute("href", "/demo");
   await expect(page.locator("body")).not.toContainText("This page could not be found");
 });

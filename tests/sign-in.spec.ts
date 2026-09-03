@@ -1,5 +1,5 @@
 /**
- * The dev sign-in path: the page denies an address off the allowlist, logs a magic link for one on
+ * The dev sign-in path: an address off the allowlist lands on the not-found page with the demo link, the server logs a magic link for one on
  * it, and following the link puts the address in the band. The Playwright server runs with
  * ORGANIZER_EMAILS including organizer@example.com and the link comes from the dev-only endpoint.
  */
@@ -11,9 +11,11 @@ test("a listed address signs in through the logged magic link and signs out agai
   await page.goto("/sign-in");
   await page.getByTestId("sign-in-email").fill("stranger@example.com");
   await page.getByTestId("sign-in-submit").click();
-  await expect(page.getByTestId("sign-in-error")).toHaveText("This address is not on the organizer list");
+  await expect(page.getByTestId("not-found-title")).toHaveText("Page not found");
+  await expect(page.getByTestId("not-found-demo")).toHaveAttribute("href", "/demo");
   expect((await request.get(`/api/dev/magic-link?email=stranger@example.com`)).status()).toBe(404);
 
+  await page.goto("/sign-in");
   await page.getByTestId("sign-in-email").fill(ORGANIZER);
   await page.getByTestId("sign-in-submit").click();
   await expect(page.getByTestId("sign-in-sent")).toHaveText("The sign-in link is in the server log");
