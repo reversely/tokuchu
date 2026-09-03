@@ -18,6 +18,7 @@
     "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
     "test:static": "TOKUCHU_STATIC=1 playwright test tests/static-agent.spec.ts",
     "agent-playbook": "node scripts/agent-playbook.mjs",
+    "agent-run": "node scripts/agent-run.mjs",
     "migrate": "tsx scripts/migrate.ts",
     "sweep-demo": "tsx scripts/sweep-demo.ts",
     "reparent-events": "tsx scripts/reparent-events.ts"
@@ -34,6 +35,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@browserbasehq/stagehand": "4.0.2",
     "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.0.0",

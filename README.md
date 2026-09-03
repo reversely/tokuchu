@@ -130,6 +130,10 @@ The important handoffs are:
 
 The event, invite, and store handoff pages include a visible Agent notes block and a `tokuchu-agent-task` meta tag in this mode. The Guest Experience tab also shows the next operation expected on each side.
 
+### Running the demo
+
+`npm run agent-run -- "<goal>"` is the primary way to run this mode: Stagehand launches the local Chrome with its WebMCP flags, and an OpenAI Agents SDK agent reads `docs/agent-playbook.md`, discovers the tools each tab registers, and chooses every call through four functions (`open_page`, `list_webmcp_tools`, `call_webmcp_tool`, `switch_tab`). It prints each call as it happens and writes the transcript to `tests/videos/`. `npm run agent-playbook` is the deterministic fallback: Playwright follows the same steps in a fixed order with the polyfill, for a run that needs no model. Both need a static server on port 3114 and the network for the demo store; the agent run also needs `OPENAI_API_KEY`. `docs/agent-playbook.md` describes both under "Run it with the agent runtime" and "The scripted run".
+
 ## Store handoff flow
 
 The store handoff is a separate phase after cart preparation. It is not the “store tab” used to read a product or fill a cart.
@@ -230,7 +234,8 @@ Agent handoff mode:
 ```sh
 TOKUCHU_STATIC=1 npm run dev -- -p 3114
 npm run test:static
-npm run agent-playbook
+npm run agent-run -- "Order the crewneck for every attendee going and report the checkout link."
+npm run agent-playbook                   # the deterministic fallback with Playwright
 ```
 
 Live-store suites:

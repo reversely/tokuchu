@@ -1,6 +1,6 @@
 # Agent playbook
 
-This document gives a browser agent, or a terminal agent with a browser tool, the prompt and the steps to run one gift order through Tokuchu and the demo store. It applies to a Tokuchu server in static mode (`TOKUCHU_STATIC=1`), where the server makes no catalog search and opens no store page of its own; every capability is a WebMCP tool on a page, and the agent moves between Tokuchu's pages and the store's product page. `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model, so a judge can repeat either path.
+This document gives a browser agent, or a terminal agent with a browser tool, the prompt and the steps to run one gift order through Tokuchu and the demo store. It applies to a Tokuchu server in static mode (`TOKUCHU_STATIC=1`), where the server makes no catalog search and opens no store page of its own; every capability is a WebMCP tool on a page, and the agent moves between Tokuchu's pages and the store's product page. `scripts/agent-run.mjs` hands this document to a model with a browser and lets it choose the calls, and `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model, so a judge can repeat either path.
 
 The whole run is fourteen arrows between three participants. The order of operations below numbers them the same way, and `README.md`, `docs/guide.md`, and `docs/prd.md` refer to the same numbers. The source is `docs/diagrams/agent-sequence.mmd`; the rendered image under `public/media` predates the fourteenth arrow, `get_order_updates`, and shows the first thirteen.
 
@@ -152,6 +152,21 @@ Follow this order and stop at the first error you cannot resolve by reading it:
 
 Report each tool call you make and a one-line summary of its result, then the checkout link.
 ```
+
+## Run it with the agent runtime
+
+`npm run agent-run -- "<goal>"` runs `scripts/agent-run.mjs`: a model follows this playbook against the live pages. Stagehand (`@browserbasehq/stagehand` 4.0.2, `localBrowser.launch`) starts the local Chrome with `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`, so `document.modelContext` on every tab is Chrome's own and no page needs the polyfill. An OpenAI Agents SDK agent reads this document as its instructions, with a short rule to list a tab's tools before its first call and to stop at the first error it cannot resolve from the error text, and takes the goal sentence as its prompt. It has four functions and nothing else:
+
+| Function | What it does |
+|---|---|
+| `open_page(url)` | Opens a tab and returns its `tab_id` |
+| `list_webmcp_tools(tab_id)` | The tools the page registers: name, description, `inputSchema` |
+| `call_webmcp_tool(tab_id, name, arguments)` | Calls one tool and returns its text payload with `is_error` |
+| `switch_tab(tab_id)` | Brings a tab to the front |
+
+The model discovers each page's tools and chooses every call; the script names no Tokuchu or store tool. Before the run, the script does the organizer's part: it opens `/demo` for a guest event, adds the three attendees of `tests/fixtures/demo-attendees.json` as going, and gives the agent the event's page, the store's product page, the invite page pattern, and the attendees' answers as context, so the agent answers each attendee's questions through `submit_rsvp` on that attendee's invite page when `list_missing` names them. The script prints each function call and each result as one line and writes the same events, with the turn and call counts and the checkout link, to `tests/videos/agent-run-<timestamp>.json`. It exits 0 once a call returns a `checkout_url`, and 1 when the model stops on an error.
+
+It needs the static server (`TOKUCHU_STATIC=1 npm run dev -- -p 3114`, or another address in `AGENT_BASE`), `OPENAI_API_KEY` in `.env` or the environment, a Chrome 149 or later on the machine, and the network for the demo store. `OPENAI_AGENT_MODEL` picks the model; the default is `gpt-5.6-luna`. `src/agent/agent-run.ts` holds the loop and `src/agent/agent-run.test.ts` runs it over a scripted model and fake pages without a browser.
 
 ## The scripted run
 
