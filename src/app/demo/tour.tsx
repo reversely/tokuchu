@@ -1,4 +1,5 @@
 "use client";
+import { replyError } from "../../lib/reply-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
 import { DEMO_ATTENDEES, DEMO_STORE } from "../../demo/seed";
@@ -138,7 +139,7 @@ async function answer(eventId: string, setNote: Note): Promise<void> {
   const sizeValue = (label: string) => size.constraints.options?.find((o) => o.label.toLowerCase() === label.toLowerCase())?.value ?? size.constraints.options?.[0]?.value;
   const guests = DEMO_ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: { [size.id]: sizeValue(a.size), [location.id]: a.location, [time.id]: a.time } }));
   const res = await fetch(`/api/events/${eventId}/rsvp`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests }) }));
-  if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? "The replies did not load");
+  if (!res.ok) throw new Error(await replyError(res));
   changed();
   await waitFor(() => document.querySelectorAll('[data-testid="attendee-row"]').length >= DEMO_ATTENDEES.length && document.querySelector('[data-state="missing"]') === null, "Filling the records grid", PAGE_MS, setNote);
 }

@@ -64,7 +64,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
       </header>
       <main className="sheet">
         {tab === "overview" ? (
-          <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
+          <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} onOpenExperience={() => setTab("experience")} />
         ) : tab === "attendees" ? (
           <Attendees snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
         ) : (

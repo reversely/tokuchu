@@ -1,4 +1,5 @@
 "use client";
+import { replyError } from "../../../lib/reply-error";
 import { useMemo, useState, type ReactNode } from "react";
 import type { Snapshot } from "./dashboard";
 import { withDemoHeaders } from "../../../demo/token";
@@ -105,7 +106,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setError(null);
     try {
       const res = await fetch(`/api/events/${snap.event.id}/search`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
-      if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+      if (!res.ok) throw new Error(await replyError(res));
       setReply((await res.json()) as SearchReply);
       setShown(5);
     } catch (e) {
@@ -152,7 +153,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
       const recipientsFilter = RECIPIENT_FILTERS[recipients];
       const body = { product_id: editing ? editing.product_id : chosen!.product_id, shop_domain: editing ? editing.shop_domain : chosen!.shop_domain, product_title: editing ? editing.product_title : chosen!.title, recipients: recipientsFilter, rules: [{ filter: recipientsFilter, product_id: editing ? editing.product_id : chosen!.product_id }], mapping: rows, default_variant_id: defaultVariant, variants, missing_value_fallback: fallback, post_lock_cancellation: postLock, delivery_window: editing ? (editing.delivery_window ?? null) : (chosen!.delivery?.window ?? null), personalization: editing ? (editing.personalization ?? null) : (chosen!.personalization ?? null), product_url: editing ? (editing.product_url ?? null) : (chosen!.url ?? null) };
       const res = await fetch(editing ? `/api/events/${snap.event.id}/gifts/${editing.id}` : `/api/events/${snap.event.id}/gifts`, withDemoHeaders({ method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
-      if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+      if (!res.ok) throw new Error(await replyError(res));
       setEditing(null);
       setChosen(null);
       setStep("list");
@@ -169,7 +170,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setError(null);
     try {
       const res = await fetch(action === "remove" ? `/api/events/${snap.event.id}/gifts/${gift.id}` : `/api/events/${snap.event.id}/gifts/${gift.id}/${action}`, withDemoHeaders({ method: action === "remove" ? "DELETE" : "POST" }));
-      if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+      if (!res.ok) throw new Error(await replyError(res));
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -209,7 +210,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
     setCuration(null);
     try {
       const res = await fetch(`/api/events/${snap.event.id}/curate?stream=1`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) }));
-      if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
+      if (!res.ok) throw new Error(await replyError(res));
       if (!res.body) throw new Error("The run returned nothing");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
