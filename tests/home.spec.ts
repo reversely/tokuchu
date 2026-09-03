@@ -11,6 +11,8 @@ test("the root renders the two-site flow and Stagehand architecture and the prim
   await expect(page.getByTestId("walkthrough-step")).toHaveCount(4);
   for (const tool of TOOLS) await expect(page.getByTestId("walkthrough").locator("code", { hasText: tool }).first()).toBeVisible();
   await expect(page.getByTestId("stagehand-runtime")).toContainText("Page.tools()");
+  await expect(page.locator("footer a", { hasText: "Architecture" })).toHaveAttribute("href", "/docs/architecture");
+  await expect(page.locator("footer a", { hasText: "Privacy" })).toHaveAttribute("href", "/privacy");
   for (const src of await page.getByTestId("walkthrough").locator("img").evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src")))) {
     expect(src).toMatch(/^\/media\//);
     expect((await request.get(src!)).status(), src!).toBe(200);
@@ -19,4 +21,16 @@ test("the root renders the two-site flow and Stagehand architecture and the prim
   await page.getByTestId("start").click();
   await expect(page).toHaveURL(/\/events\/new$/);
   await expect(page.getByTestId("publish")).toBeDisabled();
+});
+
+test("the public architecture and policy pages render", async ({ page }) => {
+  await page.goto("/docs/architecture");
+  await expect(page.getByRole("heading", { name: /Stagehand connects/ })).toBeVisible();
+  await expect(page.getByText("Page.tools()").first()).toBeVisible();
+  await expect(page.getByText("get_customization").first()).toBeVisible();
+
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "Information Tokuchu handles" })).toBeVisible();
+  await page.goto("/terms");
+  await expect(page.getByRole("heading", { name: "Agents and automated actions" })).toBeVisible();
 });

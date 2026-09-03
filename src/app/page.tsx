@@ -130,7 +130,7 @@ export default async function Page() {
         <section id="result"><div className="wrap"><div className="result-panel"><span className="eyebrow">The result</span><h2>One procurement state, useful to both sides.</h2><p>Vendor requirements are reconciled against information the organizer already has. Missing data is collected only when necessary. Organizers approve an exact revision, vendors receive only the fulfillment fields they need, and browser agents can move the purchase forward using the live WebMCP capabilities of each site.</p></div></div></section>
       </main>
 
-      <footer><div className="wrap row"><span className="brand small">Tokuchu<span className="dot">.</span></span><div className="links"><a href="#sites">Two websites</a><a href="#flow">Procurement flow</a><a href="#runtime">Browser agents</a></div><span><span lang="ja">特注</span> personalized orders for events</span></div></footer>
+      <footer><div className="wrap row"><span className="brand small">Tokuchu<span className="dot">.</span></span><div className="links"><a href="/docs/architecture">Architecture</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div><span><span lang="ja">特注</span> personalized orders for events</span></div></footer>
     </div>
   );
 }

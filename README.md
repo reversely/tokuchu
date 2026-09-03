@@ -29,7 +29,7 @@ Throughout the flow, Tokuchu both consumes WebMCP from the storefront and expose
 
 ## The flow
 
-[Open the responsive HTML flowchart](docs/two-sites-flow.html).
+[Open the rendered architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture).
 
 ### From attendee records to configured checkout
 
