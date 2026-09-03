@@ -2,7 +2,7 @@
  * The tour's steps as data, in the order tests/flow-demo.spec.ts runs them. The tour reads a step's
  * tab and target to place the callout, its narration to tell the organizer's situation, its action
  * name to drive the page's own controls, its `done` predicate to skip a step the event already shows
- * finished, and its `wire` to list the WebMCP calls the step makes with the data they carry. A step
+ * finished, and its `wire` to list the calls the step makes, UCP over HTTP or WebMCP on a page, with the data they carry. A step
  * that concerns one of the three gifts names it, and the tour selects that gift on the Attendees tab.
  */
 import { DEMO_ATTENDEES, DEMO_CORRECTION, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "./seed";
@@ -311,7 +311,7 @@ export const STEPS: TourStep[] = [
     target: { testId: "sentence" },
     waitTarget: "search-results",
     title: "Describe the item",
-    narration: "I need one crewneck per attendee with a star map of the venue and each person's name on it. I describe it in a sentence and the app searches Shopify stores over WebMCP.",
+    narration: "I need one crewneck per attendee with a star map of the venue and each person's name on it. I describe it in a sentence and the app searches Shopify's Global Catalog and each store's UCP endpoint. That search is MCP over HTTP rather than WebMCP; WebMCP starts once a store's page is open.",
     action: "search",
     done: hasGift("crewneck"),
     wire: searchWire

@@ -404,7 +404,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
       {gift && (
         <section className="block" aria-labelledby="routing" data-testid="webmcp-routing" data-gift={gift.id}>
-          <div className="labelrow"><h2 id="routing">How this reaches the store</h2><span className="eyebrow">WebMCP</span></div>
+          <div className="labelrow"><h2 id="routing">How this reaches the store</h2><span className="eyebrow">UCP and WebMCP</span></div>
           <div className="list">
             {store === DEMO_STORE.shop_domain && <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-demo-store"><span>The demo store built for this project</span><span className="type"><code>{store}</code> trading as {DEMO_STORE.shop_name}</span></div>}
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store UCP endpoint</span><span className="type"><code>https://{store}/api/ucp/mcp</code></span></div>

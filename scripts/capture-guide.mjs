@@ -64,7 +64,7 @@ await guestPage.screenshot({ path: `${OUT}/05-invite.png`, fullPage: true });
 console.log("captured 05-invite");
 await guestPage.close();
 
-// The search over WebMCP and its funnel.
+// The catalog search over Shopify's UCP endpoints and its funnel.
 await page.getByTestId("tab-experience").click();
 await page.getByTestId("sentence").fill(EVENT.search);
 await page.getByRole("button", { name: "Search", exact: true }).click();

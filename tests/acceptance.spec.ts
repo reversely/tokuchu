@@ -219,7 +219,7 @@ test("2: the organizer picks the crewneck from a real search and the store's fie
   test.setTimeout(LIVE_MS * 2);
   const done = timed("2 search and pick");
   await page.getByTestId("tab-experience").click();
-  await caption("2. Search the catalog over WebMCP");
+  await caption("2. Search the catalog over Shopify's UCP endpoints");
   await typeInto(page.getByTestId("sentence"), EVENT.search);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByTestId("results")).toBeVisible({ timeout: LIVE_MS });

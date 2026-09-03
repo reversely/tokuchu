@@ -98,7 +98,7 @@ async function webmcpOverlay(title: string, lines: string[], holdMs = 6000) {
       el = document.createElement("aside");
       el.id = "demo-webmcp";
       el.style.cssText = `position:fixed;top:0;right:0;bottom:0;z-index:9998;width:${WIDTH}px;padding:22px 22px 90px;box-sizing:border-box;overflow:hidden;background:#0B1020;color:#EAF3FC;font:14px/1.7 ui-monospace,Menlo,monospace;border-left:1px solid #22304a;pointer-events:none`;
-      el.innerHTML = `<div style="font:700 12px/1 Inter,system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#8FD0FF;margin-bottom:18px">WebMCP calls</div><div id="demo-webmcp-list"></div>`;
+      el.innerHTML = `<div style="font:700 12px/1 Inter,system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#8FD0FF;margin-bottom:18px">Calls on the wire</div><div id="demo-webmcp-list"></div>`;
       document.body.appendChild(el);
       document.body.style.marginRight = `${WIDTH}px`;
     }
@@ -205,8 +205,8 @@ test("1: create the event", async () => {
 test("2: the organizer searches the catalog, picks the store's crewneck and mug, and adds a food gift from the catalog", async () => {
   test.setTimeout(LIVE_MS * 2 + 120_000);
   await page.getByTestId("tab-experience").click();
-  await tut("Step 2 of 5", "Search the catalog over WebMCP", "The organizer describes the item. The search calls Shopify's Global Catalog and the store's own endpoint and returns a ranked list of real products.", 5000);
-  await caption("2. Search the catalog over WebMCP");
+  await tut("Step 2 of 5", "Search the catalog over Shopify's UCP endpoints", "The organizer describes the item. The search calls Shopify's Global Catalog and the store's own endpoint and returns a ranked list of real products.", 5000);
+  await caption("2. Search the catalog over Shopify's UCP endpoints");
   await typeInto(page.getByTestId("sentence"), EVENT.search);
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByTestId("results")).toBeVisible({ timeout: LIVE_MS });
@@ -219,7 +219,7 @@ test("2: the organizer searches the catalog, picks the store's crewneck and mug,
   // Honest overlay: the real endpoints the search calls, the real per-source counts, and the real titles returned.
   const funnel = await funnelData();
   const rankedCount = await page.getByTestId("result").count();
-  await webmcpOverlay("search_catalog", ["catalog.shopify.com/api/ucp/mcp", `${SHOP_DOMAIN}/api/ucp/mcp`, ...funnel.rows.map((r) => `→ ${r}`), `← ${rankedCount} ranked products`, ...funnel.names.map((n) => `• ${n}`)], 6500);
+  await webmcpOverlay("search_catalog (UCP JSON-RPC)", ["catalog.shopify.com/api/ucp/mcp", `${SHOP_DOMAIN}/api/ucp/mcp`, ...funnel.rows.map((r) => `→ ${r}`), `← ${rankedCount} ranked products`, ...funnel.names.map((n) => `• ${n}`)], 6500);
   await clearWebmcpOverlay();
 
   // Physically pick the store's crewneck from the results, then confirm it onto the gift list. The
@@ -238,7 +238,7 @@ test("2: the organizer searches the catalog, picks the store's crewneck and mug,
   expect(fields.map((f) => f.key)).toEqual(["star_map_location", "star_map_time", "caption"]);
   expect(fields.find((f) => f.key === "caption")?.constraints?.max_length).toBe(20);
   expect(crewneck.variants).toHaveLength(6);
-  await webmcpOverlay(`get_customization at ${SHOP_DOMAIN}`, [`product ${crewneck.product_title}`, ...fields.map((f) => `• ${f.label} (${f.kind}${f.constraints?.max_length ? `, max ${f.constraints.max_length}` : ""})`), `← ${crewneck.variants.length} variants`, ...crewneck.variants.map((v) => `• ${v.title}`)], 6500);
+  await webmcpOverlay(`get_customization (WebMCP page tool) at ${SHOP_DOMAIN}`, [`product ${crewneck.product_title}`, ...fields.map((f) => `• ${f.label} (${f.kind}${f.constraints?.max_length ? `, max ${f.constraints.max_length}` : ""})`), `← ${crewneck.variants.length} variants`, ...crewneck.variants.map((v) => `• ${v.title}`)], 6500);
   await clearWebmcpOverlay();
   await caption("2. The store's fields and variants are on the gift");
   await rest(1500);
@@ -255,7 +255,7 @@ test("2: the organizer searches the catalog, picks the store's crewneck and mug,
   gifts.mug = mug.id;
   expect(mug.personalization?.fields.map((f) => [f.key, f.kind])).toEqual([["photo", "image"]]);
   expect(mug.variants).toHaveLength(1);
-  await webmcpOverlay(`get_customization at ${SHOP_DOMAIN}`, [`product ${mug.product_title}`, ...(mug.personalization?.fields ?? []).map((f) => `• ${f.label} (${f.kind})`), `← ${mug.variants.length} variant`], 5500);
+  await webmcpOverlay(`get_customization (WebMCP page tool) at ${SHOP_DOMAIN}`, [`product ${mug.product_title}`, ...(mug.personalization?.fields ?? []).map((f) => `• ${f.label} (${f.kind})`), `← ${mug.variants.length} variant`], 5500);
   await clearWebmcpOverlay();
 
   // The food and drink card: Shopify's catalog in its food and beverage category, each product checked for delivery to the venue.
@@ -268,7 +268,7 @@ test("2: the organizer searches the catalog, picks the store's crewneck and mug,
   const foodResult = page.locator('[data-testid="result"][data-delivery="quoted"]').first();
   await reveal(foodResult);
   const foodFunnel = await funnelData();
-  await webmcpOverlay("search_catalog", ["catalog.shopify.com/api/ucp/mcp", "category fb", ...foodFunnel.rows.map((r) => `→ ${r}`), `← ${await page.getByTestId("result").count()} ranked products`, ...foodFunnel.names.map((n) => `• ${n}`)], 6000);
+  await webmcpOverlay("search_catalog (UCP JSON-RPC)", ["catalog.shopify.com/api/ucp/mcp", "category fb", ...foodFunnel.rows.map((r) => `→ ${r}`), `← ${await page.getByTestId("result").count()} ranked products`, ...foodFunnel.names.map((n) => `• ${n}`)], 6000);
   await clearWebmcpOverlay();
   await pickCard(foodResult, 3);
   const food = (await allGifts()).find((g) => g.shop_domain.replace(/^https?:\/\//, "") !== SHOP_DOMAIN)!;
@@ -325,7 +325,7 @@ test("3: the organizer requests the products' fields, the responses fill the rec
   await expect(page.getByTestId("attendee-row")).toHaveCount(ATTENDEES.length, { timeout: 10_000 });
   await expect(page.getByTestId("attendees-grid").locator('[data-state="missing"]')).toHaveCount(0);
   await tut("Step 4 of 5", "Review the responses and the routing", "Each response fills a row in the records grid with one column per answer. The panel below names the WebMCP tools that carry the order to the store.", 6000);
-  await caption("4. The records grid and the WebMCP routing to the store");
+  await caption("4. The records grid and the routing to the store");
   await page.getByTestId("webmcp-routing").scrollIntoViewIfNeeded();
   await rest(4500);
 
@@ -347,10 +347,10 @@ test("3: the organizer requests the products' fields, the responses fill the rec
     expect(filled.cart_fill?.status).toBe("done");
     if (key === "food") {
       expect(checkouts.food).toMatch(/^https:\/\//);
-      await webmcpOverlay(`create_cart and create_checkout at ${filled.shop_domain}`, [`${ATTENDEES.length} units of ${filled.product_title}`, `← checkout_url ${checkouts.food.split("?")[0]}`], 5500);
+      await webmcpOverlay(`create_cart and create_checkout (UCP JSON-RPC) at ${filled.shop_domain}`, [`${ATTENDEES.length} units of ${filled.product_title}`, `← checkout_url ${checkouts.food.split("?")[0]}`], 5500);
     } else {
       expect(checkouts[key]).toContain("/cart/c/");
-      await webmcpOverlay(`add_customized_to_cart at ${SHOP_DOMAIN}`, [`${ATTENDEES.length} items, one per attendee`, ...ATTENDEES.map((a) => (key === "mug" ? `• ${a.display_name}: ${a.photo.split("/").pop()}` : `• ${a.display_name}: ${a.size}, ${a.location}, ${a.time}`)), `← checkout_url ${checkouts[key].split("?")[0]}`], 5500);
+      await webmcpOverlay(`add_customized_to_cart (WebMCP page tool) at ${SHOP_DOMAIN}`, [`${ATTENDEES.length} items, one per attendee`, ...ATTENDEES.map((a) => (key === "mug" ? `• ${a.display_name}: ${a.photo.split("/").pop()}` : `• ${a.display_name}: ${a.size}, ${a.location}, ${a.time}`)), `← checkout_url ${checkouts[key].split("?")[0]}`], 5500);
     }
     await clearWebmcpOverlay();
   }

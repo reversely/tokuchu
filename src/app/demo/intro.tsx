@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export const INTRO_BEATS = [
   "Meet Kevin. Kevin organizes the 8th Annual Eastern Canada Astronomy Symposium and expects 500 participants from around the world this year.",
   "Keeping track of every participant's needs and preferences is hard. Linking those preferences to the personalized merchandise attendees expect is harder.",
-  "Tokuchu can help. Using WebMCP across Shopify's catalog of stores it finds a full suite of personalized merchandise and fills every unit in from one source of truth: Tokuchu's RSVP list."
+  "Tokuchu can help. It finds personalized merchandise through Shopify's catalog and then works each store's own WebMCP tools to fill every unit in from one source of truth: Tokuchu's RSVP list."
 ];
 
 /** One word every WORD_MS: a paragraph settles in a few seconds instead of ticking in letter by letter. */

@@ -125,7 +125,7 @@ The MCP endpoint reads the grant again on every call. Revocation or expiry there
 
 ## Capability map and underlying tools
 
-Most readers can stop at the four utilities. This table maps those concepts to the lower-level WebMCP operations for implementers and agent authors.
+Most readers can stop at the four utilities. This table maps those concepts to the operations beneath them for implementers and agent authors: WebMCP page tools on Tokuchu's and the store's pages, and Shopify's UCP endpoint methods, which are MCP over HTTP and not WebMCP.
 
 | Utility | Primary user | Tokuchu capabilities | Store capabilities |
 | --- | --- | --- | --- |

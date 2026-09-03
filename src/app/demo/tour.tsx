@@ -568,7 +568,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
         <h2 id="tour-title">{step.title}</h2>
         <p data-testid="tour-narration">{step.narration}</p>
         {wire.length > 0 && (
-          <ol className="tour-wire" data-testid="tour-wire" aria-label="The WebMCP calls this step makes">
+          <ol className="tour-wire" data-testid="tour-wire" aria-label="The calls this step makes over UCP or WebMCP">
             {wire.map((l, i) => <li key={i} data-state={l.state}>{l.text}</li>)}
           </ol>
         )}

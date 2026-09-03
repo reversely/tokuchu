@@ -89,11 +89,11 @@ The invite link opens the event with a reply form. The attendee gives a name, an
 
 The same form registers as the WebMCP tool `submit_rsvp` on this page. Its input schema lists one property per question with the store's limits, so an attendee's browser agent can answer without touching the form. Each answer is one of the replies arrow 9 waits for. The link keeps the reply: opening it again shows the saved answers and lets the attendee change them or cancel.
 
-## 6. Search the catalog over WebMCP
+## 6. Search the catalog over Shopify's UCP endpoints
 
 Guest Experience starts with a search. Pick a card or describe the item in a sentence.
 
-The search calls `search_catalog` on Shopify's Global Catalog endpoint and on the demo store's own endpoint, with the venue's address as the shipping context. The funnel under the heading shows each call: the query, how many products it returned of how many the catalog holds, and the price ceiling it searched under. Distinct products are merged across the calls, and the best candidates get a delivery check against the venue and the needed-by date.
+The search calls `search_catalog` on Shopify's Global Catalog endpoint and on the demo store's own endpoint, with the venue's address as the shipping context. Both are UCP endpoints, MCP over HTTP from Tokuchu's server; no WebMCP is involved until a store's page is open in a browser. The funnel under the heading shows each call: the query, how many products it returned of how many the catalog holds, and the price ceiling it searched under. Distinct products are merged across the calls, and the best candidates get a delivery check against the venue and the needed-by date.
 
 ![The search funnel](media/guide/06-search-funnel.png)
 
@@ -139,7 +139,7 @@ Each reply fills a row: one column per requirement of the gift shown, with the a
 
 ![The records grid](media/guide/13-records-grid.png)
 
-Under the grid, How this reaches the store lists every WebMCP hop for this gift: the store, its endpoint, the Shopify page tools on its pages, the store's `get_customization` and `add_customized_to_cart`, and Tokuchu's own `request_from_attendees`. For a plain product the panel names `approve_specs` and the store's UCP cart tools `create_cart`, `update_cart`, and `create_checkout` instead.
+Under the grid, How this reaches the store lists every hop for this gift, the UCP endpoint calls and the WebMCP page tools: the store, its endpoint, the Shopify page tools on its pages, the store's `get_customization` and `add_customized_to_cart`, and Tokuchu's own `request_from_attendees`. For a plain product the panel names `approve_specs` and the store's UCP cart tools `create_cart`, `update_cart`, and `create_checkout` instead.
 
 ![The WebMCP routing to the store](media/guide/14-webmcp-routing.png)
 
