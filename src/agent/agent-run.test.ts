@@ -116,26 +116,26 @@ describe("the browser agent runtime (#60)", () => {
           return [call("c2", "list_webmcp_tools", { tab_id: "tab1" })];
         case 3:
           expect((results.c2 as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(["list_guests", "set_gift_plan", "post_update"]);
-          return [call("c3", "call_webmcp_tool", { tab_id: "tab1", name: "list_guests", arguments: JSON.stringify({ filter: "status:eq:going" }) })];
+          return [call("c3", "call_webmcp_tool", { tab_id: "tab1", name: "list_guests", frame_id: null, arguments: JSON.stringify({ filter: "status:eq:going" }) })];
         case 4:
           expect(results.c3).toEqual({ text: JSON.stringify({ guests: [{ id: "g1", display_name: "Avery Chen" }] }), is_error: false });
           return [call("c4", "open_page", { url: STORE })];
         case 5:
-          return [call("c5", "list_webmcp_tools", { tab_id: "tab2" }), call("c6", "call_webmcp_tool", { tab_id: "tab2", name: "get_customization", arguments: JSON.stringify({ product_id: "p1" }) })];
+          return [call("c5", "list_webmcp_tools", { tab_id: "tab2" }), call("c6", "call_webmcp_tool", { tab_id: "tab2", name: "get_customization", frame_id: null, arguments: JSON.stringify({ product_id: "p1" }) })];
         case 6: {
           // A failing call comes back with is_error and the page's error text, and the model corrects it.
           expect(results.c6).toMatchObject({ is_error: false });
-          return [call("c7", "switch_tab", { tab_id: "tab1" }), call("c8", "call_webmcp_tool", { tab_id: "tab1", name: "set_gift_plan", arguments: JSON.stringify({ rules: [] }) })];
+          return [call("c7", "switch_tab", { tab_id: "tab1" }), call("c8", "call_webmcp_tool", { tab_id: "tab1", name: "set_gift_plan", frame_id: null, arguments: JSON.stringify({ rules: [] }) })];
         }
         case 7:
           expect(results.c8).toEqual({ text: JSON.stringify({ error: "product_id: Invalid input" }), is_error: true });
-          return [call("c9", "call_webmcp_tool", { tab_id: "tab1", name: "set_gift_plan", arguments: JSON.stringify({ rules: [{ product_id: "p1" }], product_title: "Customized Crewneck" }) })];
+          return [call("c9", "call_webmcp_tool", { tab_id: "tab1", name: "set_gift_plan", frame_id: null, arguments: JSON.stringify({ rules: [{ product_id: "p1" }], product_title: "Customized Crewneck" }) })];
         case 8:
           expect(results.c9).toMatchObject({ is_error: false });
-          return [call("c10", "call_webmcp_tool", { tab_id: "tab2", name: "add_customized_to_cart", arguments: JSON.stringify({ items: [{ recipient_ref: "g1" }], idempotency_key: "gift_1:now" }) })];
+          return [call("c10", "call_webmcp_tool", { tab_id: "tab2", name: "add_customized_to_cart", frame_id: null, arguments: JSON.stringify({ items: [{ recipient_ref: "g1" }], idempotency_key: "gift_1:now" }) })];
         case 9: {
           const cart = JSON.parse((results.c10 as { text: string }).text) as { checkout_url: string };
-          return [call("c11", "call_webmcp_tool", { tab_id: "tab1", name: "post_update", arguments: JSON.stringify({ gift_id: "gift_1", kind: "in_production", reference: cart.checkout_url }) })];
+          return [call("c11", "call_webmcp_tool", { tab_id: "tab1", name: "post_update", frame_id: null, arguments: JSON.stringify({ gift_id: "gift_1", kind: "in_production", reference: cart.checkout_url }) })];
         }
         default:
           return [say("Done. The cart is ready.\nhttps://store.test/checkouts/abc")];
@@ -175,15 +175,15 @@ describe("the browser agent runtime (#60)", () => {
         expect(results.c1).toEqual({ error: "No tab tab9; open_page returns the tab ids in use." });
         return [call("c2", "open_page", { url: TOKUCHU })];
       }
-      if (turn === 3) return [call("c3", "call_webmcp_tool", { tab_id: "tab1", name: "missing_tool", arguments: "{}" })];
+      if (turn === 3) return [call("c3", "call_webmcp_tool", { tab_id: "tab1", name: "missing_tool", frame_id: null, arguments: "{}" })];
       if (turn === 4) {
         expect(results.c3).toMatchObject({ is_error: true, text: expect.stringContaining("registers no tool missing_tool") });
-        return [call("c4", "call_webmcp_tool", { tab_id: "tab1", name: "list_guests", arguments: "not json" })];
+        return [call("c4", "call_webmcp_tool", { tab_id: "tab1", name: "list_guests", frame_id: null, arguments: "not json" })];
       }
       expect(results.c4).toMatchObject({ is_error: true, text: expect.stringContaining("JSON object") });
       return [say("Stopped: the last call could not be made.")];
     });
-    const outcome = await runBrowserAgent({ context, goal: "Read the guests.", playbook: PLAYBOOK, model, sleep: async () => {} });
+    const outcome = await runBrowserAgent({ context, goal: "Read the guests.", playbook: PLAYBOOK, model, sleep: async () => {}, toolsTimeoutMs: 50 });
     expect(outcome).toMatchObject({ turns: 5, calls: 4, checkout_url: null });
   });
 

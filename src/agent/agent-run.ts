@@ -1,6 +1,6 @@
 /**
  * The browser agent runtime (#60): an OpenAI Agents SDK loop whose only tools open a tab, list the
- * WebMCP tools a page registers, call one, and switch tabs. The model reads docs/agent-playbook.md
+ * WebMCP tools a page registers, call one, and switch tabs. The model reads docs/agent-runtime.md
  * as its instructions and chooses every call itself; nothing here names a Tokuchu or store tool.
  * The tabs are Stagehand pages, reached through the browser context's `newPage` and
  * `setActivePage`, and a test passes fake pages with the same shape.
@@ -45,14 +45,14 @@ type PendingEvent = { [K in RunEvent["kind"]]: Omit<Extract<RunEvent, { kind: K 
 export type RunOptions = {
   context: AgentBrowserContext;
   goal: string;
-  /** The playbook text; the runtime appends its own short rules. */
+  /** The instruction text (docs/agent-runtime.md); the runtime appends its own short rules. */
   playbook: string;
   /** A model name, or a Model instance; a test passes a scripted one. */
   model?: string | Model;
   maxTurns?: number;
   /** Called for every function call, every result, and the final message, in order. */
   onEvent?: (event: RunEvent) => void;
-  /** How long list_webmcp_tools waits for a page to register its first tool. */
+  /** How long list_webmcp_tools waits for a first tool and call_webmcp_tool waits for the requested one. */
   toolsTimeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
 };
@@ -139,6 +139,21 @@ export async function runBrowserAgent(options: RunOptions): Promise<RunOutcome> 
     return tools;
   }
 
+  /**
+   * One tool by name and frame, waiting until the timeout for a tool a page registers after its first
+   * ones. A name two frames share needs the frame_id; without it the answer names the frames.
+   */
+  async function toolNamed(page: AgentPage, name: string, frameId: string | undefined): Promise<{ tool: WebMcpTool } | { error: string }> {
+    const deadline = Date.now() + toolsTimeout;
+    for (;;) {
+      const matches = (await page.tools()).filter((t) => t.name === name && (frameId === undefined || t.frameId === frameId));
+      if (matches.length === 1) return { tool: matches[0] };
+      if (matches.length > 1) return { error: `The page registers ${name} in ${matches.length} frames (${matches.map((t) => t.frameId).join(", ")}); pass frame_id.` };
+      if (Date.now() >= deadline) return { error: `The page registers no tool ${name}${frameId ? ` in frame ${frameId}` : ""}; call list_webmcp_tools.` };
+      await sleep(500);
+    }
+  }
+
   const tools = [
     sdk.tool({
       name: "open_page",
@@ -155,12 +170,12 @@ export async function runBrowserAgent(options: RunOptions): Promise<RunOutcome> 
     }),
     sdk.tool({
       name: "list_webmcp_tools",
-      description: "Lists the WebMCP tools the page in a tab registers: each tool's name, description, and inputSchema. Call it before the first call_webmcp_tool on a tab.",
+      description: "Lists the WebMCP tools the page in a tab registers: each tool's name, description, inputSchema, and frame_id. Call it before the first call_webmcp_tool on a tab. Two frames may register the same name; frame_id tells them apart.",
       parameters: z.object({ tab_id: z.string().describe("A tab_id from open_page") }),
       execute: ({ tab_id }) =>
         traced("list_webmcp_tools", { tab_id }, async () => {
           const found = await toolsOf(pageOf(tab_id));
-          const listed = found.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema ?? null }));
+          const listed = found.map((t) => ({ name: t.name, frame_id: t.frameId, description: t.description, inputSchema: t.inputSchema ?? null }));
           return { ok: true, summary: `${listed.length} tools: ${listed.map((t) => t.name).join(" ")}`, output: { tab_id, tools: listed } };
         })
     }),
@@ -170,15 +185,16 @@ export async function runBrowserAgent(options: RunOptions): Promise<RunOutcome> 
       parameters: z.object({
         tab_id: z.string().describe("A tab_id from open_page"),
         name: z.string().describe("A tool name from list_webmcp_tools on that tab"),
+        frame_id: z.string().nullable().describe("The tool's frame_id from list_webmcp_tools; null when the name is unique on the page"),
         arguments: z.string().describe("The tool's arguments as a JSON object encoded as a string")
       }),
-      execute: ({ tab_id, name, arguments: raw }) =>
-        traced("call_webmcp_tool", { tab_id, name, arguments: parseArgs(raw) }, async () => {
+      execute: ({ tab_id, name, frame_id, arguments: raw }) =>
+        traced("call_webmcp_tool", { tab_id, name, frame_id, arguments: parseArgs(raw) }, async () => {
           const input = parseArgs(raw);
           if (input === null) return { ok: false, summary: "arguments is not a JSON object", output: { text: JSON.stringify({ error: "arguments must be a JSON object encoded as a string" }), is_error: true } };
-          const tool = (await toolsOf(pageOf(tab_id))).find((t) => t.name === name);
-          if (!tool) return { ok: false, summary: `no tool ${name} on ${tab_id}`, output: { text: JSON.stringify({ error: `The page in ${tab_id} registers no tool ${name}; call list_webmcp_tools.` }), is_error: true } };
-          const invocation = await tool.invoke({ input });
+          const found = await toolNamed(pageOf(tab_id), name, frame_id ?? undefined);
+          if ("error" in found) return { ok: false, summary: `no tool ${name} on ${tab_id}`, output: { text: JSON.stringify({ error: `The page in ${tab_id}: ${found.error}` }), is_error: true } };
+          const invocation = await found.tool.invoke({ input });
           const result = textOf(await invocation.result({ timeout: 120_000 }));
           checkoutUrl = checkoutUrlIn(result.text) ?? checkoutUrl;
           return { ok: !result.is_error, summary: result.is_error ? `error: ${short(result.text)}` : short(result.text), output: result };

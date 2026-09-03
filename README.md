@@ -15,6 +15,18 @@ Tokuchu connects three record owners. Each owns a different part of the transact
 
 The browser agent coordinates these surfaces. Tokuchu remains the system of record for the event and procurement; the store remains the system of record for the product and checkout.
 
+![Tokuchu and Customworks exchange a customization contract, approved cart items, and a checkout URL through a browser agent. A separate signed grant supports the later vendor handoff.](docs/diagrams/two-sites.svg)
+
+### The sister websites
+
+| Tokuchu — attendee and procurement records | Customworks — product and checkout |
+| --- | --- |
+| ![Tokuchu attendee records and requested product fields](docs/media/guide/13-records-grid.png) | ![Customworks checkout with one personalized line per attendee](docs/media/guide/16-store-cart.png) |
+
+Tokuchu turns RSVP data into a validated fulfilment manifest. Customworks turns that manifest into configured Shopify cart lines. Neither site silently becomes the other site's system of record.
+
+## Three concepts that should not be confused
+
 The application has two runtime modes, three actor-specific page surfaces, and two transports. These are independent concepts.
 
 ### Runtime modes
@@ -132,13 +144,15 @@ The event, invite, and store handoff pages include a visible Agent notes block a
 
 ### Running the demo
 
-`npm run agent-run -- "<goal>"` is the primary way to run this mode: Stagehand launches the local Chrome with its WebMCP flags, and an OpenAI Agents SDK agent reads `docs/agent-playbook.md`, discovers the tools each tab registers, and chooses every call through four functions (`open_page`, `list_webmcp_tools`, `call_webmcp_tool`, `switch_tab`). It prints each call as it happens and writes the transcript to `tests/videos/`. `npm run agent-playbook` is the deterministic fallback: Playwright follows the same steps in a fixed order with the polyfill, for a run that needs no model. Both need a static server on port 3114 and the network for the demo store; the agent run also needs `OPENAI_API_KEY`. `docs/agent-playbook.md` describes both under "Run it with the agent runtime" and "The scripted run".
+`npm run agent-run -- "<goal>"` is the primary way to run this mode: Stagehand launches the local Chrome with its WebMCP flags, and an OpenAI Agents SDK agent reads `docs/agent-runtime.md`, a short instruction set for that runtime, discovers the tools each tab registers, and chooses every call through four functions (`open_page`, `list_webmcp_tools`, `call_webmcp_tool`, `switch_tab`). It prints each call as it happens and writes the transcript to `tests/videos/`. `npm run agent-playbook` is the deterministic fallback: Playwright follows the same steps in a fixed order with the polyfill, for a run that needs no model. Both need a static server on port 3114 and the network for the demo store; the agent run also needs `OPENAI_API_KEY`. `docs/agent-playbook.md` describes both under "Run it with the agent runtime" and "The scripted run". The launcher is a fixture-driven demonstration: it seeds the guest list and names the demo store's product in the prompt, and the model chooses every call from there.
 
 ## Store handoff flow
 
 The store handoff is a separate phase after cart preparation. It is not the “store tab” used to read a product or fill a cart.
 
 The organizer creates an access grant and sends its signed `/s/{token}` link to the store. The link opens `/store/{grantId}`, where Tokuchu registers only the tools permitted by that grant.
+
+![The store-facing Tokuchu page showing the approved fulfilment manifest and its revision](docs/media/guide/18-store-manifest.png)
 
 ```mermaid
 sequenceDiagram

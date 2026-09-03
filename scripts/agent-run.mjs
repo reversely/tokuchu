@@ -1,8 +1,9 @@
 /**
  * The browser agent runtime (#60): Stagehand launches the local Chrome with its WebMCP flags, so
- * document.modelContext is Chrome's own, and an OpenAI Agents SDK agent reads docs/agent-playbook.md
+ * document.modelContext is Chrome's own, and an OpenAI Agents SDK agent reads docs/agent-runtime.md
  * and one goal sentence, then discovers and calls the tools the Tokuchu and store pages register.
- * The script seeds the guest list an organizer would have collected, prints each function call and
+ * This launcher is a fixture-driven demonstration: it seeds the guest list an organizer would have
+ * collected and names the demo store's product in the prompt. The runtime itself names no tool. It prints each function call and
  * result as one line, and writes the transcript beside the videos in tests/videos.
  *
  *   TOKUCHU_STATIC=1 npm run dev -- -p 3114                 # in one shell
@@ -81,7 +82,7 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
   save();
 
-  const playbook = readFileSync("docs/agent-playbook.md", "utf8");
+  const playbook = readFileSync("docs/agent-runtime.md", "utf8");
   const answers = ATTENDEES.map((a) => `${a.display_name}: size ${a.size}, star map location ${a.location}, star map time ${a.time}`).join("; ");
   const prompt = [
     goal,

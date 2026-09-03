@@ -155,18 +155,16 @@ Report each tool call you make and a one-line summary of its result, then the ch
 
 ## Run it with the agent runtime
 
-`npm run agent-run -- "<goal>"` runs `scripts/agent-run.mjs`: a model follows this playbook against the live pages. Stagehand (`@browserbasehq/stagehand` 4.0.2, `localBrowser.launch`) starts the local Chrome with `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`, so `document.modelContext` on every tab is Chrome's own and no page needs the polyfill. An OpenAI Agents SDK agent reads this document as its instructions, with a short rule to list a tab's tools before its first call and to stop at the first error it cannot resolve from the error text, and takes the goal sentence as its prompt. It has four functions and nothing else:
+`npm run agent-run -- "<goal>"` runs `scripts/agent-run.mjs`: a model chooses every WebMCP call across the two tabs. Stagehand (`@browserbasehq/stagehand` 4.0.2, `localBrowser.launch`) starts the local Chrome with its WebMCP flags, so `document.modelContext` is Chrome's own and this playbook's polyfill notes do not apply. The model does not read this document; it reads `docs/agent-runtime.md`, a shorter instruction set written for that runtime: the four functions, how to work, the task, the order the tools expect, and what each error means.
 
 | Function | What it does |
 |---|---|
 | `open_page(url)` | Opens a tab and returns its `tab_id` |
-| `list_webmcp_tools(tab_id)` | The tools the page registers: name, description, `inputSchema` |
-| `call_webmcp_tool(tab_id, name, arguments)` | Calls one tool and returns its text payload with `is_error` |
+| `list_webmcp_tools(tab_id)` | The tools the page registers: name, `frame_id`, description, `inputSchema` |
+| `call_webmcp_tool(tab_id, name, frame_id, arguments)` | Calls one tool, waiting up to the tool timeout for a name the page registers late, and returns its text payload with `is_error`; `frame_id` disambiguates a name two frames share |
 | `switch_tab(tab_id)` | Brings a tab to the front |
 
-The model discovers each page's tools and chooses every call; the script names no Tokuchu or store tool. Before the run, the script does the organizer's part: it opens `/demo` for a guest event, adds the three attendees of `tests/fixtures/demo-attendees.json` as going, and gives the agent the event's page, the store's product page, the invite page pattern, and the attendees' answers as context, so the agent answers each attendee's questions through `submit_rsvp` on that attendee's invite page when `list_missing` names them. The script prints each function call and each result as one line and writes the same events, with the turn and call counts and the checkout link, to `tests/videos/agent-run-<timestamp>.json`. It exits 0 once a call returns a `checkout_url`, and 1 when the model stops on an error.
-
-It needs the static server (`TOKUCHU_STATIC=1 npm run dev -- -p 3114`, or another address in `AGENT_BASE`), `OPENAI_API_KEY` in `.env` or the environment, a Chrome 149 or later on the machine, and the network for the demo store. `OPENAI_AGENT_MODEL` picks the model; the default is `gpt-5.6-luna`. `src/agent/agent-run.ts` holds the loop and `src/agent/agent-run.test.ts` runs it over a scripted model and fake pages without a browser.
+The runtime names no Tokuchu or store tool. The launcher is a fixture-driven demonstration rather than a fully generic agent: before the run it does the organizer's part by opening `/demo` for a guest event, seeding the three attendees of `tests/fixtures/demo-attendees.json` as going, and handing the model the event URL, the demo store's product page and id, the invite page pattern, and the attendees' answers as context. Everything after that is the model's choice. It needs the static server (`TOKUCHU_STATIC=1 npm run dev -- -p 3114`, or another address in `AGENT_BASE`), `OPENAI_API_KEY` in `.env` or the environment, Chrome 149 or later, and the network for the demo store. Each run writes a transcript to `tests/videos/agent-run-<stamp>.json`; the transcript carries the demo guest token in the event URL, so redact `?t=` before sharing one.
 
 ## The scripted run
 
