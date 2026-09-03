@@ -7,6 +7,7 @@ import { syncGift } from "../agent/cart";
 import { giftsFor } from "../domain/gifts";
 import { cartDeps } from "./cart-api";
 import { afterCommit, withPersistedEvent } from "./persistence";
+import { noteRsvpWrite } from "./proactive";
 
 /** One chain per gift, so two writes in quick succession run their syncs in order and the second sees the first's cart. */
 const pending = new Map<string, Promise<unknown>>();
@@ -16,6 +17,7 @@ const pending = new Map<string, Promise<unknown>>();
  * persisted scope, so it reads the reply it follows and its cart write lands in the row as well.
  */
 export function afterRsvpWrite(eventId: string): void {
+  noteRsvpWrite(eventId);
   const committed = afterCommit();
   for (const gift of giftsFor(eventId)) {
     if (!gift.cart_id || gift.locked_at) continue;

@@ -9,6 +9,7 @@ import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domai
 import type { CartBlocked, CartLine } from "../domain/types";
 import { postUpdate, requireGift } from "./api";
 import { afterCommit, withPersistedEvent } from "./persistence";
+import { noteCartResult } from "./proactive";
 import { withStorePage, type StorePage } from "./store-page";
 
 export type CartItem = { recipient_ref: string; variant_id: string; values: Record<string, string> };
@@ -64,7 +65,7 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
   return withPersistedEvent(eventId, () => {
     postUpdate(eventId, giftId, "tokuchu", { kind, text, reference });
     updateGift(giftId, patch);
-  });
+  }).then(() => noteCartResult(eventId, giftId));
 }
 
 /**
@@ -108,6 +109,7 @@ export async function runCartFill(eventId: string, giftId: string, deps: CartJob
       updateGift(giftId, { cart_fill: { status: "failed", started_at: started, reason }, cart_lines: record.cart_lines, cart_blocked: blocked } as Partial<GiftInput>);
     }
   });
+  noteCartResult(eventId, giftId);
 }
 
 /** One job per gift at a time; a second start while one runs joins it, and approveSpecs refuses an approval while one runs. */
