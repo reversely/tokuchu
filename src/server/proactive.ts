@@ -14,7 +14,7 @@ import type { ChangeEntry, ChatMessage } from "../domain/types";
 import { followUps } from "./api";
 import { lastSystemMessage, postMessage } from "./chat";
 import { hasDatabase } from "./db";
-import { llmEnabled } from "./flags";
+import { llmEnabled, staticMode } from "./flags";
 import { afterCommit, withPersistedEvent } from "./persistence";
 
 /** What happened: replies were written, a cart job reported on a gift, or an update was posted on a gift. */
@@ -44,6 +44,8 @@ const inFlight = new Map<string, Promise<void>>();
 
 /** Notes a change and arms the event's debounce; the post runs once the noting request's row is written. */
 function note(eventId: string, reason: Reason): void {
+  // Static mode has no assistant thread to post into (#56).
+  if (staticMode()) return;
   const entry = pending.get(eventId) ?? { timer: setTimeout(() => undefined, 0), reasons: [], commits: [], captured: state() };
   clearTimeout(entry.timer);
   entry.reasons.push(reason);

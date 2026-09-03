@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { snapshot } from "../../../server/api";
+import { staticMode } from "../../../server/flags";
+import { AGENT_TASK_META, agentTaskText } from "../../../webmcp/agent-task";
 import { guestKeepPath, signInPath } from "../../../server/demo";
 import { currentCaller, openEvent } from "../../../server/ownership";
 import { DEMO_TOKEN_PARAM } from "../../../demo/token";
@@ -8,6 +11,11 @@ import { GuestPill, SessionPill } from "../../session-pill";
 
 type Query = Record<string, string | string[] | undefined>;
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<Query> };
+
+/** In static mode the head carries the agent's task for the event page (#56). */
+export function generateMetadata(): Metadata {
+  return staticMode() ? { other: { [AGENT_TASK_META]: agentTaskText("event") } } : {};
+}
 
 /** The single `t` search param, or null when the URL carries none or repeats it. */
 function tokenFrom(query: Query): string | null {

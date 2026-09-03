@@ -7,7 +7,7 @@ import type { Model } from "@openai/agents";
 import { state } from "../domain/store";
 import type { ChatMessage } from "../domain/types";
 import { getDatabase, hasDatabase } from "./db";
-import { llmEnabled } from "./flags";
+import { llmEnabled, staticMode } from "./flags";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { dueSchedules, liveRunDeps, runSchedule, statusLine, type RunDeps } from "./schedules";
 
@@ -61,7 +61,8 @@ export async function tick(eventId: string, options: TickOptions = {}): Promise<
  * while a tick runs finds nothing to start.
  */
 export function tickAfterRead(eventId: string, now: Date = new Date()): void {
-  if (inFlight.has(eventId) || !dueSchedules(eventId, now).length) return;
+  // Static mode runs no schedules (#56).
+  if (staticMode() || inFlight.has(eventId) || !dueSchedules(eventId, now).length) return;
   const job = afterCommit()
     .then(() => withPersistedEvent(eventId, () => tick(eventId)))
     .then(() => undefined)

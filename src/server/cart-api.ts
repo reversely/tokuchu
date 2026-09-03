@@ -8,15 +8,17 @@ import { approveGift, CartStateError, liveDeps, lockAndCheckout, lockIsDue, poll
 import { CartBuyer, DeliveryWindow } from "../domain/types";
 import { BadRequestError, giftView, requireGift } from "./api";
 import { traceClient } from "./trace";
+import { staticMode } from "./flags";
 
 let deps: CartDeps = liveDeps;
 
 /** Test hook: the client factory and clock the routes and the RSVP hook use. */
 import { cartOperations } from "./registry";
 
-/** The MCP endpoint dispatches send_to_vendor and approve to these operations (organizer tokens only). */
-cartOperations.send = (eventId, giftId) => sendGiftOp(eventId, giftId, {});
-cartOperations.approve = (eventId, giftId) => approveGiftOp(eventId, giftId, {});
+/** The MCP endpoint dispatches send_to_vendor and approve to these operations (organizer tokens only); static mode refuses both, since each prices a cart at the store from the server (#56). */
+const staticRefusal = (name: string) => new BadRequestError(`${name} is off in static mode; the agent fills the cart on the store's page with the cart_items of get_fulfillment_manifest after approve_specs.`);
+cartOperations.send = (eventId, giftId) => (staticMode() ? Promise.reject(staticRefusal("send_to_vendor")) : sendGiftOp(eventId, giftId, {}));
+cartOperations.approve = (eventId, giftId) => (staticMode() ? Promise.reject(staticRefusal("approve")) : approveGiftOp(eventId, giftId, {}));
 
 export function setCartDeps(next: CartDeps): void {
   deps = next;

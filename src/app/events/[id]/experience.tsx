@@ -10,6 +10,7 @@ import { dateOnly, dateTime, money } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
 import type { CurationProposal } from "../../../agent/curation-agent";
 import { LastCalls, tracesOfGift, tracesOfSearch } from "./trace";
+import { StaticExperience } from "./handoff";
 
 type Step = "pick" | "results" | "recipients" | "mapping" | "list";
 /** What the curate endpoint returns (#120); the stream wraps it as { kind: "done", ...reply }. */
@@ -308,6 +309,9 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
       )}
     </section>
   );
+
+  // Static mode has no search and no cards: the handoff view stands in for the whole tab (#56). Every hook above has run, so the branch is stable across renders.
+  if (snap.static) return <StaticExperience snap={snap} onChanged={onChanged} />;
 
   const summaryUnits = gifts.reduce((s, g) => s + g.quantities.reduce((t, x) => t + x.quantity, 0), 0);
   const summaryCard = (

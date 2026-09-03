@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type DependencyList } from "react";
 import { registerTokuchuTools, type RegisterResult } from "../webmcp/register";
+import { STATIC_OFF_TOOLS } from "../webmcp/tools";
 import { withDemoHeaders } from "../demo/token";
 
 type Status = "pending" | "ready" | "unavailable";
@@ -49,8 +50,8 @@ export function WebMcpPill({ status }: { status: Status }) {
   );
 }
 
-/** Registers the organizer-scoped tools while the dashboard is mounted (PRD Section 7) and shows whether an agent can see them. */
-export function WebMcpProvider({ eventId }: { eventId: string }) {
-  const status = useWebMcp((signal) => registerTokuchuTools({ eventId, fetchImpl: notifyingFetch, signal }), [eventId]);
+/** Registers the organizer-scoped tools while the dashboard is mounted (PRD Section 7) and shows whether an agent can see them; a static-mode page leaves the search and the store cart tools off (#56). */
+export function WebMcpProvider({ eventId, staticMode = false }: { eventId: string; staticMode?: boolean }) {
+  const status = useWebMcp((signal) => registerTokuchuTools({ eventId, fetchImpl: notifyingFetch, signal, exclude: staticMode ? STATIC_OFF_TOOLS : [] }), [eventId, staticMode]);
   return <WebMcpPill status={status} />;
 }

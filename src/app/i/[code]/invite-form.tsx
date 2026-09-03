@@ -4,6 +4,7 @@ import type { inviteView } from "../../../server/api";
 import type { AttributeDefinition, GuestStatus } from "../../../domain/types";
 import { controlFor } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
+import { AgentNotes } from "../../agent-notes";
 import { InviteWebMcp } from "./invite-webmcp";
 import { sendRsvp } from "./send-rsvp";
 
@@ -65,7 +66,8 @@ function Question({ def, value, onChange, disabled }: { def: AttributeDefinition
   );
 }
 
-export function InviteForm({ invite, guestId }: { invite: Invite; guestId: string | null }) {
+/** The invite form; `agentNotes` adds the static-mode task block under it (#56). */
+export function InviteForm({ invite, guestId, agentNotes = false }: { invite: Invite; guestId: string | null; agentNotes?: boolean }) {
   const { event, questions } = invite;
   const [name, setName] = useState("");
   const [status, setStatus] = useState<GuestStatus | null>(null);
@@ -189,6 +191,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                 {savedStatus && <p className="hint" style={{ color: "var(--muted)", marginTop: 12 }} data-testid="saved">Saved as {STATUS_LABEL[savedStatus]}</p>}
               </>
             )}
+            {agentNotes && <AgentNotes page="invite" />}
           </div>
         </div>
       </main>

@@ -12,6 +12,7 @@ import { VENDOR_MOVES } from "../domain/procurement-status";
 import { definitionsFor, getGuest, procurementFor, state, transactionally, upsertRequest } from "../domain/store";
 import type { AttributeDefinition, Batch, ExceptionType, ProcurementException, ProcurementStatus, VendorProcurementStatus, VendorUpdate } from "../domain/types";
 import { BadRequestError, postUpdate, requireEvent, requireGift, requireGuest } from "./api";
+import type { CartItem } from "./cart-job";
 import { expireGrantsFor } from "./grants";
 import { deliverAll, type Outgoing } from "./request-mail";
 
@@ -30,6 +31,8 @@ export type FulfillmentManifest = {
   requirement_schema_version?: string;
   status: ProcurementStatus;
   attendees: FulfillmentAttendee[];
+  /** One item per ready attendee in the shape the store's add_customized_to_cart takes (#56), cut to the values the caller may read. */
+  cart_items: CartItem[];
 };
 
 /** Where the gift stands: the status its Procurement holds. */
@@ -99,6 +102,22 @@ function attendeeRow(row: ManifestRow, exceptions: ProcurementException[], varia
   return { attendee_ref: row.guest_id, status: worst(issues, open.length > 0), variant_id: row.variant_id, values, issues };
 }
 
+/**
+ * The cart item for one ready row: the store's field keys with each value as the string the cart
+ * tool takes, and only the fields whose source the caller may read. The variant question's value
+ * stays out, since the variant id carries it.
+ */
+function cartItem(row: ManifestRow, graded: FulfillmentAttendee, readable?: string[]): CartItem[] {
+  if (graded.status !== "ready" || !row.variant_id) return [];
+  const values: Record<string, string> = {};
+  for (const [key, field] of Object.entries(row.personalization ?? {})) {
+    if (field.value === null || field.value === undefined) continue;
+    if (readable && field.source.type === "definition" && !readable.includes(field.source.definition_id)) continue;
+    values[key] = String(field.value);
+  }
+  return [{ recipient_ref: row.guest_id, variant_id: row.variant_id, values }];
+}
+
 /** The manifest for a gift as the caller may see it; `readable` absent is the organizer's view. */
 export function fulfillmentManifest(eventId: string, giftId: string, readable?: string[]): FulfillmentManifest {
   const gift = requireGift(eventId, giftId);
@@ -106,9 +125,8 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
   const variantDefinitionId = gift.mapping[0]?.definition_id;
   const variantKey = variantDefinitionId ? keys.byDefinition.get(variantDefinitionId) : undefined;
   const exceptions = openExceptionsFor(giftId);
-  const attendees = manifest(gift)
-    .filter((row) => row.unit_status !== "excluded")
-    .map((row) => attendeeRow(row, exceptions, variantDefinitionId, variantKey, keys.byKey, readable));
+  const rows = manifest(gift).filter((row) => row.unit_status !== "excluded");
+  const attendees = rows.map((row) => attendeeRow(row, exceptions, variantDefinitionId, variantKey, keys.byKey, readable));
   return {
     procurement_id: giftId,
     gift_id: giftId,
@@ -116,7 +134,8 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
     approved_revision: approvedRevision(gift),
     ...schemaFields(gift),
     status: procurementStatus(gift),
-    attendees
+    attendees,
+    cart_items: rows.flatMap((row, i) => cartItem(row, attendees[i], readable))
   };
 }
 

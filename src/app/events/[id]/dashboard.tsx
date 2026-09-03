@@ -56,7 +56,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
           <button type="button" className={tab === "attendees" ? "on" : ""} aria-current={tab === "attendees" ? "page" : undefined} onClick={() => setTab("attendees")} data-testid="tab-attendees">Attendees</button>
         </nav>
         <div className="right">
-          <WebMcpProvider eventId={event.id} />
+          <WebMcpProvider eventId={event.id} staticMode={snap.static} />
           <span className={`pill${event.status === "published" ? " live" : ""}`} data-testid="status">{event.status === "published" ? "Published" : "Draft"}</span>
           <button className="btn ghost" type="button" onClick={() => setTraceOpen((open) => !open)} aria-pressed={traceOpen} data-testid="trace-toggle">Agent trace</button>
           {invite && (

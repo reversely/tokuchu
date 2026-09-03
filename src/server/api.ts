@@ -55,8 +55,9 @@ import { canonicalRequirementKey, slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { approvalState } from "./approval";
 import { messagesFor } from "./chat";
-import { llmEnabled } from "./flags";
 import { TRACE_SNAPSHOT_CAP, tracesFor } from "./trace";
+import { customshopUrl } from "../agent/customshop";
+import { llmEnabled, staticMode } from "./flags";
 import { grantsFor, grantView } from "./grants";
 import { afterRsvpWrite } from "./hooks";
 import { reconcileGift, requirementsFor, type RequirementConfirmation } from "./reconcile";
@@ -196,7 +197,8 @@ export function snapshot(eventId: string) {
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   tickAfterRead(eventId);
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, procurements: procurementsFor(eventId), requests: requestViews(eventId), exceptions: exceptionsFor(eventId), grants: grantsFor(eventId).map(grantView), messages: messagesFor(eventId), traces: tracesFor(eventId, { limit: TRACE_SNAPSHOT_CAP }), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
+  // In static mode the page shows the store's URL on the handoff card, so an agent knows where the store's tools are (#56).
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, procurements: procurementsFor(eventId), requests: requestViews(eventId), exceptions: exceptionsFor(eventId), grants: grantsFor(eventId).map(grantView), messages: messagesFor(eventId), traces: tracesFor(eventId, { limit: TRACE_SNAPSHOT_CAP }), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), static: staticMode(), store_url: staticMode() ? customshopUrl() : null, demo: event.demo };
 }
 
 /* ---- Gifts ---- */
@@ -287,7 +289,7 @@ export function deleteGift(eventId: string, giftId: string) {
  */
 export function approveSpecs(eventId: string, giftId: string, now = new Date()) {
   const gift = requireGift(eventId, giftId);
-  if (gift.cart_fill?.status === "running") throw new BadRequestError("The cart job is still running; approve again once it settles.");
+  if (gift.cart_fill?.status === "running") throw new BadRequestError(`The cart job for gift ${giftId} is still running; approve again once it settles.`);
   // The approval's own entry is the approved revision, so a manifest read at that revision reads as approved.
   const approved = recordProcurementChange(giftId, "approved", "organizer", "The organizer approved the attendee values");
   updateGift(giftId, { approved_at: now.toISOString(), approved_seq: approved.seq, checkout_url: null, cart_fill: null, cart_lines: null, cart_blocked: null } as Partial<GiftInput>);
@@ -462,7 +464,7 @@ const MappingsBody = z.object({ mappings: z.array(PersonalizationMapping) });
 export function setPersonalizationMappings(eventId: string, giftId: string, body: unknown) {
   const gift = requireGift(eventId, giftId);
   const event = requireEvent(eventId);
-  if (!gift.personalization?.fields.length) throw new BadRequestError("The gift's product has no personalization schema.");
+  if (!gift.personalization?.fields.length) throw new BadRequestError(`Gift ${giftId} has no personalization schema; call set_gift_customization with the store's get_customization payload first.`);
   const data = parseBody(MappingsBody, body);
   const errors = validateMappings(gift, event, data.mappings, definitionsFor(eventId));
   if (errors.length) throw new BadRequestError(errors.map((e) => `${e.code}: ${e.message}`).join("; "));

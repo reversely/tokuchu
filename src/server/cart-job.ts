@@ -12,6 +12,7 @@ import { moveProcurement } from "../domain/procurement";
 import { postUpdate, requireGift } from "./api";
 import { cartDepsFor } from "./cart-api";
 import { runCatalogCartFill } from "./catalog-cart";
+import { staticMode } from "./flags";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { noteCartResult } from "./proactive";
 import { withStorePage, type StorePage } from "./store-page";
@@ -130,6 +131,8 @@ const inFlight = new Map<string, Promise<void>>();
  * returns before the job completes; the dashboard poll shows its progress.
  */
 export function startCartFill(eventId: string, giftId: string, deps: CartJobDeps = liveDeps): Promise<void> {
+  // In static mode no job runs: the agent takes the manifest's cart_items to the store's page itself (#56).
+  if (staticMode()) return Promise.resolve();
   const running = inFlight.get(giftId);
   if (running) return running;
   const job = afterCommit()

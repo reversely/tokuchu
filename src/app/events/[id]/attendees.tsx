@@ -433,7 +433,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
               {approved ? (
                 <span className="pill live" data-testid="specs-approved">Approved</span>
               ) : (
-                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Approving" : "Approve and fill the cart"}</button>
+                <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || attendees.length === 0} data-testid="approve-send">{busy === "approve" ? "Approving" : snap.static ? "Approve" : "Approve and fill the cart"}</button>
               )}
               {stale && (
                 <button type="button" className="btn primary" onClick={approve} disabled={busy !== null || filling} data-testid="re-approve">{busy === "approve" ? "Approving" : "Re-approve"}</button>
@@ -449,6 +449,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
               <p className="hint" style={{ marginTop: 12 }} data-testid="approval-revision" data-approved={approval.approved_revision ?? ""}>Approved at revision {approval.approved_revision}</p>
             )
           )}
+          {snap.static && <p className="hint" style={{ marginTop: 12 }} data-testid="static-approve-note">{approved ? "The agent takes cart_items from get_fulfillment_manifest to the store's page and calls add_customized_to_cart" : "Approval records the revision; the agent fills the cart on the store's page afterwards"}</p>}
           {approved && changed > 0 && <p className="hint" style={{ marginTop: 12 }} data-testid="changed-count">{changed} {changed === 1 ? "attendee" : "attendees"} changed an answer after approval</p>}
           {approved && filling && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filling">Filling the cart</p>}
           {approved && fill?.status === "done" && <p className="hint" style={{ marginTop: 12 }} data-testid="cart-filled">Cart filled</p>}

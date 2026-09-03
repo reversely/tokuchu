@@ -9,10 +9,11 @@
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changeReader, changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
+import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
+import { setGiftCustomization, withStoreCustomization } from "./customization";
 import { newId, state } from "../domain/store";
 import type { AccessGrant, CallerToken } from "../domain/types";
-import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
+import { giftCreateBody, TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
 import { grantStatus, tokenScope, writeAsGrantee } from "./grants";
 import { noteUpdatePosted } from "./proactive";
 import { fulfillmentManifest, postProcurementUpdate, procurementSummary } from "./procurement";
@@ -171,7 +172,11 @@ async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant 
       return { ...all, entries };
     }
     case "set_gift_plan":
+      // Without a gift the plan creates one from its first rule's product (#56); the store read the route makes stays off in static mode.
+      if (!args.gift_id) return createGiftFromBody(eventId, await withStoreCustomization(giftCreateBody(args)));
       return updateGiftFromBody(eventId, String(args.gift_id), { rules: args.rules });
+    case "set_gift_customization":
+      return setGiftCustomization(eventId, String(args.gift_id), { product_id: args.product_id, title: args.title, fields: args.fields, variants: args.variants, selected_variant_id: args.selected_variant_id, currency: args.currency });
     case "set_personalization_mapping": {
       const giftId = String(args.gift_id);
       if (!organizer) {

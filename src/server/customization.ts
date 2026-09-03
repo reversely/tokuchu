@@ -4,10 +4,13 @@
  * confirms a product of a shop that answers the merchant tools, so the gift carries the store's
  * fields with their constraints and the store's variants with the numeric ids the cart tool takes.
  */
-import { customshopHost, customshopUrl, storeMeta } from "../agent/customshop";
+import { z } from "zod";
+import { bareProductId, customshopHost, customshopUrl, storeMeta } from "../agent/customshop";
 import { deriveSchemaId, deriveSchemaVersion, type VendorRequirementSchema } from "../domain/requirement-schema";
 import { PERSONALIZATION_KINDS, PersonalizationField, type Variant } from "../domain/types";
+import { requireGift, updateGiftFromBody } from "./api";
 import { BadRequestError } from "./errors";
+import { staticMode } from "./flags";
 import { withStorePage, type StorePage } from "./store-page";
 import { tracedStorePage, type TraceDraft } from "./trace";
 
@@ -91,7 +94,8 @@ type Reader = (pageUrl: string, productId: string, currency: string, trace?: Cus
  */
 export async function withStoreCustomization(body: unknown, read: Reader = readThroughStorePage, trace?: CustomizationTrace): Promise<unknown> {
   const gift = (body ?? {}) as GiftBodyShape;
-  if (!gift.product_id || !answersMerchantTools(gift.shop_domain)) return body;
+  // In static mode the server opens no store page; the agent hands the payload in through set_gift_customization (#56).
+  if (staticMode() || !gift.product_id || !answersMerchantTools(gift.shop_domain)) return body;
   const shopUrl = customshopUrl()!;
   const meta = await storeMeta(shopUrl);
   const customization = await cachedRead(read, gift.product_url || shopUrl, gift.product_id, meta.currency, trace);
@@ -104,4 +108,54 @@ export async function withStoreCustomization(body: unknown, read: Reader = readT
 function readThroughStorePage(pageUrl: string, productId: string, currency: string, trace?: CustomizationTrace): Promise<StoreCustomization> {
   const open = trace ? tracedStorePage(trace.eventId, withStorePage, { record: trace.record }) : withStorePage;
   return open(pageUrl, (page) => readCustomization(page, productId, currency, new URL(pageUrl).host));
+}
+
+/* ---- The agent's hand-off of the store's payload (#56) ---- */
+
+const ToolVariantBody = z.object({ id: z.union([z.string(), z.number()]).transform(String), title: z.string().default(""), price_cents: z.number().int().default(0), available: z.boolean().default(true), options: z.array(z.object({ name: z.string(), label: z.string() })).default([]) });
+
+/** The payload `get_customization` returns on the store's page, as set_gift_customization takes it; `currency` is the agent's addition when the store's page states one. */
+export const CustomizationBody = z.object({
+  product_id: z.union([z.string(), z.number()]).transform(String).optional(),
+  title: z.string().optional(),
+  fields: z.array(z.record(z.string(), z.unknown())),
+  variants: z.array(ToolVariantBody).default([]),
+  selected_variant_id: z.union([z.string(), z.number()]).transform(String).nullable().optional(),
+  schema_id: z.string().optional(),
+  schema_version: z.string().optional(),
+  currency: z.string().optional()
+});
+
+/** The display currency for the store's variants: the payload's, then the gift's, then the app's default. */
+const DEFAULT_CURRENCY = "CAD";
+
+/**
+ * Stores the store's customization payload on a gift the way the server's own read would: the
+ * store's fields and variants replace the gift's, a mapping row naming a variant the store does
+ * not list drops, and the default variant is the store's selected one unless the gift already
+ * names one the store lists. The requirement schema goes through the same diff as a re-read.
+ *
+ * Raises:
+ *   BadRequestError: when the payload is not the tool's shape, names another product, or carries no field Tokuchu resolves.
+ */
+export function setGiftCustomization(eventId: string, giftId: string, body: unknown) {
+  const gift = requireGift(eventId, giftId);
+  const parsed = CustomizationBody.safeParse(body);
+  if (!parsed.success) throw new BadRequestError(`set_gift_customization takes the get_customization payload: ${parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ")}.`);
+  const data = parsed.data;
+  if (data.product_id && bareProductId(data.product_id) !== bareProductId(gift.product_id)) throw new BadRequestError(`product_id ${data.product_id} is not gift ${giftId}'s product ${gift.product_id}.`);
+  const currency = data.currency || gift.variants[0]?.currency || DEFAULT_CURRENCY;
+  const customization = parseCustomization(data as Record<string, unknown>, currency, { store_domain: gift.shop_domain, product_id: bareProductId(gift.product_id) });
+  if (data.fields.length && !customization.fields.length) throw new BadRequestError(`fields: none of the ${data.fields.length} fields has a kind Tokuchu resolves (${PERSONALIZATION_KINDS.join(", ")}).`);
+  const known = new Set(customization.variants.map((v) => v.id));
+  const mapping = gift.mapping.filter((row) => known.has(row.variant_id));
+  const defaultVariant = gift.default_variant_id && known.has(gift.default_variant_id) ? gift.default_variant_id : customization.selected_variant_id;
+  const patch = {
+    variants: customization.variants,
+    mapping,
+    default_variant_id: defaultVariant,
+    personalization: { fields: customization.fields, schema_id: customization.schema.schema_id, schema_version: customization.schema.version },
+    ...(gift.product_title || !customization.title ? {} : { product_title: customization.title })
+  };
+  return updateGiftFromBody(eventId, giftId, patch);
 }

@@ -16,6 +16,7 @@
     "test:e2e": "playwright test",
     "setup": "bash scripts/setup.sh",
     "test:flow-demo": "playwright test tests/flow-demo.spec.ts",
+    "test:static": "TOKUCHU_STATIC=1 playwright test tests/static-agent.spec.ts",
     "migrate": "tsx scripts/migrate.ts",
     "sweep-demo": "tsx scripts/sweep-demo.ts",
     "reparent-events": "tsx scripts/reparent-events.ts"

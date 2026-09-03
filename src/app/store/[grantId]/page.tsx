@@ -1,11 +1,19 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { staticMode } from "../../../server/flags";
 import { withPersistedEvent } from "../../../server/persistence";
 import { STORE_COOKIE, storeSessionFrom } from "../../../server/store-session";
 import { storeView, type StoreView } from "../../../server/store-view";
+import { AGENT_TASK_META, agentTaskText } from "../../../webmcp/agent-task";
 import { StorePage } from "./store-page";
 
 type Props = { params: Promise<{ grantId: string }> };
+
+/** In static mode the head carries the agent's task for the store's page (#56). */
+export function generateMetadata(): Metadata {
+  return staticMode() ? { other: { [AGENT_TASK_META]: agentTaskText("store") } } : {};
+}
 
 /**
  * The store-facing page (#47): the Procurement one grant opens, read under the store session the
@@ -22,5 +30,5 @@ export default async function Page({ params }: Props) {
   } catch {
     notFound();
   }
-  return <StorePage view={view} />;
+  return <StorePage view={view} agentNotes={staticMode()} />;
 }

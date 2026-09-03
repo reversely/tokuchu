@@ -40,8 +40,16 @@ export interface ToolDefinition {
   description: string;
   inputSchema: JsonObjectSchema;
   scopes: Scope[];
-  route: Route;
+  /** The route the call maps to; a function picks it from the arguments, as set_gift_plan does with and without a gift_id. */
+  route: Route | ((args: ToolArgs) => Route);
 }
+
+/**
+ * The tools a static-mode page leaves off (#56): the catalog search and the store cart operations
+ * run on the server against the store, which static mode never does. The agent searches and fills
+ * the cart on the store's own page instead.
+ */
+export const STATIC_OFF_TOOLS = ["search_gifts", "send_to_vendor", "approve"] as const;
 
 const REPLY = { type: "string", description: "The attendee's reply", enum: ["going", "maybe", "cant_go"] } as const;
 const DISPLAY_NAME = { type: "string", description: "The attendee's name as the organizer's list shows it" } as const;
@@ -52,6 +60,12 @@ const FILTER = { type: "string", description: "A filter as field:op:value clause
 const FIELDS = { type: "array", description: "Definition ids to include; empty means every value the caller may read.", items: { type: "string" } } as const;
 const csv = (v: unknown) => (Array.isArray(v) ? v.map(String).join(",") : typeof v === "string" ? v : undefined);
 const str = (v: unknown) => (v === undefined || v === null ? undefined : String(v));
+
+/** The create body of set_gift_plan without a gift_id: the first rule's product with the store the call names. */
+export function giftCreateBody(a: ToolArgs): Record<string, unknown> {
+  const rules = Array.isArray(a.rules) ? (a.rules as { product_id?: unknown }[]) : [];
+  return { product_id: rules[0]?.product_id, shop_domain: a.shop_domain, product_title: a.product_title, product_url: a.product_url ?? null, rules };
+}
 
 export const TOOLS: ToolDefinition[] = [
   {
@@ -172,10 +186,41 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "set_gift_plan",
-    description: "Replaces a gift's plan: the ordered rules that assign a product to guests by filter. The first rule whose filter matches a guest wins.",
-    inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" }, rules: { type: "array", description: "Rules as {filter, product_id} in order", items: { type: "object" } } }, required: ["gift_id", "rules"], additionalProperties: false },
+    description: "Replaces a gift's plan: the ordered rules that assign a product to guests by filter. The first rule whose filter matches a guest wins. Without a gift_id the call creates the gift from the first rule's product_id and returns it with its id; shop_domain, product_title, and product_url name the store and the product's page. A personalized product then takes its fields through set_gift_customization.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gift_id: { type: "string", description: "The gift's id; leave it out to create the gift" },
+        rules: { type: "array", description: "Rules as {filter, product_id} in order; filter is a list of {field, op, value} clauses and an empty list matches everyone", items: { type: "object" } },
+        shop_domain: { type: "string", description: "The store's domain, such as example.myshopify.com, when creating" },
+        product_title: { type: "string", description: "The product's title, when creating" },
+        product_url: { type: "string", description: "The product's page at the store, where its WebMCP tools run, when creating", format: "uri" }
+      },
+      required: ["rules"],
+      additionalProperties: false
+    },
     scopes: ["organizer"],
-    route: { method: "PATCH", path: "/api/events/:eventId/gifts/{gift_id}", body: (a) => ({ rules: a.rules }) }
+    route: (a) => (a.gift_id ? { method: "PATCH", path: "/api/events/:eventId/gifts/{gift_id}", body: (x) => ({ rules: x.rules }) } : { method: "POST", path: "/api/events/:eventId/gifts", body: (x) => giftCreateBody(x) })
+  },
+  {
+    name: "set_gift_customization",
+    description: "Stores the store's customization contract on a gift: the payload the store page's get_customization tool returned (product_id, title, fields, variants, selected_variant_id) as the gift's fields and variants, the way the server's own read would. Call it after set_gift_plan and before get_requirements; the variants' ids are the ones add_customized_to_cart takes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gift_id: { type: "string", description: "The gift's id" },
+        product_id: { type: "string", description: "The product id the payload names; it must be the gift's product" },
+        title: { type: "string", description: "The product's title as the store states it" },
+        fields: { type: "array", description: "The store's fields as {key, label, kind, required, constraints}", items: { type: "object" } },
+        variants: { type: "array", description: "The store's variants as {id, title, price_cents, available, options}", items: { type: "object" } },
+        selected_variant_id: { type: "string", description: "The variant the store selects by default" },
+        currency: { type: "string", description: "The store's currency as an ISO code, when the page states one" }
+      },
+      required: ["gift_id", "fields"],
+      additionalProperties: false
+    },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/customization", body: (a) => ({ product_id: a.product_id, title: a.title, fields: a.fields, variants: a.variants, selected_variant_id: a.selected_variant_id, currency: a.currency }) }
   },
   {
     name: "set_personalization_mapping",
@@ -339,19 +384,20 @@ export function rsvpAnswers(definitions: AttributeDefinition[], args: ToolArgs):
 
 /** Builds the URL and init for one call: path arguments in braces, then the query or the body. */
 export function buildRequest(tool: ToolDefinition, eventId: string, args: ToolArgs): { url: string; init: RequestInit } {
-  let path = tool.route.path.replace(":eventId", encodeURIComponent(eventId));
+  const route = typeof tool.route === "function" ? tool.route(args) : tool.route;
+  let path = route.path.replace(":eventId", encodeURIComponent(eventId));
   // The gift is the procurement until a Procurement record exists, so procurement_id fills a gift_id path segment.
   path = path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(String(args[key] ?? (key === "gift_id" ? args.procurement_id : undefined) ?? "")));
-  const init: RequestInit = { method: tool.route.method, headers: { Accept: "application/json" } };
-  if (tool.route.query) {
+  const init: RequestInit = { method: route.method, headers: { Accept: "application/json" } };
+  if (route.query) {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(tool.route.query(args))) if (v !== undefined && v !== "") params.set(k, v);
+    for (const [k, v] of Object.entries(route.query(args))) if (v !== undefined && v !== "") params.set(k, v);
     const qs = params.toString();
     if (qs) path += `?${qs}`;
   }
-  if (tool.route.body) {
+  if (route.body) {
     init.headers = { ...init.headers, "Content-Type": "application/json" };
-    init.body = JSON.stringify(tool.route.body(args));
+    init.body = JSON.stringify(route.body(args));
   }
   return { url: path, init };
 }

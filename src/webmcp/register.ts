@@ -40,11 +40,12 @@ export async function executeThroughApi(tool: ToolDefinition, eventId: string, a
   }
 }
 
-export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolCall }: { eventId: string; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
+/** Registers the organizer's tools; `exclude` names the ones a static-mode page leaves off (#56). */
+export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolCall, exclude = [] }: { eventId: string; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void; exclude?: readonly string[] }): Promise<RegisterResult> {
   const modelContext = document.modelContext;
   if (!modelContext) return { supported: false };
   const doFetch = fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const organizerTools = TOOLS.filter((t) => t.scopes.includes("organizer"));
+  const organizerTools = TOOLS.filter((t) => t.scopes.includes("organizer") && !exclude.includes(t.name));
   for (const tool of organizerTools) {
     await modelContext.registerTool(
       {

@@ -32,7 +32,7 @@ describe("the tool definitions", () => {
     expect(buildRequest(tool("follow_up"), "evt_1", { gift_id: "gift_9" })).toMatchObject({ url: "/api/events/evt_1/gifts/gift_9/follow-up", init: { method: "POST" } });
   });
   it("keeps the money-spending tools away from vendor scope", () => {
-    for (const name of ["set_gift_plan", "set_personalization_mapping", "send_to_vendor", "approve", "approve_specs", "list_guests", "get_guest", "list_missing", "search_gifts", "request_from_attendees", "follow_up"]) expect(tool(name).scopes).toEqual(["organizer"]);
+    for (const name of ["set_gift_plan", "set_gift_customization", "set_personalization_mapping", "send_to_vendor", "approve", "approve_specs", "list_guests", "get_guest", "list_missing", "search_gifts", "request_from_attendees", "follow_up"]) expect(tool(name).scopes).toEqual(["organizer"]);
     for (const name of ["get_procurement", "get_requirements", "get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "post_procurement_update", "get_updates", "count_by", "get_summary"]) expect(tool(name).scopes).toContain("vendor");
     expect(tool("submit_rsvp").scopes).toEqual(["attendee"]);
   });
