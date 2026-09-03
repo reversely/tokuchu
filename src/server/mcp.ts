@@ -11,9 +11,10 @@ import { z } from "zod";
 import { readLatestSeq } from "./seq";
 import { changeReader, changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
 import { newId, state } from "../domain/store";
-import type { CallerToken } from "../domain/types";
+import type { AccessGrant, CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
-import { grantStatus, tokenScope } from "./grants";
+import { grantStatus, tokenScope, writeAsGrantee } from "./grants";
+import { noteUpdatePosted } from "./proactive";
 import { fulfillmentManifest, postProcurementUpdate, procurementSummary } from "./procurement";
 import { cartOperations } from "./registry";
 
@@ -53,7 +54,8 @@ export function tokenFrom(eventId: string, request: Request): CallerToken | null
   if (!id) return null;
   const token = state().tokens.get(id);
   if (!token || token.event_id !== eventId) return null;
-  if (token.expires_at && Date.parse(token.expires_at) < Date.now()) return null;
+  // A token minted from a grant takes its expiry from the grant, which every call reads afresh, so the refusal names the reason.
+  if (!token.grant_id && token.expires_at && Date.parse(token.expires_at) < Date.now()) return null;
   return token;
 }
 
@@ -65,13 +67,13 @@ function allowed(token: CallerToken, tool: ToolDefinition): boolean {
  * The token under its grant's scope as the grant stands now, or the refusal a revoked, expired, or
  * missing grant answers with. A token without a grant keeps the scope it was minted with.
  */
-function underGrant(token: CallerToken): { token: CallerToken } | { error: string } {
-  if (!token.grant_id) return { token };
+function underGrant(token: CallerToken): { token: CallerToken; grant: AccessGrant | null } | { error: string } {
+  if (!token.grant_id) return { token, grant: null };
   const grant = state().grants.get(token.grant_id);
   if (!grant || grant.event_id !== token.event_id) return { error: "The grant behind this token no longer exists." };
   const status = grantStatus(grant);
   if (status !== "active") return { error: status === "revoked" ? "The grant behind this token was revoked." : "The grant behind this token has expired." };
-  return { token: { ...token, ...tokenScope(grant) } };
+  return { token: { ...token, ...tokenScope(grant) }, grant };
 }
 
 /* ---- The dispatch: each tool runs the operation its page route runs, under the token's scope ---- */
@@ -106,8 +108,14 @@ function mappingDefinitionIds(raw: unknown): string[] {
   });
 }
 
-async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinition, args: ToolArgs): Promise<unknown> {
+async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant | null, tool: ToolDefinition, args: ToolArgs): Promise<unknown> {
   const organizer = token.callable_tools.includes("set_gift_plan");
+  // A post under a grant is the grantee's write in the change log, and every post wakes the chat's proactive line.
+  const posting = async <T>(giftId: string, write: () => Promise<T>): Promise<T> => {
+    const result = grant ? await writeAsGrantee(grant, token.id, write) : await write();
+    noteUpdatePosted(eventId, giftId);
+    return result;
+  };
   const strArg = (k: string) => (args[k] === undefined || args[k] === null ? undefined : String(args[k]));
   const fields = Array.isArray(args.fields) ? (args.fields as string[]) : undefined;
   switch (tool.name) {
@@ -173,13 +181,13 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
     case "post_update": {
       const giftId = String(args.gift_id);
       if (!organizer) requireGiftScope(token, giftId);
-      return postUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, { kind: args.kind, text: args.text ?? "", expected_date: args.expected_date ?? null, reference: args.reference ?? null, guest_id: args.guest_id ?? null });
+      return posting(giftId, async () => postUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, { kind: args.kind, text: args.text ?? "", expected_date: args.expected_date ?? null, reference: args.reference ?? null, guest_id: args.guest_id ?? null }));
     }
     case "post_procurement_update": {
       const giftId = strArg("gift_id") ?? strArg("procurement_id") ?? "";
       if (!organizer) requireGiftScope(token, giftId);
       const { gift_id: _gift, procurement_id: _procurement, meta: _meta, ...body } = args;
-      return postProcurementUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, body);
+      return posting(giftId, () => postProcurementUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, body));
     }
     case "get_updates": {
       const giftId = String(args.gift_id);
@@ -247,7 +255,7 @@ export async function handleRpc(eventId: string, stored: CallerToken | null, rpc
   // The grant is read on every call, so a revocation or an expiry answers the next request with an error and nothing else.
   const scoped = underGrant(stored);
   if ("error" in scoped) return reply(text({ error: scoped.error }, true));
-  const token = scoped.token;
+  const { token, grant } = scoped;
   const visible = TOOLS.filter((t) => allowed(token, t));
   if (rpc.method === "tools/list") return reply({ tools: visible.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) });
   if (rpc.method === "tools/call") {
@@ -258,7 +266,7 @@ export async function handleRpc(eventId: string, stored: CallerToken | null, rpc
     const profile = (args.meta as { "ucp-agent"?: { profile?: string } } | undefined)?.["ucp-agent"]?.profile;
     if (profile) state().tokens.set(stored.id, { ...stored, last_profile_url: profile });
     try {
-      const result = await dispatch(eventId, token, tool, args);
+      const result = await dispatch(eventId, token, grant, tool, args);
       return reply({ ...text(result), structuredContent: result, seq: readLatestSeq() });
     } catch (e) {
       if (e instanceof NotFoundError || e instanceof BadRequestError) return reply(text({ error: e.message }, true));

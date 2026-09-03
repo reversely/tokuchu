@@ -1,9 +1,11 @@
 /**
- * Proactive status posts (#34): after an RSVP write or a cart run the assistant posts into the
- * event's chat on its own. The triggers note the change; a per-event debounce turns a burst of
- * replies into one post, which runs after the noting request has written its row, in a persisted
- * scope of its own. With the agent on, the post is written from the current state through its
- * tools with an instruction to say only what changed; with it off, a deterministic line stands in.
+ * Proactive status posts (#34): after an RSVP write, a cart run, or a post into a gift's progress
+ * log the assistant posts into the event's chat on its own. The triggers note the change; a
+ * per-event debounce turns a burst of replies into one post, which runs after the noting request
+ * has written its row, in a persisted scope of its own. With the agent on, the post is written
+ * from the current state through its tools with an instruction to say only what changed; with it
+ * off, a deterministic line stands in. A posted update names its actor from the change log, so a
+ * store's post and the organizer's read as different people.
  */
 import type { Model } from "@openai/agents";
 import { runWithState, state, guestsFor, type State } from "../domain/store";
@@ -15,8 +17,8 @@ import { hasDatabase } from "./db";
 import { llmEnabled } from "./flags";
 import { afterCommit, withPersistedEvent } from "./persistence";
 
-/** What happened: replies were written, or a cart job reported on a gift. */
-export type Reason = { kind: "rsvp" } | { kind: "cart"; gift_id: string };
+/** What happened: replies were written, a cart job reported on a gift, or an update was posted on a gift. */
+export type Reason = { kind: "rsvp" } | { kind: "cart"; gift_id: string } | { kind: "update"; gift_id: string };
 
 export type ProactiveConfig = {
   /** How long a burst of triggers waits before one post; a few seconds covers a party's replies. */
@@ -57,6 +59,10 @@ export function noteRsvpWrite(eventId: string): void {
 
 export function noteCartResult(eventId: string, giftId: string): void {
   note(eventId, { kind: "cart", gift_id: giftId });
+}
+
+export function noteUpdatePosted(eventId: string, giftId: string): void {
+  note(eventId, { kind: "update", gift_id: giftId });
 }
 
 /**
@@ -130,11 +136,43 @@ function cartLine(eventId: string, giftId: string): string | null {
   return null;
 }
 
+/** Who wrote a change-log entry, in the organizer's words: the store or the agent by its grantee id, the organizer, an attendee, or Tokuchu. */
+function actorLabel(entry: ChangeEntry): string {
+  switch (entry.actor_type) {
+    case "vendor":
+      return entry.actor_id ? `The store ${entry.actor_id}` : "The store";
+    case "agent":
+      return entry.actor_id ? `The agent ${entry.actor_id}` : "An agent";
+    case "attendee":
+      return "An attendee";
+    case "system":
+      return "Tokuchu";
+    default:
+      return "The organizer";
+  }
+}
+
+/** The deterministic update line: each actor's posts on the gift since the last post with the last one's words. */
+function updateLine(eventId: string, giftId: string, since: string | null): string | null {
+  const gift = giftsFor(eventId).find((g) => g.id === giftId);
+  if (!gift) return null;
+  const title = gift.product_title || gift.product_id;
+  const posts = changesSinceLastPost(eventId, since).filter((c) => c.kind === "update" && c.gift_id === giftId);
+  if (!posts.length) return null;
+  const byActor = new Map<string, ChangeEntry[]>();
+  for (const c of posts) byActor.set(actorLabel(c), [...(byActor.get(actorLabel(c)) ?? []), c]);
+  return [...byActor].map(([actor, rows]) => `${actor} posted ${plural(rows.length, "update", "updates")} on ${title}: ${rows[rows.length - 1].summary ?? "no words"}.`).join(" ");
+}
+
 function deterministicPost(eventId: string, reasons: Reason[], since: string | null): string | null {
   const lines: string[] = [];
   const carts = new Set(reasons.flatMap((r) => (r.kind === "cart" ? [r.gift_id] : [])));
   for (const giftId of carts) {
     const line = cartLine(eventId, giftId);
+    if (line) lines.push(line);
+  }
+  for (const giftId of new Set(reasons.flatMap((r) => (r.kind === "update" ? [r.gift_id] : [])))) {
+    const line = updateLine(eventId, giftId, since);
     if (line) lines.push(line);
   }
   if (reasons.some((r) => r.kind === "rsvp")) {
@@ -148,6 +186,7 @@ function describe(reasons: Reason[]): string {
   const out: string[] = [];
   if (reasons.some((r) => r.kind === "rsvp")) out.push("RSVP replies were written");
   for (const giftId of new Set(reasons.flatMap((r) => (r.kind === "cart" ? [r.gift_id] : [])))) out.push(`the cart job reported on gift ${giftId}`);
+  for (const giftId of new Set(reasons.flatMap((r) => (r.kind === "update" ? [r.gift_id] : [])))) out.push(`an update was posted on gift ${giftId}`);
   return out.join(" and ");
 }
 
@@ -155,7 +194,7 @@ async function agentPost(eventId: string, reasons: Reason[], last: ChatMessage |
   const { runCurationAgent } = await import("../agent/curation-agent");
   const prompt = [
     `Something changed: ${describe(reasons)}.`,
-    "Read the current state through your tools and write the organizer at most three short sentences that say only what changed and what to do about it: replies arriving, a request completing or stalling, an attendee with no email address, a cart filled or failed, or a needed-by date within the delivery window with rows still missing.",
+    "Read the current state through your tools and write the organizer at most three short sentences that say only what changed and what to do about it: replies arriving, a request completing or stalling, an attendee with no email address, a cart filled or failed, a store's update on an order, or a needed-by date within the delivery window with rows still missing. Name who posted an update from the change's actor: the store or agent by its id, or the organizer.",
     "Do not search for products or select a gift. Reply with the post only, or with the single word NOTHING when nothing worth raising changed.",
     last ? `The last system line said: "${last.text}". Do not repeat it.` : ""
   ]

@@ -9,8 +9,8 @@
 import { z } from "zod";
 import { manifest } from "../domain/gifts";
 import { requirementKeys } from "../domain/procurement";
-import { definitionsFor, newId, state } from "../domain/store";
-import { GranteeType, GrantPermission, type AccessGrant, type CallerToken } from "../domain/types";
+import { currentSeq, definitionsFor, newId, state } from "../domain/store";
+import { GranteeType, GrantPermission, type AccessGrant, type ActorType, type CallerToken } from "../domain/types";
 import { BadRequestError, NotFoundError, requireEvent, requireGift } from "./api";
 import { storeLinkPath } from "./store-session";
 import { TOOLS } from "../webmcp/tools";
@@ -124,6 +124,31 @@ export function readableDefinitionIds(grant: AccessGrant): string[] {
 /** The scope a token takes from its grant, read fresh on every call. */
 export function tokenScope(grant: AccessGrant): Pick<CallerToken, "gift_ids" | "readable_definition_ids" | "callable_tools" | "expires_at"> {
   return { gift_ids: [grant.procurement_id], readable_definition_ids: readableDefinitionIds(grant), callable_tools: callableTools(grant), expires_at: grant.expires_at };
+}
+
+/**
+ * The change-log actor a grant's holder writes as: the grantee's type and id. A person at the store
+ * writes as the vendor, since the change log names no user actor; an agent writes as an agent.
+ */
+export function grantActor(grant: AccessGrant): { actor_type: ActorType; actor_id: string } {
+  return { actor_type: grant.grantee_type === "agent" ? "agent" : "vendor", actor_id: grant.grantee_id };
+}
+
+/**
+ * Runs a write for a token and names the grant's holder as the actor on every change-log entry it
+ * appended. The write path records the token as the entry's source, so the entries a call wrote are
+ * the ones after the starting sequence whose actor is the token; the grant says who holds it.
+ */
+export async function writeAsGrantee<T>(grant: AccessGrant, tokenId: string, write: () => Promise<T>): Promise<T> {
+  const since = currentSeq();
+  const result = await write();
+  const changes = state().changes;
+  const actor = grantActor(grant);
+  for (let i = changes.length - 1; i >= 0 && changes[i].seq > since; i -= 1) {
+    const entry = changes[i];
+    if (entry.event_id === grant.event_id && entry.actor_id === tokenId) changes[i] = { ...entry, ...actor };
+  }
+  return result;
 }
 
 /**

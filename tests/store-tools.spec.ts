@@ -73,7 +73,7 @@ test("the store page registers the grant's tools and each call runs under the gr
   await expect(page.getByTestId("store-status")).toHaveText("ordered");
   await expect(page.getByTestId("store-update")).toHaveAttribute("data-kind", "confirmed");
   const changes = await execute(page, "get_changes", { procurement_id: giftId, after_revision: 0 });
-  expect((JSON.parse(changes.text).changes as { type: string; actor_type: string }[]).at(-1)).toMatchObject({ type: "status_changed", actor_type: "vendor" });
+  expect((JSON.parse(changes.text).changes as { type: string; actor_type: string; actor_id?: string }[]).at(-1)).toMatchObject({ type: "status_changed", actor_type: "agent", actor_id: "store-agent" });
 
   const foreign = await execute(page, "get_fulfillment_manifest", { procurement_id: "gift_other" });
   expect(foreign.isError).toBe(true);

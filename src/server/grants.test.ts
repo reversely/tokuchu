@@ -1,12 +1,13 @@
 /** Access grants (#41): the token derives from the grant, the endpoint reads the grant on every call, and revocation, expiry, and fulfilment cut access. */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deserializeState, publishEvent, resetState, serializeState, state } from "../domain/store";
 import type { PersonalizationField } from "../domain/types";
-import { createEventFromBody, createGiftFromBody, requestFromAttendees, snapshot, submitRsvp } from "./api";
-import { callableTools, createGrant, expireGrantsFor, grantStatus, grantView, grantsFor, revokeGrant, tokenForGrant } from "./grants";
+import { createEventFromBody, createGiftFromBody, postUpdate, requestFromAttendees, snapshot, submitRsvp } from "./api";
+import { callableTools, createGrant, expireGrantsFor, grantActor, grantStatus, grantView, grantsFor, revokeGrant, tokenForGrant } from "./grants";
 import { setMailer } from "./mail";
-import { handleRpc } from "./mcp";
+import { createToken, handleRpc, tokenFrom } from "./mcp";
 import { postProcurementUpdate } from "./procurement";
+import { storeView } from "./store-view";
 
 const BODY = { title: "Astronomy Symposium", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" } };
 const FIELDS: PersonalizationField[] = [
@@ -44,6 +45,13 @@ const isError = (r: Record<string, unknown>) => (r.result as { isError?: boolean
 const listed = async (eventId: string, tokenId: string) => {
   const r = await rpc(eventId, tokenId, "tools/list");
   return isError(r) ? payload(r) : (r.result as { tools: { name: string }[] }).tools.map((t) => t.name);
+};
+/** The bearer request the endpoint route hands to tokenFrom. */
+const bearer = (tokenId: string) => new Request("http://x", { headers: { authorization: `Bearer ${tokenId}` } });
+/** The change views for a gift as the organizer reads them, from the given revision. */
+const views = (eventId: string, giftId: string, after = 0) => {
+  const organizer = createToken(eventId, { holder: "organizer", gift_ids: [giftId], callable_tools: ["get_changes", "set_gift_plan"] });
+  return rpc(eventId, organizer.id, "tools/call", { name: "get_changes", arguments: { procurement_id: giftId, after_revision: after } }).then((r) => payload(r).changes as { type: string; actor_type: string; actor_id?: string }[]);
 };
 
 describe("an access grant", () => {
@@ -103,12 +111,15 @@ describe("an access grant", () => {
     expect(isError(await call(event.id, token.id, "post_procurement_update", { procurement_id: gift.id, type: "accepted" }))).toBe(true);
   });
 
-  it("answers every call with an error once the grant is revoked", async () => {
+  it("answers every call with an error once the grant is revoked and ends the store page's session", async () => {
     const { event, gift } = await seed();
     const grant = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read", "updates:write"] });
     const token = tokenForGrant(event.id, grant.id);
     expect(isError(await call(event.id, token.id, "get_fulfillment_manifest", { procurement_id: gift.id }))).toBe(false);
+    expect(storeView(event.id, grant.id).token_id).toBe(token.id);
     const revoked = revokeGrant(event.id, grant.id);
+    expect(() => storeView(event.id, grant.id)).toThrow(/revoked/);
+    expect(tokenFrom(event.id, bearer(token.id))?.id).toBe(token.id);
     expect(revoked.revoked_at).toBeTruthy();
     expect(grantStatus(revoked)).toBe("revoked");
     expect(await listed(event.id, token.id)).toEqual({ error: "The grant behind this token was revoked." });
@@ -132,6 +143,75 @@ describe("an access grant", () => {
     expect(await listed(event.id, "tok_past")).toEqual({ error: "The grant behind this token has expired." });
   });
 
+  it("checks the grant's expiry on every endpoint call and on the store page's load", async () => {
+    const { event, gift } = await seed();
+    const grant = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read", "updates:write"], expires_at: "2030-01-01T00:00:00Z" });
+    const token = tokenForGrant(event.id, grant.id);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2029-12-31T23:59:00Z"));
+      expect(tokenFrom(event.id, bearer(token.id))?.id).toBe(token.id);
+      expect(isError(await call(event.id, token.id, "get_fulfillment_manifest", { procurement_id: gift.id }))).toBe(false);
+      expect(storeView(event.id, grant.id).grant.id).toBe(grant.id);
+      vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+      // The bearer still resolves, so the refusal names the expiry instead of a missing token.
+      const stored = tokenFrom(event.id, bearer(token.id));
+      expect(stored?.id).toBe(token.id);
+      expect(await handleRpc(event.id, stored, { jsonrpc: "2.0", id: 1, method: "tools/list" })).toMatchObject({ result: { isError: true } });
+      const refused = await call(event.id, token.id, "post_procurement_update", { procurement_id: gift.id, type: "accepted" });
+      expect(payload(refused)).toEqual({ error: "The grant behind this token has expired." });
+      expect(state().gifts.get(gift.id)!.procurement_status).toBeUndefined();
+      expect(() => storeView(event.id, grant.id)).toThrow(/expired/);
+      // A token minted without a grant keeps its own expiry check.
+      const plain = createToken(event.id, { holder: "x", callable_tools: ["get_changes"], expires_at: "2029-06-01T00:00:00Z" });
+      expect(tokenFrom(event.id, bearer(plain.id))).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names the grantee as the actor of every change a token writes and the organizer as another", async () => {
+    const { event, gift, avery } = await seed();
+    const store = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["updates:write"] });
+    const agent = createGrant(event.id, { procurement_id: gift.id, grantee_type: "agent", grantee_id: "store-agent", permissions: ["updates:write"] });
+    const person = createGrant(event.id, { procurement_id: gift.id, grantee_type: "user", grantee_id: "person@store.example", permissions: ["updates:write"] });
+    expect(grantActor(store)).toEqual({ actor_type: "vendor", actor_id: "springbuilt.myshopify.com" });
+    expect(grantActor(agent)).toEqual({ actor_type: "agent", actor_id: "store-agent" });
+    expect(grantActor(person)).toEqual({ actor_type: "vendor", actor_id: "person@store.example" });
+    const before = state().seq;
+
+    const storeToken = tokenForGrant(event.id, store.id);
+    expect(isError(await call(event.id, storeToken.id, "post_procurement_update", { procurement_id: gift.id, type: "accepted", reference: "PO-1" }))).toBe(false);
+    const agentToken = tokenForGrant(event.id, agent.id);
+    expect(isError(await call(event.id, agentToken.id, "post_procurement_update", { procurement_id: gift.id, type: "needs_information", attendee_ref: avery, requirement_id: "caption", message: "Which spelling" }))).toBe(false);
+    const personToken = tokenForGrant(event.id, person.id);
+    expect(isError(await call(event.id, personToken.id, "post_update", { gift_id: gift.id, kind: "reply", text: "Checked the sizes" }))).toBe(false);
+    postUpdate(event.id, gift.id, "organizer", { kind: "reply", text: "Approved the spelling" });
+
+    const written = state().changes.filter((c) => c.seq > before);
+    expect(written.map((c) => [c.kind, c.actor_type, c.actor_id])).toEqual([
+      ["update", "vendor", "springbuilt.myshopify.com"],
+      ["procurement", "vendor", "springbuilt.myshopify.com"],
+      ["update", "agent", "store-agent"],
+      ["procurement", "agent", "store-agent"],
+      ["update", "vendor", "person@store.example"],
+      ["update", "organizer", undefined]
+    ]);
+    expect(written.every((c) => !c.actor_id?.startsWith("tok_"))).toBe(true);
+    const read = await views(event.id, gift.id, before);
+    expect(read.map((c) => [c.type, c.actor_type, c.actor_id])).toEqual([
+      ["update_posted", "vendor", "springbuilt.myshopify.com"],
+      ["status_changed", "vendor", "springbuilt.myshopify.com"],
+      ["update_posted", "agent", "store-agent"],
+      ["exception_opened", "agent", "store-agent"],
+      ["update_posted", "vendor", "person@store.example"],
+      ["update_posted", "organizer", undefined]
+    ]);
+    // A change the same store writes under a later grant carries the actor the state document stores.
+    const restored = deserializeState(JSON.parse(JSON.stringify(serializeState(state()))));
+    expect(restored.changes.filter((c) => c.seq > before).map((c) => c.actor_id)).toEqual(["springbuilt.myshopify.com", "springbuilt.myshopify.com", "store-agent", "store-agent", "person@store.example", undefined]);
+  });
+
   it("expires every grant on the procurement when the store posts fulfilled", async () => {
     const { event, gift, other } = await seed();
     const store = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read", "updates:write"] });
@@ -143,7 +223,16 @@ describe("an access grant", () => {
     expect(payload(posted).procurement_status).toBe("fulfilled");
     for (const id of [store.id, agent.id]) expect(grantStatus(grantsFor(event.id).find((g) => g.id === id)!)).toBe("expired");
     expect(grantStatus(grantsFor(event.id).find((g) => g.id === elsewhere.id)!)).toBe("active");
+    // The store's next call, over the bearer header the route reads, answers with the expiry and writes nothing.
+    const stored = tokenFrom(event.id, bearer(token.id));
+    expect(stored?.id).toBe(token.id);
     expect(await listed(event.id, token.id)).toEqual({ error: "The grant behind this token has expired." });
+    const refused = await call(event.id, token.id, "post_update", { gift_id: gift.id, kind: "reply", text: "after" });
+    expect(payload(refused)).toEqual({ error: "The grant behind this token has expired." });
+    expect(state().updates.size).toBe(1);
+    expect(() => storeView(event.id, store.id)).toThrow(/expired/);
+    expect(() => storeView(event.id, agent.id)).toThrow(/expired/);
+    expect(storeView(event.id, elsewhere.id).grant.id).toBe(elsewhere.id);
     expect(expireGrantsFor(event.id, gift.id)).toEqual([]);
   });
 

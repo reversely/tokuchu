@@ -5,10 +5,12 @@
 import { Usage, type Model, type ModelRequest, type ModelResponse } from "@openai/agents";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishEvent, resetState } from "../domain/store";
-import type { PersonalizationField } from "../domain/types";
+import type { CallerToken, PersonalizationField } from "../domain/types";
 import { approveSpecs, createEventFromBody, createGiftFromBody, patchRsvp, requestFromAttendees, snapshot, submitRsvp } from "./api";
 import { runCartFill, type CartJobDeps } from "./cart-job";
 import { messagesFor, postMessage } from "./chat";
+import { createGrant, tokenForGrant } from "./grants";
+import { createToken, handleRpc } from "./mcp";
 import { configureProactive, flushProactive } from "./proactive";
 import type { StoreCall } from "./store-page";
 
@@ -140,6 +142,25 @@ describe("proactive posts (#34)", () => {
     await flushProactive(event.id);
     const after = messagesFor(event.id).map((m) => m.text);
     expect(after[after.length - 1]).toBe("The cart for Customized Crewneck failed: The store did not fill the cart: the store is closed. Fix the rows it names and approve again.");
+  });
+
+  it("names a store's update and the organizer's as different actors", async () => {
+    const { event, gift } = await seedCart();
+    const grant = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["updates:write"] });
+    const store = tokenForGrant(event.id, grant.id);
+    const organizer = createToken(event.id, { holder: "organizer", gift_ids: [gift.id], callable_tools: ["post_update", "set_gift_plan"] });
+    const post = async (token: CallerToken, name: string, args: Record<string, unknown>) => {
+      const reply = (await handleRpc(event.id, token, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } })).result as { isError?: boolean; content: { text: string }[] };
+      expect(reply.isError, reply.content[0].text).toBeUndefined();
+    };
+    const before = messagesFor(event.id).length;
+    await new Promise((r) => setTimeout(r, 2));
+    await post(store, "post_procurement_update", { procurement_id: gift.id, type: "accepted", reference: "PO-7" });
+    await post(organizer, "post_update", { gift_id: gift.id, kind: "reply", text: "Checked the sizes" });
+    await flushProactive(event.id);
+    const lines = messagesFor(event.id).map((m) => m.text);
+    expect(lines).toHaveLength(before + 1);
+    expect(lines[lines.length - 1]).toBe("The store springbuilt.myshopify.com posted 1 update on Customized Crewneck: confirmed: accepted. The organizer posted 1 update on Customized Crewneck: reply: Checked the sizes.");
   });
 
   it("with the model on, asks the agent to read the state and say only what changed, naming the last system line", async () => {
