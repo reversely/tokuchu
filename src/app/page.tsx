@@ -16,13 +16,13 @@ const BEATS: Beat[] = [
     arrows: "Arrow 3",
     tools: ["search_catalog"],
     text: ["Kevin uses Shopify's Global Catalog to find a suitable product and arrives at Customworks."],
-    visual: { kind: "capture", window: "Tokuchu Guest Experience", media: "/media/step2-search-pick.gif", alt: "The search ranking the celestial shirt and the organizer picking it" }
+    visual: { kind: "capture", window: "Tokuchu Guest Experience", media: "/media/guide-07-search-results.webp", alt: "The ranked results with the celestial shirt from Customworks" }
   },
   {
     arrows: "Arrow 4",
     tools: ["get_customization"],
     text: ["The celestial shirt exposes a custom WebMCP function called get_customization. It tells the agent that each shirt requires a printed name and a shirt size and a location for the star map."],
-    visual: { kind: "capture", window: "Tokuchu Attendees", media: "/media/step3-requirements.gif", alt: "The requirements the store returned with the source of each value" }
+    visual: { kind: "capture", window: "Tokuchu Attendees", media: "/media/guide-10-gift-with-customization.webp", alt: "The gift holding the fields and the variants the store returned" }
   },
   {
     arrows: "Arrows 5 to 9",
@@ -37,7 +37,7 @@ const BEATS: Beat[] = [
     arrows: "Arrow 10",
     tools: ["get_fulfillment_manifest"],
     text: ["Once those responses come back Tokuchu validates the data and assembles a fulfillment manifest containing only the information required for this procurement."],
-    visual: { kind: "capture", window: "Tokuchu Attendees", media: "/media/tokuchu-attendees.webp", alt: "The Attendees tab with the records grid graded from the fulfillment manifest" }
+    visual: { kind: "capture", window: "Tokuchu Attendees", media: "/media/guide-13-records-grid.webp", alt: "The Attendees tab with the records grid graded from the fulfillment manifest" }
   },
   {
     arrows: "Arrow 11",
@@ -64,7 +64,7 @@ const BEATS: Beat[] = [
     arrows: "Arrows 12 and 13",
     tools: ["add_customized_to_cart", "post_update"],
     text: ["Once the fulfillment data is complete Kevin's agent can use Shopify's native WebMCP tools to place the configured items into the cart and continue through checkout."],
-    visual: { kind: "capture", window: "Customworks checkout", media: "/media/step5-approve-checkout.gif", alt: "The approval filling the store's cart and the checkout showing one line per attendee" }
+    visual: { kind: "capture", window: "Customworks checkout", media: "/media/guide-16-store-cart.webp", alt: "The store's cart with one line per attendee" }
   }
 ];
 
