@@ -15,12 +15,13 @@ An event's organizer wants a personalized product for every attendee who replied
 
 ## The order the tools expect
 
+0. Tokuchu: if `list_guests` returns no one and the run is a demonstration, `load_sample_attendees` adds ten attendees as going and returns each one's `guest_id` with the size and star map location and time the organizer holds offline. Keep that reply: it is where the answers for step 6 come from. Three attendees have no location on file; leave those unanswered and report them.
 1. Tokuchu: `list_guests` with `{ "filter": "status:eq:going" }`. Each row carries the guest id, the display name, and the answers held so far.
 2. Store page: `get_customization` with the product id. Keep the whole payload: product id, title, fields (key, label, kind, required, constraints), variants with numeric ids, selected variant.
 3. Tokuchu: `set_gift_plan` without a `gift_id`: rules that select going attendees for that product id, plus `shop_domain`, `product_title`, `product_url`. The reply is the gift with its `id`.
 4. Tokuchu: `set_gift_customization` with `gift_id` and the payload from step 2.
 5. Tokuchu: `get_requirements` with `gift_id`. Each requirement names its `source`; `question` means attendees must supply it. Then `request_from_attendees` with `gift_id`. Then `get_requirements` again and `set_personalization_mapping` with one row per non-variant requirement, using the requirement's own `mapping` when it carries one and otherwise a definition source on its `definition_id`.
-6. Tokuchu: `list_missing` per guest question with `{ "definition_id": ..., "filter": "status:eq:going" }`. When an attendee is named as missing an answer and you have been given that attendee's answers, open the attendee's invite page and call `submit_rsvp` there with the `guest_id` and one property per question key.
+6. Tokuchu: `list_missing` per guest question with `{ "definition_id": ..., "filter": "status:eq:going" }`. When an attendee is named as missing an answer and the sample reply holds that attendee's details, open the attendee's invite page and call `submit_rsvp` there with the `guest_id` and one property per question key.
 7. Tokuchu: `get_fulfillment_manifest` with `gift_id` until every attendee's `status` reads `ready`. Its `cart_items` array is the cart payload.
 8. Tokuchu: `approve_specs` with `gift_id`. The reply carries `approved_at`. Read `get_fulfillment_manifest` once more and keep `cart_items`.
 9. Store page: `add_customized_to_cart` with `{ "items": cart_items, "idempotency_key": "<gift id>:<approved_at>" }`. The reply lists ready lines and a `checkout_url`.

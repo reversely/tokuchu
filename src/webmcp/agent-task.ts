@@ -12,6 +12,7 @@ export const AGENT_TASK_META = "tokuchu-agent-task";
 const EVENT: AgentTask = {
   summary: "Tokuchu runs as a records app for a browser agent. Every capability is a WebMCP tool on this page and the store's product page carries the rest.",
   steps: [
+    "If the event has no guests and the run is a demonstration call load_sample_attendees; its reply carries each attendee's offline details for later answers.",
     "List the tools with document.modelContext.getTools() and read the guests with list_guests.",
     "Open the store's product page and call get_customization with the product id.",
     "Call set_gift_plan without a gift_id to create the gift from the product.",

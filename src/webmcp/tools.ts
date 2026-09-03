@@ -203,6 +203,13 @@ export const TOOLS: ToolDefinition[] = [
     route: (a) => (a.gift_id ? { method: "PATCH", path: "/api/events/:eventId/gifts/{gift_id}", body: (x) => ({ rules: x.rules }) } : { method: "POST", path: "/api/events/:eventId/gifts", body: (x) => giftCreateBody(x) })
   },
   {
+    name: "load_sample_attendees",
+    description: "Adds ten sample attendees to the event as going, each with an email, and returns each one's guest_id and the details the organizer holds offline: a size and a star map location and time. Three have no location on file. Use it when the event has no guests and the task is a demonstration; an attendee already on the list is not added again.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/sample-attendees", body: () => ({}) }
+  },
+  {
     name: "set_gift_customization",
     description: "Stores the store's customization contract on a gift: the payload the store page's get_customization tool returned (product_id, title, fields, variants, selected_variant_id) as the gift's fields and variants, the way the server's own read would. Call it after set_gift_plan and before get_requirements; the variants' ids are the ones add_customized_to_cart takes.",
     inputSchema: {

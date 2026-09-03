@@ -11,6 +11,7 @@ import { z } from "zod";
 import { readLatestSeq } from "./seq";
 import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
 import { setGiftCustomization, withStoreCustomization } from "./customization";
+import { loadSampleAttendees } from "./sample-attendees";
 import { newId, state } from "../domain/store";
 import type { AccessGrant, CallerToken } from "../domain/types";
 import { giftCreateBody, TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
@@ -175,6 +176,8 @@ async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant 
       // Without a gift the plan creates one from its first rule's product (#56); the store read the route makes stays off in static mode.
       if (!args.gift_id) return createGiftFromBody(eventId, await withStoreCustomization(giftCreateBody(args)));
       return updateGiftFromBody(eventId, String(args.gift_id), { rules: args.rules });
+    case "load_sample_attendees":
+      return loadSampleAttendees(eventId);
     case "set_gift_customization":
       return setGiftCustomization(eventId, String(args.gift_id), { product_id: args.product_id, title: args.title, fields: args.fields, variants: args.variants, selected_variant_id: args.selected_variant_id, currency: args.currency });
     case "set_personalization_mapping": {

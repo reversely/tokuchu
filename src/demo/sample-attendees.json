@@ -1,0 +1,15 @@
+{
+  "_note": "Ten sample attendees the load_sample_attendees page tool adds to an event as going, each with an email. size, location, and time are details the organizer holds offline; the tool returns them so an agent can answer the store's questions for each attendee through submit_rsvp. Three attendees have no location on file and one has an ambiguous one.",
+  "attendees": [
+    { "display_name": "Avery Chen", "email": "avery.chen@example.com", "size": "M", "location": "Toronto, Ontario, Canada", "time": "21:00" },
+    { "display_name": "Blake Rivera", "email": "blake.rivera@example.com", "size": "L", "location": "Vancouver, British Columbia, Canada", "time": "22:30" },
+    { "display_name": "Carmen Diaz", "email": "carmen.diaz@example.com", "size": "XL", "location": "Cambridge", "time": "20:15" },
+    { "display_name": "Dev Patel", "email": "dev.patel@example.com", "size": "S", "location": "Montreal, Quebec, Canada", "time": "23:00" },
+    { "display_name": "Elena Fischer", "email": "elena.fischer@example.com", "size": "M", "location": "Berlin, Germany", "time": "22:00" },
+    { "display_name": "Farah Haddad", "email": "farah.haddad@example.com", "size": "L", "location": null, "time": "21:30" },
+    { "display_name": "Gabriel Okafor", "email": "gabriel.okafor@example.com", "size": "2XL", "location": "Lagos, Nigeria", "time": "20:00" },
+    { "display_name": "Hana Sato", "email": "hana.sato@example.com", "size": "S", "location": "Sapporo, Japan", "time": "23:30" },
+    { "display_name": "Ines Moreau", "email": "ines.moreau@example.com", "size": "M", "location": null, "time": "22:15" },
+    { "display_name": "Jonas Berg", "email": "jonas.berg@example.com", "size": "XL", "location": null, "time": "21:45" }
+  ]
+}
