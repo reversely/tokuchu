@@ -70,7 +70,7 @@ describe("the fulfillment manifest", () => {
     const rows = Object.fromEntries(view.attendees.map((a) => [a.attendee_ref, a]));
     expect(rows[avery]).toMatchObject({ status: "ready", variant_id: "v-l", values: { star_map_location: "Vancouver", caption: "Avery Chen", variant_size: "l" }, issues: [] });
     expect(rows[blake]).toMatchObject({ status: "incomplete", variant_id: "v-m", values: { star_map_location: null, caption: "Blake Rivera", variant_size: "m" } });
-    expect(rows[blake].issues).toEqual([{ requirement_id: "star_map_location", status: "incomplete", message: "Enter Location for Star Map 1 is not confirmed by the attendee yet" }]);
+    expect(rows[blake].issues).toEqual([{ requirement_id: "star_map_location", status: "missing", message: "Enter Location for Star Map 1 is not confirmed by the attendee yet" }]);
   });
 
   it("never shows a token holder a requirement whose definition it may not read", async () => {
@@ -97,7 +97,7 @@ describe("the fulfillment manifest", () => {
     patchRsvp(event.id, blake, { answers: { [location.id]: "Calgary" } });
     const later = fulfillmentManifest(event.id, gift.id);
     expect(later.revision).toBeGreaterThan(later.approved_revision!);
-    expect(later.attendees.find((a) => a.attendee_ref === blake)).toMatchObject({ status: "ready", values: { star_map_location: "Calgary" } });
+    expect(later.attendees.find((a) => a.attendee_ref === blake)).toMatchObject({ status: "ready", values: { star_map_location: "Calgary" }, issues: [{ requirement_id: "star_map_location", status: "changed_after_approval" }] });
   });
 });
 
@@ -134,7 +134,7 @@ describe("a store's structured update", () => {
     expect(posted.exception!.created_revision).toBeLessThanOrEqual(posted.current_revision);
     const row = fulfillmentManifest(event.id, gift.id).attendees.find((a) => a.attendee_ref === avery)!;
     expect(row.status).toBe("exception");
-    expect(row.issues).toEqual([{ requirement_id: "star_map_location", status: "incomplete", message: "Which Vancouver?\nThere are two." }]);
+    expect(row.issues).toEqual([{ requirement_id: "star_map_location", status: "missing", message: "Which Vancouver?\nThere are two." }]);
     const corrections = sent.filter((m) => m.subject.startsWith("A correction"));
     expect(corrections).toHaveLength(1);
     expect(corrections[0].subject).toBe("A correction for your details for Astronomy Symposium");

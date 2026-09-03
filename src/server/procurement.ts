@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domain/gifts";
-import type { PersonalizationIssue } from "../domain/personalization";
+import type { RequirementResolutionStatus } from "../domain/personalization";
 import { currentRevision, moveProcurement, openException, openExceptionsFor, requirementKeys } from "../domain/procurement";
 import { VENDOR_MOVES } from "../domain/procurement-status";
 import { definitionsFor, getGuest, procurementFor, state, transactionally, upsertRequest } from "../domain/store";
@@ -17,7 +17,8 @@ import { deliverAll, type Outgoing } from "./request-mail";
 
 export type { ProcurementStatus };
 export type AttendeeStatus = "ready" | "incomplete" | "invalid" | "exception";
-export type IssueStatus = "incomplete" | "invalid" | "vendor_rejected" | "exception";
+/** The status an issue carries: a requirement's resolution status short of resolved, or exception for a problem raised on the attendee as a whole. */
+export type IssueStatus = Exclude<RequirementResolutionStatus, "resolved"> | "exception";
 export type FulfillmentIssue = { requirement_id: string; status: IssueStatus; message: string };
 export type FulfillmentAttendee = { attendee_ref: string; status: AttendeeStatus; variant_id: string | null; values: Record<string, unknown>; issues: FulfillmentIssue[] };
 export type FulfillmentManifest = {
@@ -49,10 +50,16 @@ function approvedRevision(gift: Batch): number | null {
   return row.approved_revision ?? (typeof gift.approved_seq === "number" ? gift.approved_seq : null);
 }
 
-const ISSUE_STATUS: Record<PersonalizationIssue["code"], IssueStatus> = { missing_source: "incomplete", missing_value: "incomplete", invalid_type: "invalid", too_long: "invalid", unsupported_value: "invalid" };
-const EXCEPTION_ISSUE: Record<ExceptionType, IssueStatus> = { missing_information: "incomplete", invalid_value: "vendor_rejected", option_unavailable: "vendor_rejected", mapping_problem: "exception", other: "exception" };
+const EXCEPTION_ISSUE: Record<ExceptionType, IssueStatus> = { missing_information: "missing", invalid_value: "vendor_rejected", option_unavailable: "vendor_rejected", mapping_problem: "exception", other: "exception" };
 
-const worst = (issues: FulfillmentIssue[], open: boolean): AttendeeStatus => (open ? "exception" : issues.some((i) => i.status === "invalid") ? "invalid" : issues.length ? "incomplete" : "ready");
+/** The attendee grade each issue status carries; a value changed after the approval stays usable. */
+const ISSUE_GRADE: Record<IssueStatus, AttendeeStatus> = { missing: "incomplete", mapping_unresolved: "incomplete", needs_confirmation: "incomplete", invalid: "invalid", vendor_rejected: "invalid", changed_after_approval: "ready", exception: "exception" };
+
+function worst(issues: FulfillmentIssue[], open: boolean): AttendeeStatus {
+  if (open) return "exception";
+  const grades = issues.map((i) => ISSUE_GRADE[i.status]);
+  return grades.includes("invalid") ? "invalid" : grades.includes("incomplete") ? "incomplete" : "ready";
+}
 
 function exceptionMessage(row: ProcurementException): string {
   if (row.message) return row.message;
@@ -77,11 +84,18 @@ function attendeeRow(row: ManifestRow, exceptions: ProcurementException[], varia
     if (canRead(variantDefinitionId)) values[variantKey] = row.values[variantDefinitionId];
     else hidden.add(variantKey);
   }
-  const issues: FulfillmentIssue[] = (row.personalization_issues ?? []).filter((i) => !hidden.has(i.vendor_field_key)).map((i) => ({ requirement_id: i.vendor_field_key, status: ISSUE_STATUS[i.code], message: i.message }));
+  const issues: FulfillmentIssue[] = (row.personalization_issues ?? []).filter((i) => !hidden.has(i.vendor_field_key)).map((i) => ({ requirement_id: i.vendor_field_key, status: i.status, message: i.message }));
   if (row.unit_status === "unservable") issues.push({ requirement_id: variantKey ?? "variant", status: "invalid", message: row.reason ?? "No variant resolves for the row" });
-  else if (row.unit_status === "held") issues.push({ requirement_id: variantKey ?? "variant", status: "incomplete", message: row.reason ?? "The unit waits for a value" });
+  else if (row.unit_status === "held") issues.push({ requirement_id: variantKey ?? "variant", status: "missing", message: row.reason ?? "The unit waits for a value" });
   const open = exceptions.filter((e) => e.attendee_ref === row.guest_id && !(e.requirement_id && (hidden.has(e.requirement_id) || (byKey.has(e.requirement_id) && !canRead(byKey.get(e.requirement_id)!)))));
-  for (const e of open) issues.push({ requirement_id: e.requirement_id ?? "procurement", status: EXCEPTION_ISSUE[e.type], message: exceptionMessage(e) });
+  // A rejection the row already grades vendor_rejected keeps the store's own words in place of the row's generic message.
+  for (const e of open) {
+    const status = EXCEPTION_ISSUE[e.type];
+    const graded = status === "vendor_rejected" ? issues.findIndex((i) => i.requirement_id === e.requirement_id && i.status === "vendor_rejected") : -1;
+    const issue = { requirement_id: e.requirement_id ?? "procurement", status, message: exceptionMessage(e) };
+    if (graded >= 0) issues[graded] = issue;
+    else issues.push(issue);
+  }
   return { attendee_ref: row.guest_id, status: worst(issues, open.length > 0), variant_id: row.variant_id, values, issues };
 }
 

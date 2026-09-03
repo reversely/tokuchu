@@ -282,8 +282,12 @@ export const MappingSource = z.discriminatedUnion("type", [
 ]);
 export type MappingSource = z.infer<typeof MappingSource>;
 
-/** One mapping row: the vendor field it fills, its source, and an optional transform. */
-export const PersonalizationMapping = z.object({ vendor_field_key: z.string(), source: MappingSource, transform: PersonalizationTransform.optional() });
+/** Where a mapping row stands when it is not settled: flagged for the organizer to confirm, or unresolved after the requirement's constraints changed. */
+export const MappingResolution = z.enum(["needs_confirmation", "unresolved"]);
+export type MappingResolution = z.infer<typeof MappingResolution>;
+
+/** One mapping row: the vendor field it fills, its source, an optional transform, and its resolution when not settled. */
+export const PersonalizationMapping = z.object({ vendor_field_key: z.string(), source: MappingSource, transform: PersonalizationTransform.optional(), resolution: MappingResolution.optional() });
 export type PersonalizationMapping = z.infer<typeof PersonalizationMapping>;
 
 /* ---- Gifts ---- */

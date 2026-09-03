@@ -5,8 +5,8 @@
  * with no recompute step to schedule.
  */
 import { matches, type Subject } from "./filter";
-import { personalized, personalizeRow, type RowPersonalization } from "./personalization";
-import { createProcurement, getDefinition, getEvent, guestsFor, newId, state, subjectFor } from "./store";
+import { personalized, personalizeRow, type ResolutionContext, type RowPersonalization } from "./personalization";
+import { createProcurement, definitionsFor, getDefinition, getEvent, getValue, guestsFor, newId, state, subjectFor } from "./store";
 import type { AttributeDefinition, Batch, GiftOverride, Option, SynonymRow, UnitStatus, Variant, VariantMappingRow } from "./types";
 import synonymData from "./synonyms.json";
 
@@ -160,13 +160,38 @@ function cancelledAfterLock(gift: Batch, productId: string, override: GiftOverri
 /** The unit statuses a cart line counts: a kept or reassignable cancelled unit still ships. */
 export const COUNTED: ReadonlySet<UnitStatus> = new Set(["open", "locked", "cancelled_sunk", "cancelled_reassignable"]);
 
-/** One row per guest the recipients filter selects. A personalized product's rows carry the resolved per-guest values. */
+/** The requirement keys a store rejected per attendee: the open invalid_value and option_unavailable exceptions on the gift. */
+function rejectedByAttendee(giftId: string): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const row of state().exceptions.values()) {
+    if (row.procurement_id !== giftId || row.status !== "open" || !row.attendee_ref || !row.requirement_id) continue;
+    if (row.type !== "invalid_value" && row.type !== "option_unavailable") continue;
+    if (!out.has(row.attendee_ref)) out.set(row.attendee_ref, new Set());
+    out.get(row.attendee_ref)!.add(row.requirement_id);
+  }
+  return out;
+}
+
+/** What each row's grading reads for one subject: the definitions, the stored value rows, the approved revision, and the store's rejections. */
+function resolutionContext(gift: Batch, subject: Subject, definitions: Map<string, AttributeDefinition>, rejected: Map<string, Set<string>>): ResolutionContext {
+  const approved = state().procurements.get(gift.id)?.approved_revision ?? gift.approved_seq ?? null;
+  const valueRow = (definitionId: string) => {
+    const def = definitions.get(definitionId);
+    if (!def) return undefined;
+    return def.scope === "party" ? getValue("party", subject.guest.party_id, definitionId) : def.scope === "event" ? getValue("event", gift.event_id, definitionId) : getValue("guest", subject.guest.id, definitionId);
+  };
+  return { definitions, valueRow, approvedRevision: approved, rejected: rejected.get(subject.guest.id) };
+}
+
+/** One row per guest the recipients filter selects. A personalized product's rows carry the resolved per-guest values with each requirement's status. */
 export function manifest(gift: Batch): ManifestRow[] {
   const event = personalized(gift) ? getEvent(gift.event_id) : null;
+  const definitions = event ? new Map(definitionsFor(gift.event_id).map((d) => [d.id, d])) : new Map<string, AttributeDefinition>();
+  const rejected = event ? rejectedByAttendee(gift.id) : new Map<string, Set<string>>();
   return guestsFor(gift.event_id)
     .map((guest) => subjectFor(guest))
     .filter((subject) => matches(gift.recipients, subject))
-    .map((subject) => ({ guest_id: subject.guest.id, display_name: subject.guest.display_name, status: subject.guest.status, values: subject.values, ...resolveGuest(gift, subject), ...(event ? personalizeRow(gift, event, subject) : {}) }));
+    .map((subject) => ({ guest_id: subject.guest.id, display_name: subject.guest.display_name, status: subject.guest.status, values: subject.values, ...resolveGuest(gift, subject), ...(event ? personalizeRow(gift, event, subject, resolutionContext(gift, subject, definitions, rejected)) : {}) }));
 }
 
 /** Units per product and variant, excluding unservable, held, and excluded rows. */

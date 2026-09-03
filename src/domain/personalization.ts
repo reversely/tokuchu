@@ -7,10 +7,46 @@
 import type { Subject } from "./filter";
 import type { AttributeDefinition, Batch, Event, MappingSource, PersonalizationField, PersonalizationKind, PersonalizationMapping, PersonalizationTransform, ValueType, Venue } from "./types";
 
-export type PersonalizationIssue = { guest_id?: string; vendor_field_key: string; code: "missing_source" | "missing_value" | "invalid_type" | "too_long" | "unsupported_value"; message: string };
+/**
+ * Where one requirement stands for one attendee. A field existing does not resolve a requirement:
+ * the value must pass the field's constraints, no store may have rejected it, the mapping must be
+ * settled, and it must not have changed since the approval.
+ */
+export type RequirementResolutionStatus = "resolved" | "missing" | "invalid" | "mapping_unresolved" | "needs_confirmation" | "vendor_rejected" | "changed_after_approval";
+
+/** How a resolved value came to be: an attendee's or organizer's field, a value derived through a transform or from the event, an answer a store's requirement asked for, or a literal the organizer set. */
+export type ResolvedValueSource = "existing_field" | "derived" | "vendor_requested_answer" | "literal";
+
+/** The provenance of one resolved value: internal by default, available to the organizer's view and for audit. */
+export type ResolvedFulfillmentValue = {
+  requirement_id: string;
+  attribute_id?: string;
+  value: unknown;
+  source: ResolvedValueSource;
+  /** The definitions a derived value reads and the transform applied. */
+  source_attribute_ids?: string[];
+  transform?: PersonalizationTransform;
+  reconciliation_method?: string;
+  updated_at: string;
+  revision: number;
+};
+
+export type PersonalizationIssue = { guest_id?: string; vendor_field_key: string; code: "missing_source" | "missing_value" | "invalid_type" | "too_long" | "unsupported_value" | "vendor_rejected" | "changed_after_approval" | "needs_confirmation" | "mapping_unresolved"; status: Exclude<RequirementResolutionStatus, "resolved">; message: string };
 export type PersonalizationStatus = "ready" | "incomplete" | "invalid";
-export type ResolvedField = { value: unknown; source: MappingSource };
+export type ResolvedField = { value: unknown; source: MappingSource; status: RequirementResolutionStatus; provenance?: ResolvedFulfillmentValue };
 export type RowPersonalization = { personalization: Record<string, ResolvedField>; personalization_status: PersonalizationStatus; personalization_issues: PersonalizationIssue[] };
+
+/** What a row's grading reads beyond the gift and the subject; every part is optional so a caller without a store grades on the values alone. */
+export type ResolutionContext = {
+  /** The event's definitions by id, for the provenance of a definition source. */
+  definitions?: Map<string, AttributeDefinition>;
+  /** The stored value row a definition source read for this subject, for its time and revision. */
+  valueRow?: (definitionId: string) => { updated_at: string; seq: number } | undefined;
+  /** The revision the organizer approved; a value written after it reads as changed_after_approval. */
+  approvedRevision?: number | null;
+  /** The requirement keys a store rejected for this attendee through an open exception. */
+  rejected?: ReadonlySet<string>;
+};
 
 type EventKey = "title" | "starts_at" | "venue";
 type GuestKey = "display_name";
@@ -195,37 +231,101 @@ function valueIssue(field: PersonalizationField, value: unknown): Pick<Personali
   return null;
 }
 
-/** Resolves every mapped vendor field for one guest and grades the row: ready, incomplete (a source or value missing), or invalid (a value that fails its field). */
-export function personalizeRow(gift: Batch, event: Event, subject: Subject): RowPersonalization {
+/** The resolution status each issue code grades the requirement. */
+const ISSUE_RESOLUTION: Record<PersonalizationIssue["code"], PersonalizationIssue["status"]> = {
+  missing_source: "mapping_unresolved",
+  mapping_unresolved: "mapping_unresolved",
+  missing_value: "missing",
+  invalid_type: "invalid",
+  too_long: "invalid",
+  unsupported_value: "invalid",
+  vendor_rejected: "vendor_rejected",
+  changed_after_approval: "changed_after_approval",
+  needs_confirmation: "needs_confirmation"
+};
+
+/** The row grade each requirement status carries; a changed value stays usable, so it leaves the row ready. */
+const ROW_GRADE: Record<RequirementResolutionStatus, PersonalizationStatus> = {
+  resolved: "ready",
+  changed_after_approval: "ready",
+  missing: "incomplete",
+  mapping_unresolved: "incomplete",
+  needs_confirmation: "incomplete",
+  invalid: "invalid",
+  vendor_rejected: "invalid"
+};
+
+/** The provenance of a value a mapping resolved: which definition or transform it came through and when it was written. */
+function provenance(field: PersonalizationField, mapping: PersonalizationMapping, value: unknown, event: Event, context: ResolutionContext): ResolvedFulfillmentValue {
+  const { source, transform } = mapping;
+  const base = { requirement_id: field.key, value, ...(transform ? { transform } : {}) };
+  if (source.type === "definition") {
+    const def = context.definitions?.get(source.definition_id);
+    const row = context.valueRow?.(source.definition_id);
+    const stamp = { updated_at: row?.updated_at ?? event.created_at, revision: row?.seq ?? 0 };
+    if (transform) return { ...base, source: "derived", source_attribute_ids: [source.definition_id], ...stamp };
+    return { ...base, attribute_id: source.definition_id, source: def?.namespace === "vendor" || def?.vendor_field ? "vendor_requested_answer" : "existing_field", ...stamp };
+  }
+  const stamp = { updated_at: event.created_at, revision: 0 };
+  if (source.type === "literal") return { ...base, source: "literal", ...stamp };
+  return { ...base, source: "derived", source_attribute_ids: [], ...stamp };
+}
+
+/**
+ * Resolves every mapped vendor field for one guest, grades each requirement with its resolution
+ * status and provenance, and grades the row: ready, incomplete (a source or value missing or
+ * unconfirmed), or invalid (a value that fails its field or that the store rejected).
+ */
+export function personalizeRow(gift: Batch, event: Event, subject: Subject, context: ResolutionContext = {}): RowPersonalization {
   const mappings = new Map((gift.personalization_mappings ?? []).map((m) => [m.vendor_field_key, m]));
   const issues: PersonalizationIssue[] = [];
   const resolved: Record<string, ResolvedField> = {};
   const guestId = subject.guest.id;
+  const issue = (key: string, code: PersonalizationIssue["code"], message: string) => issues.push({ guest_id: guestId, vendor_field_key: key, code, status: ISSUE_RESOLUTION[code], message });
   for (const field of gift.personalization?.fields ?? []) {
     const mapping = mappings.get(field.key);
     if (!mapping) {
-      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_source", message: `${field.label} has not been requested from attendees` });
+      if (field.required) issue(field.key, "missing_source", `${field.label} has not been requested from attendees`);
+      continue;
+    }
+    if (mapping.resolution === "unresolved") {
+      issue(field.key, "mapping_unresolved", `${field.label} needs its mapping settled again`);
+      resolved[field.key] = { value: null, source: mapping.source, status: "mapping_unresolved" };
       continue;
     }
     let value = resolveSourceValue(mapping.source, event, subject);
     if (mapping.transform) {
       const transformed = applyTransform(mapping.transform, value);
       if (!transformed.ok) {
-        issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "invalid_type", message: transformed.reason });
-        resolved[field.key] = { value: null, source: mapping.source };
+        issue(field.key, "invalid_type", transformed.reason);
+        resolved[field.key] = { value: null, source: mapping.source, status: "invalid" };
         continue;
       }
       value = transformed.value;
     }
     if (isMissing(value)) {
-      if (field.required) issues.push({ guest_id: guestId, vendor_field_key: field.key, code: "missing_value", message: `${field.label} is not confirmed by the attendee yet` });
-      resolved[field.key] = { value: null, source: mapping.source };
+      if (field.required) issue(field.key, "missing_value", `${field.label} is not confirmed by the attendee yet`);
+      resolved[field.key] = { value: null, source: mapping.source, status: "missing" };
       continue;
     }
-    const issue = valueIssue(field, value);
-    if (issue) issues.push({ guest_id: guestId, vendor_field_key: field.key, ...issue });
-    resolved[field.key] = { value, source: mapping.source };
+    const failed = valueIssue(field, value);
+    const origin = provenance(field, mapping, value, event, context);
+    let status: RequirementResolutionStatus = "resolved";
+    if (failed) {
+      issue(field.key, failed.code, failed.message);
+      status = "invalid";
+    } else if (context.rejected?.has(field.key)) {
+      issue(field.key, "vendor_rejected", `The store rejected ${field.label}`);
+      status = "vendor_rejected";
+    } else if (mapping.resolution === "needs_confirmation") {
+      issue(field.key, "needs_confirmation", `${field.label} waits for the organizer to confirm its mapping`);
+      status = "needs_confirmation";
+    } else if (typeof context.approvedRevision === "number" && origin.revision > context.approvedRevision) {
+      issue(field.key, "changed_after_approval", `${field.label} changed after the approval`);
+      status = "changed_after_approval";
+    }
+    resolved[field.key] = { value, source: mapping.source, status, provenance: origin };
   }
-  const invalid = issues.some((i) => i.code === "invalid_type" || i.code === "too_long" || i.code === "unsupported_value");
-  return { personalization: resolved, personalization_status: invalid ? "invalid" : issues.length ? "incomplete" : "ready", personalization_issues: issues };
+  const grades = issues.map((i) => ROW_GRADE[i.status]);
+  return { personalization: resolved, personalization_status: grades.includes("invalid") ? "invalid" : grades.includes("incomplete") ? "incomplete" : "ready", personalization_issues: issues };
 }

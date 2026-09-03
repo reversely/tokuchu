@@ -98,7 +98,7 @@ describe("the MCP endpoint", () => {
     for (const row of scoped.attendees) expect(Object.keys(row.values)).toEqual(["flavour"]);
     const whole = payload(await call(event.id, organizer, "get_fulfillment_manifest", { gift_id: gift.id }));
     expect(whole.attendees.map((a: { values: Record<string, unknown> }) => Object.keys(a.values).sort())).toEqual([["caption", "flavour"], ["caption", "flavour"]]);
-    expect(whole.attendees[1]).toMatchObject({ status: "invalid", issues: [{ requirement_id: "caption", status: "incomplete" }, { requirement_id: "flavour", status: "invalid" }] });
+    expect(whole.attendees[1]).toMatchObject({ status: "invalid", issues: [{ requirement_id: "caption", status: "missing" }, { requirement_id: "flavour", status: "invalid" }] });
     expect(scoped.attendees[1].issues.map((i: { requirement_id: string }) => i.requirement_id)).toEqual(["flavour"]);
     expect(isError(await call(event.id, vendor, "get_fulfillment_manifest", { gift_id: "gift_other" }))).toBe(true);
   });

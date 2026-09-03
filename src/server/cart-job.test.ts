@@ -27,8 +27,8 @@ const row = (guest: string, extra: Partial<ManifestRow>): ManifestRow => ({ gues
 describe("building the store's items from the manifest", () => {
   it("sends one item per ready row with every resolved value as a string and names why the others stay out", () => {
     const rows = [
-      row("g1", { personalization: { caption: { value: "AVERY", source: { type: "guest", key: "display_name" } }, star_map_location: { value: "Venue, Toronto, ON, CA", source: { type: "event", key: "venue" } } } }),
-      row("g2", { personalization_status: "incomplete", personalization_issues: [{ guest_id: "g2", vendor_field_key: "caption", code: "missing_value", message: "Text 2 has no value" }] }),
+      row("g1", { personalization: { caption: { value: "AVERY", source: { type: "guest", key: "display_name" }, status: "resolved" }, star_map_location: { value: "Venue, Toronto, ON, CA", source: { type: "event", key: "venue" }, status: "resolved" } } }),
+      row("g2", { personalization_status: "incomplete", personalization_issues: [{ guest_id: "g2", vendor_field_key: "caption", code: "missing_value", status: "missing", message: "Text 2 has no value" }] }),
       row("g3", { variant_id: null, unit_status: "held", reason: "No value for Size; the unit waits for one." }),
       row("g4", { unit_status: "excluded" })
     ];

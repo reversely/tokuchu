@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift, manifest, type GiftInput } from "./gifts";
 import { applyTransform, locationQuery, validateMappings, type PersonalizationIssue } from "./personalization";
-import { createEvent, createGuest, createParty, getEvent, resetState, upsertDefinition, writeValue, type EventInput } from "./store";
+import { moveProcurement, openException, resolveExceptionsByAnswer } from "./procurement";
+import { createEvent, createGuest, createParty, getEvent, getValue, resetState, state, upsertDefinition, writeValue, type EventInput } from "./store";
 import type { AttributeDefinition, PersonalizationField, PersonalizationMapping } from "./types";
 
 const EVENT: EventInput = {
@@ -177,7 +178,7 @@ describe("the personalized manifest", () => {
     const g = gift(event.id, { personalization_mappings: mappings(nameDef) });
     const r = row(g, two.id);
     expect(r.personalization_status).toBe("incomplete");
-    expect(r.personalization_issues).toEqual([{ guest_id: two.id, vendor_field_key: "caption", code: "missing_value", message: expect.any(String) }]);
+    expect(r.personalization_issues).toEqual([{ guest_id: two.id, vendor_field_key: "caption", code: "missing_value", status: "missing", message: expect.any(String) }]);
     expect(r.personalization?.caption.value).toBeNull();
   });
 
@@ -200,6 +201,78 @@ describe("the personalized manifest", () => {
     const outside = gift(event.id, { personalization_mappings: [...mappings(nameDef).slice(0, 3), { vendor_field_key: "accent", source: { type: "literal", value: "pink" } }] });
     expect(row(outside, one.id)).toMatchObject({ personalization_status: "invalid" });
     expect(codes(row(outside, one.id).personalization_issues)).toEqual(["unsupported_value"]);
+  });
+
+  it("grades each requirement resolved with the provenance of its value", () => {
+    const { event, nameDef, one } = seed();
+    const g = gift(event.id, { personalization_mappings: mappings(nameDef) });
+    const r = row(g, one.id);
+    const written = getValue("guest", one.id, nameDef.id)!;
+    expect(r.personalization?.caption).toMatchObject({ status: "resolved", provenance: { requirement_id: "caption", attribute_id: nameDef.id, value: "Ada", source: "existing_field", updated_at: written.updated_at, revision: written.seq } });
+    expect(r.personalization?.star_date).toMatchObject({ status: "resolved", provenance: { source: "derived", source_attribute_ids: [], transform: "date_only", revision: 0 } });
+    expect(r.personalization?.accent).toMatchObject({ status: "resolved", provenance: { source: "literal", value: "gold" } });
+    expect(Object.values(r.personalization ?? {}).every((f) => f.status === "resolved")).toBe(true);
+  });
+
+  it("names an answer to a store's own question vendor_requested_answer and a transformed answer derived", () => {
+    const { event, nameDef, one } = seed();
+    const asked = upsertDefinition(event.id, { namespace: "vendor", key: "caption", label: "Caption", scope: "guest", value_type: "text", constraints: {}, default_visibility: [], required_rule: "going", creator: "organizer", vendor_field: { key: "caption", label: "Caption", kind: "name", vendor_id: "shop.example", requirement_id: "caption" } });
+    writeValue("guest", one.id, asked.id, "Ada L", "guest");
+    const direct = gift(event.id, { personalization_mappings: [...mappings(nameDef).slice(1), { vendor_field_key: "caption", source: { type: "definition", definition_id: asked.id, subject_scope: "guest" } }] });
+    expect(row(direct, one.id).personalization?.caption.provenance).toMatchObject({ attribute_id: asked.id, source: "vendor_requested_answer", value: "Ada L" });
+    const upper = gift(event.id, { personalization_mappings: [...mappings(nameDef).slice(1), { vendor_field_key: "caption", source: { type: "definition", definition_id: asked.id, subject_scope: "guest" }, transform: "uppercase" }] });
+    expect(row(upper, one.id).personalization?.caption.provenance).toMatchObject({ source: "derived", source_attribute_ids: [asked.id], transform: "uppercase", value: "ADA L" });
+  });
+
+  it("grades a value that fails the field invalid even though the field exists: Alexandria-Catherine against a 12 character cap", () => {
+    const { event, nameDef, one } = seed();
+    writeValue("guest", one.id, nameDef.id, "Alexandria-Catherine", "guest");
+    const r = row(gift(event.id, { personalization_mappings: mappings(nameDef) }), one.id);
+    expect(r.personalization?.caption).toMatchObject({ value: "Alexandria-Catherine", status: "invalid" });
+    expect(r.personalization_issues).toEqual([{ guest_id: one.id, vendor_field_key: "caption", code: "too_long", status: "invalid", message: "Caption allows 12 characters" }]);
+    expect(r.personalization_status).toBe("invalid");
+  });
+
+  it("grades a missing answer missing and an unmapped or unsettled requirement mapping_unresolved", () => {
+    const { event, nameDef, two } = seed();
+    expect(row(gift(event.id, { personalization_mappings: mappings(nameDef) }), two.id).personalization?.caption).toMatchObject({ value: null, status: "missing" });
+    const unmapped = row(gift(event.id, { personalization_mappings: mappings(nameDef).slice(1) }), two.id);
+    expect(unmapped.personalization_issues?.map((i) => [i.code, i.status])).toEqual([["missing_source", "mapping_unresolved"]]);
+    const unsettled = row(gift(event.id, { personalization_mappings: [{ ...mappings(nameDef)[0], resolution: "unresolved" }, ...mappings(nameDef).slice(1)] }), two.id);
+    expect(unsettled.personalization?.caption).toMatchObject({ value: null, status: "mapping_unresolved" });
+    expect(unsettled.personalization_status).toBe("incomplete");
+  });
+
+  it("grades a mapping flagged for confirmation needs_confirmation with the value in place", () => {
+    const { event, nameDef, one } = seed();
+    const r = row(gift(event.id, { personalization_mappings: [{ ...mappings(nameDef)[0], resolution: "needs_confirmation" }, ...mappings(nameDef).slice(1)] }), one.id);
+    expect(r.personalization?.caption).toMatchObject({ value: "Ada", status: "needs_confirmation" });
+    expect(r.personalization_issues?.map((i) => i.status)).toEqual(["needs_confirmation"]);
+    expect(r.personalization_status).toBe("incomplete");
+  });
+
+  it("grades a requirement the store rejected through an open exception vendor_rejected until the exception closes", () => {
+    const { event, nameDef, one, two } = seed();
+    const g = gift(event.id, { personalization_mappings: mappings(nameDef) });
+    openException(g.id, { attendee_ref: one.id, requirement_id: "caption", type: "invalid_value", message: "No hyphens." }, "token:tok_1");
+    expect(row(g, one.id).personalization?.caption).toMatchObject({ value: "Ada", status: "vendor_rejected" });
+    expect(row(g, one.id)).toMatchObject({ personalization_status: "invalid", personalization_issues: [{ vendor_field_key: "caption", code: "vendor_rejected", status: "vendor_rejected" }] });
+    expect(row(g, two.id).personalization?.caption.status).toBe("missing");
+    writeValue("guest", one.id, nameDef.id, "Ada B", "guest");
+    resolveExceptionsByAnswer(one.id, nameDef.id, "guest");
+    expect(row(g, one.id).personalization?.caption.status).toBe("resolved");
+  });
+
+  it("grades an answer written after the approved revision changed_after_approval and keeps the row ready", () => {
+    const { event, nameDef, one } = seed();
+    const g = gift(event.id, { personalization_mappings: mappings(nameDef) });
+    moveProcurement(g.id, "approved", "organizer", { patch: { approved_revision: state().seq } });
+    expect(row(g, one.id).personalization?.caption.status).toBe("resolved");
+    const later = writeValue("guest", one.id, nameDef.id, "Ada C", "guest");
+    const r = row(g, one.id);
+    expect(r.personalization?.caption).toMatchObject({ value: "Ada C", status: "changed_after_approval", provenance: { revision: later.seq } });
+    expect(r.personalization_issues?.map((i) => i.status)).toEqual(["changed_after_approval"]);
+    expect(r.personalization_status).toBe("ready");
   });
 
   it("leaves an ordinary product's manifest rows without personalization fields", () => {
