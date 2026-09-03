@@ -7,6 +7,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseFilter, type Filter } from "../domain/filter";
 import {
+  actorOf,
+  appendChange,
   changesSince,
   countBy,
   createEvent,
@@ -45,6 +47,7 @@ import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
+import { changesAfter, recordProcurementChange } from "../domain/procurement";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
@@ -243,7 +246,9 @@ export function createGiftFromBody(eventId: string, body: unknown) {
 export function updateGiftFromBody(eventId: string, giftId: string, body: unknown) {
   requireGift(eventId, giftId);
   const patch = parseBody(GiftBody.partial(), body);
-  return giftView(eventId, updateGift(giftId, patch as Partial<GiftInput>).id);
+  updateGift(giftId, patch as Partial<GiftInput>);
+  if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
+  return giftView(eventId, giftId);
 }
 
 export function deleteGift(eventId: string, giftId: string) {
@@ -267,7 +272,9 @@ export function deleteGift(eventId: string, giftId: string) {
 export function approveSpecs(eventId: string, giftId: string, now = new Date()) {
   const gift = requireGift(eventId, giftId);
   if (gift.cart_fill?.status === "running") throw new BadRequestError("The cart job is still running; approve again once it settles.");
-  updateGift(giftId, { approved_at: now.toISOString(), approved_seq: currentSeq(), checkout_url: null, cart_fill: null, cart_lines: null, cart_blocked: null } as Partial<GiftInput>);
+  // The approval's own entry is the approved revision, so a manifest read at that revision reads as approved.
+  const approved = recordProcurementChange(giftId, "approved", "organizer", "The organizer approved the attendee values");
+  updateGift(giftId, { approved_at: now.toISOString(), approved_seq: approved.seq, checkout_url: null, cart_fill: null, cart_lines: null, cart_blocked: null } as Partial<GiftInput>);
   return giftView(eventId, giftId);
 }
 
@@ -400,6 +407,8 @@ export async function requestFromAttendees(eventId: string, giftId: string) {
       }
     }
     updateGift(giftId, { mapping: variantRows, personalization_mappings: fieldRows, requested_at: gift.requested_at ?? new Date().toISOString() } as Partial<GiftInput>);
+    const created = resolved.filter((r) => !gift.personalization_mappings?.some((m) => m.vendor_field_key === r.key) && r.definition_id);
+    if (created.length) recordProcurementChange(giftId, "mapping_changed", "organizer", `Questions requested from attendees for ${created.map((r) => r.key).join(", ")}`);
     const asked = askedDefinitionIds(resolved, definitionsFor(eventId));
     return recordRequests(eventId, giftId, asked, new Set());
   });
@@ -492,6 +501,7 @@ export function setPersonalizationMappings(eventId: string, giftId: string, body
   const errors = validateMappings(gift, event, data.mappings, definitionsFor(eventId));
   if (errors.length) throw new BadRequestError(errors.map((e) => `${e.code}: ${e.message}`).join("; "));
   updateGift(giftId, { personalization_mappings: data.mappings } as Partial<GiftInput>);
+  recordProcurementChange(giftId, "mapping_changed", "organizer", `The mappings for ${data.mappings.map((m) => m.vendor_field_key).join(", ") || "no field"} changed`);
   return giftView(eventId, giftId);
 }
 
@@ -697,12 +707,17 @@ export function postUpdate(eventId: string, giftId: string, caller: string, body
   const parsed = UpdateBody.safeParse(body);
   if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   if (parsed.data.guest_id) requireGuest(eventId, parsed.data.guest_id);
-  const s = state();
-  s.seq += 1;
-  const update: VendorUpdate = { id: newId("upd"), event_id: eventId, gift_id: giftId, caller, ...parsed.data, created_at: new Date().toISOString(), seq: s.seq };
-  s.updates.set(update.id, update);
-  s.changes.push({ kind: "update", seq: update.seq, at: update.created_at, event_id: eventId, update_id: update.id, gift_id: giftId, update_kind: update.kind, caller });
+  const id = newId("upd");
+  const entry = appendChange({ kind: "update", event_id: eventId, update_id: id, gift_id: giftId, update_kind: parsed.data.kind, caller, ...actorOf(caller), ...(parsed.data.guest_id ? { attendee_ref: parsed.data.guest_id } : {}), summary: parsed.data.text ? `${parsed.data.kind}: ${parsed.data.text}` : parsed.data.kind });
+  const update: VendorUpdate = { id, event_id: eventId, gift_id: giftId, caller, ...parsed.data, created_at: entry.at, seq: entry.seq };
+  state().updates.set(update.id, update);
   return update;
+}
+
+/** The changes after a revision a caller may see for a gift (get_changes); `readable` absent is the organizer's view. */
+export function changeReader(eventId: string, giftId: string, afterRevision: number, readable?: string[]) {
+  requireGift(eventId, giftId);
+  return changesAfter(giftId, afterRevision, readable);
 }
 
 export function updatesFor(eventId: string, giftId: string, since = 0): VendorUpdate[] {

@@ -7,7 +7,7 @@
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
+import { changeReader, changes, counts, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
 import { newId, state } from "../domain/store";
 import type { CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
@@ -122,6 +122,11 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       return { ...view, rows: (view.rows ?? []).map((r) => filterPersonalization(filterValues(r, ids), ids)) };
     }
     case "get_changes": {
+      const giftId = strArg("gift_id") ?? strArg("procurement_id");
+      if (giftId) {
+        if (!organizer) requireGiftScope(token, giftId);
+        return changeReader(eventId, giftId, Number(args.after_revision ?? 0) || 0, organizer ? undefined : token.readable_definition_ids);
+      }
       const since = Number(args.since_seq ?? 0);
       const all = changes(eventId, Number.isNaN(since) ? 0 : since);
       if (organizer) return all;

@@ -28,6 +28,14 @@ Tokuchu is the organizer's app. The store is a Shopify storefront that speaks We
 
 Hops 2, 3, 4, and 5 run over WebMCP tools; the Attendees tab's approve button runs the `approve_specs` definition through `executeThroughApi` as its request buttons do. Hop 1 runs over HTTP because the Global Catalog exists only at its endpoint; the store's own page tool `search_catalog` covers one store and Tokuchu's search spans many. Hop 7 runs after checkout, where Shopify exposes orders through the Admin API alone.
 
+## The procurement tools
+
+A store's agent holds a token (`POST /api/events/{id}/tokens`) that names the gifts it may read and the definitions it may see. The gift is the procurement until a Procurement record exists, so each tool takes `procurement_id` or `gift_id` for the same record. Every procurement-visible write appends one change-log entry with `actor_type`, the attendee and requirement it concerns, and a one-line summary; the gift's `current_revision` is the seq of the last entry the caller may see.
+
+| Tool | Who calls | Route | What it returns |
+| --- | --- | --- | --- |
+| `get_changes` | the organizer's page, or a token holder over JSON-RPC | `GET /api/events/{id}/changes?gift={giftId}&after={revision}` | `{ procurement_id, from_revision, current_revision, changes[] }`; each change carries `revision`, `timestamp`, `actor_type`, `actor_id?`, `type`, `attendee_ref?`, `requirement_id?`, `summary`. A token holder sees a value write only for a definition the gift maps and the token may read. Without a gift the call keeps its earlier form: `?since={seq}` returns the event's whole change log |
+
 ## The bridge
 
 The merchant tools and Shopify's page tools exist only on the store's pages. Tokuchu's server opens a page of the store in a headless browser (`src/server/store-page.ts`), injects the WebMCP polyfill before the page scripts run so that both Shopify's script and the theme asset register their tools, waits for `getTools()` to list them, and calls them with `executeTool`.js` beside the polyfill. The cart the tools build belongs to that browser session. The `checkoutUrl` the cart tool returns, `/cart/c/{token}?key=...`, opens the same cart at Shopify's checkout in any browser, which is how the cart leaves the session and reaches the organizer.

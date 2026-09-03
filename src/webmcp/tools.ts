@@ -106,10 +106,19 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_changes",
-    description: "Returns the change log after a sequence number: value writes, status changes, and gift updates. Call it with the last sequence number you saw to learn what changed.",
-    inputSchema: { type: "object", properties: { since_seq: { type: "integer", description: "The last sequence number already seen; 0 for everything" } }, required: ["since_seq"], additionalProperties: false },
+    description: "Returns the changes to a procurement after a revision: each with its revision, timestamp, actor, type, the attendee and requirement it concerns, and a one-line summary. Call it with the current_revision of the last manifest or change list you read. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record. Without a gift the call returns the event's whole change log after since_seq.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procurement_id: { type: "string", description: "The procurement's id; the gift's id until a Procurement record exists" },
+        gift_id: { type: "string", description: "The gift's id; the same record as procurement_id" },
+        after_revision: { type: "integer", description: "The revision already seen; 0 for every change" },
+        since_seq: { type: "integer", description: "For the event-wide log without a gift: the last sequence number already seen; 0 for everything" }
+      },
+      additionalProperties: false
+    },
     scopes: ["organizer", "vendor"],
-    route: { method: "GET", path: "/api/events/:eventId/changes", query: (a) => ({ since: str(a.since_seq ?? 0) }) }
+    route: { method: "GET", path: "/api/events/:eventId/changes", query: (a) => ({ since: str(a.since_seq ?? 0), gift: str(a.gift_id ?? a.procurement_id), after: str(a.after_revision) }) }
   },
   {
     name: "search_gifts",

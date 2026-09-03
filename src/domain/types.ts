@@ -169,11 +169,32 @@ export const CallerToken = z.object({
 });
 export type CallerToken = z.infer<typeof CallerToken>;
 
-/** One entry of the change log: a value write, a status change, or a vendor update. */
+/** Who made a change: the attendee on the invite page, the organizer, a store's token holder, an agent acting for one of them, or Tokuchu itself. */
+export const ActorType = z.enum(["attendee", "organizer", "vendor", "agent", "system"]);
+export type ActorType = z.infer<typeof ActorType>;
+
+/** What a procurement-level change-log entry records. */
+export const ProcurementChangeType = z.enum(["mapping_changed", "plan_changed", "approved", "exception_opened", "exception_resolved", "exception_dismissed", "status_changed"]);
+export type ProcurementChangeType = z.infer<typeof ProcurementChangeType>;
+
+/** The actor and the procurement context each change-log entry carries; an entry stored before revisions existed reads them as absent. */
+const ChangeContext = {
+  actor_type: ActorType.optional(),
+  actor_id: z.string().optional(),
+  gift_id: z.string().optional(),
+  /** The guest the change concerns. */
+  attendee_ref: z.string().optional(),
+  /** The store's requirement key the change concerns. */
+  requirement_id: z.string().optional(),
+  summary: z.string().optional()
+};
+
+/** One entry of the change log: a value write, a status change, a vendor update, or a procurement change. */
 export const ChangeEntry = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("value"), seq: z.number().int(), at: z.string(), event_id: z.string(), subject_type: z.enum(["guest", "party", "event"]), subject_id: z.string(), definition_id: z.string(), value: z.unknown(), source: z.string() }),
-  z.object({ kind: z.literal("status"), seq: z.number().int(), at: z.string(), event_id: z.string(), guest_id: z.string(), from: GuestStatus, to: GuestStatus, source: z.string() }),
-  z.object({ kind: z.literal("update"), seq: z.number().int(), at: z.string(), event_id: z.string(), update_id: z.string(), gift_id: z.string(), update_kind: UpdateKind, caller: z.string() })
+  z.object({ ...ChangeContext, kind: z.literal("value"), seq: z.number().int(), at: z.string(), event_id: z.string(), subject_type: z.enum(["guest", "party", "event"]), subject_id: z.string(), definition_id: z.string(), value: z.unknown(), source: z.string() }),
+  z.object({ ...ChangeContext, kind: z.literal("status"), seq: z.number().int(), at: z.string(), event_id: z.string(), guest_id: z.string(), from: GuestStatus, to: GuestStatus, source: z.string() }),
+  z.object({ ...ChangeContext, kind: z.literal("update"), seq: z.number().int(), at: z.string(), event_id: z.string(), update_id: z.string(), gift_id: z.string(), update_kind: UpdateKind, caller: z.string() }),
+  z.object({ ...ChangeContext, kind: z.literal("procurement"), seq: z.number().int(), at: z.string(), event_id: z.string(), gift_id: z.string(), type: ProcurementChangeType })
 ]);
 export type ChangeEntry = z.infer<typeof ChangeEntry>;
 

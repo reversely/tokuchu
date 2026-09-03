@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGift, updateGift } from "../domain/gifts";
 import { publishEvent, resetState, upsertDefinition } from "../domain/store";
-import { createEventFromBody, submitRsvp } from "./api";
+import { createEventFromBody, patchRsvp, submitRsvp } from "./api";
 import { createToken, handleRpc, tokenFrom, type RpcRequest } from "./mcp";
 import { TOOLS } from "../webmcp/tools";
 import { cartOperations } from "./registry";
@@ -87,6 +87,26 @@ describe("the MCP endpoint", () => {
     const feed = payload(await call(event.id, vendor, "get_changes", { since_seq: before })).entries as { kind: string }[];
     expect(feed.map((e) => e.kind)).toEqual(["update"]);
     expect(tokenFrom(event.id, new Request("http://x", { headers: { authorization: `Bearer ${vendor.id}` } }))?.last_profile_url).toBe("https://vendor.example/profile.json");
+  });
+
+  it("reads a gift's changes after a revision through the token's scope", async () => {
+    const { event, vendor, gift, organizer, choice, name, guestIds } = seed();
+    const start = payload(await call(event.id, vendor, "get_changes", { procurement_id: gift.id, after_revision: 0 }));
+    expect(start).toMatchObject({ procurement_id: gift.id, from_revision: 0 });
+    expect(start.changes.every((c: { type: string }) => c.type === "reply_changed" || c.type === "answer_changed")).toBe(true);
+    await call(event.id, organizer, "post_update", { gift_id: gift.id, kind: "confirmed", text: "Confirmed." });
+    const next = payload(await call(event.id, vendor, "get_changes", { gift_id: gift.id, after_revision: start.current_revision }));
+    expect(next.from_revision).toBe(start.current_revision);
+    expect(next.changes.map((c: { type: string; actor_type: string }) => [c.type, c.actor_type])).toEqual([["update_posted", "organizer"]]);
+    expect(next.current_revision).toBeGreaterThan(start.current_revision);
+    // A value on a definition the gift does not map is not a procurement change; one the gift maps but the token may not read stays out of the vendor's view.
+    patchRsvp(event.id, guestIds[1], { answers: { [name.id]: "Two" } });
+    expect(payload(await call(event.id, organizer, "get_changes", { gift_id: gift.id, after_revision: next.current_revision })).changes).toEqual([]);
+    const narrow = createToken(event.id, { holder: "narrow", gift_ids: [gift.id], readable_definition_ids: [], callable_tools: ["get_changes"] });
+    patchRsvp(event.id, guestIds[1], { answers: { [choice.id]: ["a"] } });
+    expect(payload(await call(event.id, narrow, "get_changes", { gift_id: gift.id, after_revision: next.current_revision })).changes).toEqual([]);
+    expect(payload(await call(event.id, vendor, "get_changes", { gift_id: gift.id, after_revision: next.current_revision })).changes.map((c: { requirement_id: string }) => c.requirement_id)).toEqual(["dietary"]);
+    expect(isError(await call(event.id, vendor, "get_changes", { gift_id: "gift_other", after_revision: 0 }))).toBe(true);
   });
 
   it("has the cart operations registered for the organizer's send and approve", () => {

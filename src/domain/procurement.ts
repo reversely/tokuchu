@@ -1,0 +1,99 @@
+/**
+ * The procurement view of the change log. Until a Procurement row exists the gift is the
+ * procurement: its revision is the seq of the last change a store's agent may see for it, and the
+ * reader lists the changes after a revision in the shape get_changes returns. The store's
+ * requirement key (a vendor field key or the variant question's key) names each requirement.
+ */
+import type { Batch, ChangeEntry, ProcurementChangeType } from "./types";
+import { getGift } from "./gifts";
+import { actorOf, appendChange, definitionsFor, getGuest, state } from "./store";
+
+/** One change as get_changes returns it. */
+export type ChangeView = { revision: number; timestamp: string; actor_type: NonNullable<ChangeEntry["actor_type"]>; actor_id?: string; type: string; attendee_ref?: string; requirement_id?: string; summary: string };
+
+/** The definition each requirement key of a gift reads, and the key each definition fills. */
+export type RequirementKeys = { byDefinition: Map<string, string>; byKey: Map<string, string> };
+
+/** The store's requirement keys a gift's mappings name: a vendor field key per mapped definition and the variant question's own key. */
+export function requirementKeys(gift: Batch): RequirementKeys {
+  const byDefinition = new Map<string, string>();
+  const defs = new Map(definitionsFor(gift.event_id).map((d) => [d.id, d]));
+  for (const m of gift.personalization_mappings ?? []) if (m.source.type === "definition") byDefinition.set(m.source.definition_id, m.vendor_field_key);
+  for (const row of gift.mapping) {
+    const def = defs.get(row.definition_id);
+    if (def && !byDefinition.has(def.id)) byDefinition.set(def.id, def.key);
+  }
+  return { byDefinition, byKey: new Map([...byDefinition].map(([id, key]) => [key, id])) };
+}
+
+/** Records a procurement-level change on a gift: a mapping or plan edit, an approval, an exception, or a status move. */
+export function recordProcurementChange(giftId: string, type: ProcurementChangeType, source: string, summary: string, context: { attendee_ref?: string; requirement_id?: string } = {}): ChangeEntry {
+  const gift = getGift(giftId);
+  return appendChange({ kind: "procurement", event_id: gift.event_id, gift_id: giftId, type, ...actorOf(source), ...context, summary });
+}
+
+/**
+ * True when a store's agent holding `readable` may see the entry for the gift: a value write to a
+ * definition the gift maps and the holder may read, a reply status change, a post on the gift, or a
+ * procurement change whose requirement the holder may read. `readable` absent means the organizer.
+ */
+function visible(entry: ChangeEntry, giftId: string, keys: RequirementKeys, readable?: string[]): boolean {
+  const canRead = (definitionId: string) => !readable || readable.includes(definitionId);
+  switch (entry.kind) {
+    case "value":
+      return keys.byDefinition.has(entry.definition_id) && canRead(entry.definition_id);
+    case "status":
+      return true;
+    case "update":
+      return entry.gift_id === giftId;
+    case "procurement": {
+      if (entry.gift_id !== giftId) return false;
+      const definitionId = entry.requirement_id ? keys.byKey.get(entry.requirement_id) : undefined;
+      return definitionId ? canRead(definitionId) : true;
+    }
+  }
+}
+
+/** The change-log entries after `after` a holder may see for the gift, in sequence order. */
+export function procurementChanges(giftId: string, after: number, readable?: string[]): ChangeEntry[] {
+  const gift = getGift(giftId);
+  const keys = requirementKeys(gift);
+  return state().changes.filter((c) => c.event_id === gift.event_id && c.seq > after && visible(c, giftId, keys, readable));
+}
+
+/** The seq of the last change a holder may see for the gift, or 0 before any. */
+export function currentRevision(giftId: string, readable?: string[]): number {
+  return procurementChanges(giftId, 0, readable).at(-1)?.seq ?? 0;
+}
+
+function guestName(guestId: string): string {
+  try {
+    return getGuest(guestId).display_name;
+  } catch {
+    return guestId;
+  }
+}
+
+/** One entry in the reader's shape; an entry stored before revisions existed derives its actor and summary from its own fields. */
+export function changeView(entry: ChangeEntry, keys: RequirementKeys): ChangeView {
+  const actor = entry.actor_type ? { actor_type: entry.actor_type, ...(entry.actor_id ? { actor_id: entry.actor_id } : {}) } : actorOf("source" in entry ? entry.source : "caller" in entry ? entry.caller : "system");
+  const base = { revision: entry.seq, timestamp: entry.at, ...actor };
+  const ref = (attendee?: string, requirement?: string) => ({ ...(attendee ? { attendee_ref: attendee } : {}), ...(requirement ? { requirement_id: requirement } : {}) });
+  switch (entry.kind) {
+    case "value":
+      return { ...base, type: "answer_changed", ...ref(entry.attendee_ref ?? (entry.subject_type === "guest" ? entry.subject_id : undefined), entry.requirement_id ?? keys.byDefinition.get(entry.definition_id)), summary: entry.summary ?? `${guestName(entry.subject_id)} answered ${keys.byDefinition.get(entry.definition_id) ?? entry.definition_id}` };
+    case "status":
+      return { ...base, type: "reply_changed", ...ref(entry.guest_id), summary: entry.summary ?? `${guestName(entry.guest_id)} changed the reply from ${entry.from} to ${entry.to}` };
+    case "update":
+      return { ...base, type: "update_posted", ...ref(entry.attendee_ref, entry.requirement_id), summary: entry.summary ?? `${entry.update_kind} posted` };
+    case "procurement":
+      return { ...base, type: entry.type, ...ref(entry.attendee_ref, entry.requirement_id), summary: entry.summary ?? entry.type };
+  }
+}
+
+/** The get_changes result for a gift: the changes after `after` the holder may see and the revision the reader stands at. */
+export function changesAfter(giftId: string, after: number, readable?: string[]) {
+  const keys = requirementKeys(getGift(giftId));
+  const entries = procurementChanges(giftId, 0, readable);
+  return { procurement_id: giftId, gift_id: giftId, from_revision: after, current_revision: entries.at(-1)?.seq ?? 0, changes: entries.filter((c) => c.seq > after).map((c) => changeView(c, keys)) };
+}

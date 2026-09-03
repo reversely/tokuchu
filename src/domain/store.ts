@@ -9,7 +9,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { matches, type Filter, type Subject } from "./filter";
 import * as T from "./types";
-import type { AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
+import type { ActorType, AttributeDefinition, AttributeValue, Batch, CallerToken, ChangeEntry, ChatMessage, Event, Guest, GuestStatus, Party, Request, RequestDelivery, Schedule, VendorUpdate } from "./types";
 import { aggregate, validateValue, type Aggregate } from "./values";
 import libraryData from "./library.json";
 
@@ -138,6 +138,27 @@ function nextSeq(): number {
 
 export class InvalidValueError extends Error {}
 
+/* ---- The change log ---- */
+
+/** The actor a write's source names: the invite page writes as `guest`, the dashboard as `organizer`, the cart job as `tokuchu`, and a token holder as `token:<id>`. */
+export function actorOf(source: string): { actor_type: ActorType; actor_id?: string } {
+  if (source === "guest") return { actor_type: "attendee" };
+  if (source === "organizer") return { actor_type: "organizer" };
+  if (source === "tokuchu" || source === "system") return { actor_type: "system" };
+  if (source.startsWith("token:")) return { actor_type: "vendor", actor_id: source.slice("token:".length) };
+  return { actor_type: "agent", actor_id: source };
+}
+
+type WithoutSeq<E> = E extends unknown ? Omit<E, "seq" | "at"> : never;
+
+/** Appends one change-log entry with the next sequence number and the current time. */
+export function appendChange(entry: WithoutSeq<ChangeEntry>): ChangeEntry {
+  const s = state();
+  const row = { ...entry, seq: nextSeq(), at: now() } as ChangeEntry;
+  s.changes.push(row);
+  return row;
+}
+
 /* ---- Events and definitions ---- */
 
 /**
@@ -246,7 +267,7 @@ export function createGuest(eventId: string, partyId: string, input: { display_n
   const guest: Guest = { id: newId("guest"), event_id: eventId, party_id: partyId, role: input.role ?? "guest", status: input.status ?? "no_reply", attendance: input.attendance ?? {}, display_name: input.display_name };
   s.guests.set(guest.id, guest);
   s.parties.set(partyId, { ...party, guest_ids: [...party.guest_ids, guest.id] });
-  if (guest.status !== "no_reply") s.changes.push({ kind: "status", seq: nextSeq(), at: now(), event_id: eventId, guest_id: guest.id, from: "no_reply", to: guest.status, source: "guest" });
+  if (guest.status !== "no_reply") appendChange({ kind: "status", event_id: eventId, guest_id: guest.id, from: "no_reply", to: guest.status, source: "guest", ...actorOf("guest"), attendee_ref: guest.id, summary: `${guest.display_name} replied ${guest.status}` });
   return guest;
 }
 
@@ -267,7 +288,7 @@ export function setGuestStatus(guestId: string, status: GuestStatus, source: str
   if (guest.status === status) return guest;
   const next = { ...guest, status };
   s.guests.set(guestId, next);
-  s.changes.push({ kind: "status", seq: nextSeq(), at: now(), event_id: guest.event_id, guest_id: guestId, from: guest.status, to: status, source });
+  appendChange({ kind: "status", event_id: guest.event_id, guest_id: guestId, from: guest.status, to: status, source, ...actorOf(source), attendee_ref: guestId, summary: `${guest.display_name} changed the reply from ${guest.status} to ${status}` });
   return next;
 }
 
@@ -296,9 +317,10 @@ export function writeValue(subjectType: AttributeValue["subject_type"], subjectI
   const def = getDefinition(definitionId);
   const checked = validateValue(def, raw);
   if (!checked.ok) throw new InvalidValueError(checked.reason);
-  const row: AttributeValue = { subject_type: subjectType, subject_id: subjectId, definition_id: definitionId, value: checked.value, source, updated_at: now(), seq: nextSeq() };
+  // The value row and its change-log entry share one seq, so the entry is appended first and the row takes its number.
+  const entry = appendChange({ kind: "value", event_id: def.event_id, subject_type: subjectType, subject_id: subjectId, definition_id: definitionId, value: checked.value, source, ...actorOf(source), ...(subjectType === "guest" ? { attendee_ref: subjectId } : {}), ...(def.vendor_field ? { requirement_id: def.vendor_field.key } : {}), summary: `${def.label} ${source === "guest" ? "answered" : "set"}` });
+  const row: AttributeValue = { subject_type: subjectType, subject_id: subjectId, definition_id: definitionId, value: checked.value, source, updated_at: entry.at, seq: entry.seq };
   s.values.set(valueKey(subjectType, subjectId, definitionId), row);
-  s.changes.push({ kind: "value", seq: row.seq, at: row.updated_at, event_id: def.event_id, subject_type: subjectType, subject_id: subjectId, definition_id: definitionId, value: checked.value, source });
   return row;
 }
 
