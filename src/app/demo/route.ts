@@ -1,4 +1,4 @@
-import { appUrl as appOrigin } from "../../server/request-mail";
+import { publicOrigin } from "../../server/request-mail";
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse } from "../../server/api";
 import { hasDatabase } from "../../server/db";
@@ -41,11 +41,6 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     return errorResponse(e);
   }
-}
-
-/** The origin a redirect should carry: the configured public URL, since the standalone server reports its bind address in request.url. */
-function publicOrigin(request: Request): string {
-  return process.env.APP_URL || process.env.AUTH_URL ? appOrigin() : new URL(request.url).origin;
 }
 
 /** Chrome and Safari mark a speculative fetch with Sec-Purpose or Purpose. */

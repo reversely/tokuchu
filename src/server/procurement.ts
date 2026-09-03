@@ -99,6 +99,47 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
   };
 }
 
+/** The open exceptions a caller may see on a gift: every one without a requirement, and those whose requirement's definition the caller may read. */
+export function visibleExceptions(eventId: string, giftId: string, readable?: string[]): ProcurementException[] {
+  const gift = requireGift(eventId, giftId);
+  const byKey = requirementKeys(gift).byKey;
+  return openExceptionsFor(giftId).filter((e) => {
+    if (!readable || !e.requirement_id) return true;
+    const definitionId = byKey.get(e.requirement_id);
+    return !definitionId || readable.includes(definitionId);
+  });
+}
+
+/** The Procurement as get_procurement returns it: the product, the store, where the order stands, and the revisions. */
+export type ProcurementSummary = {
+  procurement_id: string;
+  gift_id: string;
+  product: { id: string; title: string; url: string | null };
+  store: string;
+  status: ProcurementStatus;
+  current_revision: number;
+  approved_revision: number | null;
+  requirement_schema_id?: string;
+  attendees: number;
+  open_exceptions: number;
+};
+
+export function procurementSummary(eventId: string, giftId: string, readable?: string[]): ProcurementSummary {
+  const gift = requireGift(eventId, giftId);
+  return {
+    procurement_id: giftId,
+    gift_id: giftId,
+    product: { id: gift.product_id, title: gift.product_title, url: gift.product_url ?? null },
+    store: gift.shop_domain,
+    status: procurementStatus(gift),
+    current_revision: currentRevision(giftId, readable),
+    approved_revision: typeof gift.approved_seq === "number" ? gift.approved_seq : null,
+    ...(gift.personalization?.fields.length ? { requirement_schema_id: `${gift.shop_domain}/${gift.product_id}` } : {}),
+    attendees: manifest(gift).filter((row) => row.unit_status !== "excluded").length,
+    open_exceptions: visibleExceptions(eventId, giftId, readable).length
+  };
+}
+
 /* ---- Structured updates (post_procurement_update) ---- */
 
 const UpdateType = z.enum(["accepted", "production_started", "fulfilled", "needs_information", "invalid_value", "option_unavailable", "exception"]);

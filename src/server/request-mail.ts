@@ -17,6 +17,11 @@ export function appUrl(): string {
   return (process.env.APP_URL || process.env.AUTH_URL || "http://localhost:3113").replace(/\/$/, "");
 }
 
+/** The origin a redirect should carry: the configured public URL, since the standalone server reports its bind address in request.url. */
+export function publicOrigin(request: Request): string {
+  return process.env.APP_URL || process.env.AUTH_URL ? appUrl() : new URL(request.url).origin;
+}
+
 /** The attendee's own link, or a placeholder when the event has no invite code yet. */
 export function attendeeLink(event: Event, guest: Guest): string {
   return event.invite_code ? `${appUrl()}/i/${event.invite_code}?guest=${guest.id}` : `(unpublished event) guest ${guest.id}`;
