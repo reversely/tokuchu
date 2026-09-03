@@ -60,6 +60,11 @@ export function StorePage({ view }: { view: StoreView }) {
               <div className="row store-row"><span>Requirement schema</span><code data-testid="store-schema">{procurement.requirement_schema_id ?? "none"}</code></div>
               <div className="row store-row"><span>Access</span><span data-testid="store-permissions">{grant.permissions.join(" ")}</span></div>
               <div className="row store-row"><span>Access ends</span><span data-testid="store-expires">{grant.expires_at ? when(grant.expires_at) : "when the order is fulfilled"}</span></div>
+              <div className="row store-row">
+                <span>Seen up to revision</span>
+                <span data-testid="store-seen">{grant.acknowledged_revision ?? "none"}</span>
+                {view.tools.includes("acknowledge_changes") && <AcknowledgeButton eventId={event.id} tokenId={view.token_id} revision={procurement.current_revision} seen={grant.acknowledged_revision ?? null} />}
+              </div>
             </div>
           </section>
 
@@ -81,7 +86,13 @@ export function StorePage({ view }: { view: StoreView }) {
 
           {manifest && (
             <section className="block" data-testid="store-manifest">
-              <div className="labelrow"><h2>Fulfilment manifest</h2><span className="tag quiet">revision {manifest.revision}</span></div>
+              <div className="labelrow">
+                <h2>Fulfilment manifest</h2>
+                <span style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <span className="tag quiet">revision {manifest.revision}</span>
+                  <a className="btn ghost small" href={`/store/${grant.id}/fulfillment.csv`} download data-testid="store-csv">Download CSV</a>
+                </span>
+              </div>
               <div className="store-table">
                 <table className="records">
                   <thead>
@@ -146,6 +157,33 @@ export function StorePage({ view }: { view: StoreView }) {
         </div>
       </main>
     </div>
+  );
+}
+
+/** Records the current revision as seen through acknowledge_changes (#52) and reloads the page's data. */
+function AcknowledgeButton({ eventId, tokenId, revision, seen }: { eventId: string; tokenId: string; revision: number; seen: number | null }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (seen !== null && seen >= revision) return <span className="tag quiet" data-testid="store-ack-current">up to date</span>;
+
+  async function acknowledge() {
+    setBusy(true);
+    setError(null);
+    const result = await executeThroughMcp(eventId, tokenId, "acknowledge_changes", { revision }, fetch);
+    setBusy(false);
+    if (result.isError) {
+      setError((JSON.parse(result.content[0].text) as { error?: string }).error ?? "The revision was not recorded");
+      return;
+    }
+    router.refresh();
+  }
+
+  return (
+    <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <button type="button" className="btn ghost small" onClick={acknowledge} disabled={busy} data-testid="store-ack">{busy ? "Recording" : `Mark revision ${revision} as seen`}</button>
+      {error && <span className="error" data-testid="store-ack-error">{error}</span>}
+    </span>
   );
 }
 

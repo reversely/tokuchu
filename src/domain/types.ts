@@ -220,7 +220,9 @@ export const AccessGrant = z.object({
   created_by: z.string(),
   created_at: z.string(),
   expires_at: z.string().nullable().default(null),
-  revoked_at: z.string().nullable().default(null)
+  revoked_at: z.string().nullable().default(null),
+  /** The last revision the holder acknowledged through acknowledge_changes; absent or null before any. */
+  acknowledged_revision: z.number().int().nullable().optional()
 });
 export type AccessGrant = z.infer<typeof AccessGrant>;
 

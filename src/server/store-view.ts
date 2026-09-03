@@ -11,7 +11,7 @@ import { NotFoundError } from "./errors";
 import { fulfillmentManifest, procurementSummary, visibleExceptions, type FulfillmentManifest, type ProcurementSummary } from "./procurement";
 
 export type StoreView = {
-  grant: Pick<AccessGrant, "id" | "grantee_type" | "grantee_id" | "permissions" | "expires_at">;
+  grant: Pick<AccessGrant, "id" | "grantee_type" | "grantee_id" | "permissions" | "expires_at" | "acknowledged_revision">;
   token_id: string;
   /** The tools the grant's token may call, for the page's registration. */
   tools: string[];
@@ -39,7 +39,7 @@ export function storeView(eventId: string, grantId: string): StoreView {
   const readable = scope.readable_definition_ids;
   const giftId = grant.procurement_id;
   return {
-    grant: { id: grant.id, grantee_type: grant.grantee_type, grantee_id: grant.grantee_id, permissions: grant.permissions, expires_at: grant.expires_at },
+    grant: { id: grant.id, grantee_type: grant.grantee_type, grantee_id: grant.grantee_id, permissions: grant.permissions, expires_at: grant.expires_at, acknowledged_revision: grant.acknowledged_revision },
     token_id: token.id,
     tools: scope.callable_tools,
     event: { id: event.id, title: event.title, starts_at: event.starts_at },

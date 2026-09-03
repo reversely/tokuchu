@@ -149,6 +149,21 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "GET", path: "/api/events/:eventId/changes", query: (a) => ({ since: str(a.since_seq ?? 0), gift: str(a.gift_id ?? a.procurement_id), after: str(a.after_revision) }) }
   },
   {
+    name: "acknowledge_changes",
+    description: "Records the last revision the caller has read on its grant, so the organizer sees what the store has seen. Call it with the revision of the last manifest or change list you read; a revision past the current one is refused. A grant's token acknowledges its own grant and needs no grant_id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        grant_id: { type: "string", description: "The grant to acknowledge for; the organizer names one and a grant's token leaves it out" },
+        revision: { type: "integer", description: "The revision read; 0 acknowledges nothing yet", minimum: 0 }
+      },
+      required: ["revision"],
+      additionalProperties: false
+    },
+    scopes: ["organizer", "vendor"],
+    route: { method: "POST", path: "/api/events/:eventId/grants/{grant_id}/ack", body: (a) => ({ revision: a.revision }) }
+  },
+  {
     name: "search_gifts",
     description: "Searches Shopify's catalog for a gift for the guests: a card (gift_sets, food_drink, apparel, stationery) or a sentence, shipping to the venue, under the cost per person, with delivery to the venue checked for each candidate. Returns the ranked products, the excluded ones with the rule that excluded each, and the funnel per search.",
     inputSchema: { type: "object", properties: { card: { type: "string", description: "A card key", enum: ["gift_sets", "food_drink", "apparel", "stationery"] }, sentence: { type: "string", description: "The gift in the organizer's words, when no card fits" } }, additionalProperties: false },

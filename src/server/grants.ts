@@ -29,7 +29,7 @@ export const GrantBody = z.object({
 const TOOLS_FOR: Record<GrantPermission, readonly string[]> = {
   "manifest:read": ["get_procurement", "get_manifest", "get_fulfillment_manifest"],
   "requirements:read": ["get_requirements"],
-  "changes:read": ["get_changes"],
+  "changes:read": ["get_changes", "acknowledge_changes"],
   "updates:read": ["get_updates"],
   "updates:write": ["post_update", "post_procurement_update"]
 };

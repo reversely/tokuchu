@@ -55,7 +55,7 @@ async function open(page: Page, request: APIRequestContext, id: string, body: Re
 test("the store page registers the grant's tools and each call runs under the grant's token", async ({ page, request }) => {
   const { id, giftId, guestId } = await seed(request);
   await open(page, request, id, { procurement_id: giftId, grantee_type: "agent", grantee_id: "store-agent", permissions: ["manifest:read", "requirements:read", "changes:read", "updates:read", "updates:write"] });
-  expect(await toolNames(page)).toEqual(["get_changes", "get_fulfillment_manifest", "get_manifest", "get_procurement", "get_requirements", "get_updates", "post_procurement_update", "post_update"]);
+  expect(await toolNames(page)).toEqual(["acknowledge_changes", "get_changes", "get_fulfillment_manifest", "get_manifest", "get_procurement", "get_requirements", "get_updates", "post_procurement_update", "post_update"]);
 
   const summary = await execute(page, "get_procurement", { procurement_id: giftId });
   expect(summary.isError).toBe(false);

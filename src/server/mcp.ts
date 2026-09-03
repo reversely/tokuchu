@@ -156,6 +156,7 @@ async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant 
       if (!organizer) requireGiftScope(token, giftId);
       return procurementSummary(eventId, giftId, organizer ? undefined : token.readable_definition_ids);
     }
+    case "acknowledge_changes": return (await import("./acknowledge")).acknowledgeChanges(eventId, token, args);
     case "get_changes": {
       const giftId = strArg("gift_id") ?? strArg("procurement_id");
       if (giftId) {

@@ -12,6 +12,7 @@ import { slugValue } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
 import { cellState, ExceptionsList, GridCell, GridLegend, ProcurementState, requirementKey, useFulfillmentManifest } from "./readiness";
 import { ReconcilePanels } from "./reconcile-panels";
+import { ProcurementExports } from "./procurement-exports";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
@@ -477,6 +478,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
         </section>
       )}
+      {gift && <ProcurementExports eventId={snap.event.id} giftId={gift.id} seq={snap.seq} current={approval?.current_revision ?? 0} />}
 
       {gift && <ShareBlock eventId={snap.event.id} gift={gift} requirements={requirements} />}
 
