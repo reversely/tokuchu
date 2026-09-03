@@ -70,8 +70,10 @@ test("a revoke ends the open store session: the next tool call errors and the pa
   await expect(page.getByTestId("not-found-title")).toHaveText("Page not found");
   const { grants } = (await (await request.get(`/api/events/${id}/grants?procurement=${giftId}`)).json()) as { grants: { status: string }[] };
   expect(grants.map((g) => g.status)).toEqual(["revoked"]);
-  const changes = (await (await request.get(`/api/events/${id}/changes?gift=${giftId}&after=0`)).json()) as { changes: { type: string }[] };
-  expect(changes.changes.some((c) => c.type === "status_changed")).toBe(false);
+  // The status machine records its own moves (draft to collecting); the revoked store's accepted must not have landed as ordered.
+  const changes = (await (await request.get(`/api/events/${id}/changes?gift=${giftId}&after=0`)).json()) as { changes: { type: string; actor_type?: string; summary?: string }[] };
+  expect(changes.changes.some((c) => c.type === "status_changed" && /ordered/.test(c.summary ?? ""))).toBe(false);
+  expect(changes.changes.some((c) => c.actor_type === "vendor" || c.actor_type === "agent")).toBe(false);
 });
 
 test("a fulfilled order expires the grant and the store page ends its own session on the post", async ({ page, request }) => {
