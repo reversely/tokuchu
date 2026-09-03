@@ -28,6 +28,7 @@ import {
   listMissing,
   newEventId,
   newId,
+  procurementFor,
   procurementsFor,
   publishEvent,
   recordFollowUp,
@@ -49,7 +50,7 @@ import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { validateMappings } from "../domain/personalization";
 import { changesAfter, exceptionsFor, moveProcurement, recordProcurementChange, resolveExceptionsByAnswer, syncReadiness } from "../domain/procurement";
-import { slugValue } from "../domain/values";
+import { canonicalRequirementKey, slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { approvalState } from "./approval";
 import { messagesFor } from "./chat";
@@ -343,9 +344,12 @@ export async function requestFromAttendees(eventId: string, giftId: string) {
   const outgoing = transactionally(() => {
     const variantRows = [...gift.mapping];
     const fieldRows = [...(gift.personalization_mappings ?? [])];
+    const procurement = procurementFor(giftId);
     const resolved = giftRequirements(eventId, giftId).map((r) => {
       if (!r.question) return r;
-      const created = upsertDefinition(eventId, { namespace: "organizer", key: r.key, label: r.label, scope: "guest", value_type: r.question.value_type, constraints: r.question.constraints, default_visibility: [], required_rule: "going", creator: "organizer", ...(r.kind === "variant" ? {} : { vendor_field: { key: r.key, label: r.label, kind: r.kind } }) });
+      // A store's field becomes a vendor-namespace question under Tokuchu's canonical key, with the store, the product, the schema, and the field it came from as provenance.
+      const vendor = r.kind === "variant" ? {} : { namespace: "vendor" as const, key: canonicalRequirementKey(r.key, gift.shop_domain), vendor_field: { key: r.key, label: r.label, kind: r.kind, vendor_id: gift.shop_domain, product_id: gift.product_id, requirement_id: r.key, ...(procurement.requirement_schema_id ? { requirement_schema_id: procurement.requirement_schema_id } : {}), ...(procurement.requirement_schema_version ? { requirement_schema_version: procurement.requirement_schema_version } : {}) } };
+      const created = upsertDefinition(eventId, { namespace: "organizer", key: r.key, label: r.label, scope: "guest", value_type: r.question.value_type, constraints: r.question.constraints, default_visibility: [], required_rule: "going", creator: "organizer", ...vendor });
       const mapping: PersonalizationMapping | undefined = r.kind === "variant" ? undefined : { vendor_field_key: r.key, source: { type: "definition", definition_id: created.id, subject_scope: "guest" } };
       return { ...r, source: "definition" as const, definition_id: created.id, already: true, mapping };
     });

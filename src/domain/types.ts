@@ -22,10 +22,31 @@ export const Constraints = z.object({
 });
 export type Constraints = z.infer<typeof Constraints>;
 
+/**
+ * The store field a definition came from and where that field lives: the store, the product, the
+ * requirement schema and its version, and the requirement's own id (the store's field key). The
+ * definition's key is Tokuchu's canonical name for the concept and never carries the store's name.
+ */
+export const VendorField = z.object({
+  key: z.string(),
+  label: z.string(),
+  kind: z.string(),
+  vendor_id: z.string().optional(),
+  product_id: z.string().optional(),
+  requirement_schema_id: z.string().optional(),
+  requirement_schema_version: z.string().optional(),
+  requirement_id: z.string().optional()
+});
+export type VendorField = z.infer<typeof VendorField>;
+
+/** Who a definition belongs to: the library's seed, the organizer's own question, or a store's requirement. */
+export const DefinitionNamespace = z.enum(["core", "organizer", "vendor"]);
+export type DefinitionNamespace = z.infer<typeof DefinitionNamespace>;
+
 export const AttributeDefinition = z.object({
   id: z.string(),
   event_id: z.string(),
-  namespace: z.enum(["core", "organizer"]),
+  namespace: DefinitionNamespace,
   key: z.string(),
   label: z.string(),
   scope: z.enum(["guest", "party", "event"]),
@@ -36,8 +57,8 @@ export const AttributeDefinition = z.object({
   /** When a guest must answer: always, only when going, or never. */
   required_rule: z.enum(["always", "going", "never"]),
   creator: z.string(),
-  /** Set when a store's customization field created the question: the field it came from. */
-  vendor_field: z.object({ key: z.string(), label: z.string(), kind: z.string() }).optional()
+  /** Set when a store's customization field created the question: the field it came from and its provenance. */
+  vendor_field: VendorField.optional()
 });
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
 

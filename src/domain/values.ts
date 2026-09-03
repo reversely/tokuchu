@@ -100,6 +100,18 @@ export function slugValue(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
 }
 
+/**
+ * The canonical definition key for a store's requirement: the store's field key as a slug with the
+ * store's own name stripped from the front, so customworks_star_map_location at customworks.myshopify.com
+ * and star_map_location at another store name one concept.
+ */
+export function canonicalRequirementKey(fieldKey: string, shopDomain: string): string {
+  const slug = slugValue(fieldKey);
+  const storeName = slugValue(shopDomain.replace(/^https?:\/\//, "").split(".")[0] ?? "");
+  const stripped = storeName && slug.startsWith(`${storeName}_`) ? slug.slice(storeName.length + 1) : slug;
+  return stripped || slug;
+}
+
 export function controlFor(def: AttributeDefinition): "text" | "textarea" | "number" | "checkbox" | "radio" | "checkboxes" | "date" | "file" | "select" {
   switch (def.value_type) {
     case "text":

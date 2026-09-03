@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { AttributeDefinition } from "./types";
-import { aggregate, controlFor, validateValue } from "./values";
+import { aggregate, canonicalRequirementKey, controlFor, validateValue } from "./values";
 
-const def = (value_type: AttributeDefinition["value_type"], constraints: AttributeDefinition["constraints"] = {}): AttributeDefinition => ({ id: "d", event_id: "e", namespace: "organizer", key: "k", label: "Field", scope: "guest", value_type, constraints, default_visibility: [], required_rule: "always", creator: "test" });
+describe("canonicalRequirementKey", () => {
+  it("slugs the store's field key and strips the store's own name from the front", () => {
+    expect(canonicalRequirementKey("star_map_location", "springbuilt.myshopify.com")).toBe("star_map_location");
+    expect(canonicalRequirementKey("customworks_star_map_location", "customworks.myshopify.com")).toBe("star_map_location");
+    expect(canonicalRequirementKey("customworks-star-map-location", "https://customworks.myshopify.com")).toBe("star_map_location");
+    expect(canonicalRequirementKey("customworks_star_map_location", "springbuilt.myshopify.com")).toBe("customworks_star_map_location");
+    expect(canonicalRequirementKey("Printed Name", "")).toBe("printed_name");
+  });
+});
+
+const def =(value_type: AttributeDefinition["value_type"], constraints: AttributeDefinition["constraints"] = {}): AttributeDefinition => ({ id: "d", event_id: "e", namespace: "organizer", key: "k", label: "Field", scope: "guest", value_type, constraints, default_visibility: [], required_rule: "always", creator: "test" });
 
 describe("validateValue per value type", () => {
   it("text trims and checks max length and pattern", () => {

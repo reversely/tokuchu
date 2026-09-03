@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetState, publishEvent } from "../domain/store";
 import { updateGift, type GiftInput } from "../domain/gifts";
 import type { PersonalizationField } from "../domain/types";
-import { approveSpecs, createEventFromBody, createGiftFromBody, followUp, giftRequirements, giftView, patchRsvp, requestFromAttendees, setPersonalizationMappings, snapshot, submitRsvp } from "./api";
+import { approveSpecs, createEventFromBody, createGiftFromBody, followUp, giftRequirements, giftView, inviteView, patchRsvp, requestFromAttendees, setPersonalizationMappings, snapshot, submitRsvp } from "./api";
 import { setMailer, type MailMessage } from "./mail";
 
 const BODY = {
@@ -93,6 +93,35 @@ describe("comparing the store's fields with what the event holds", () => {
     const motto = snapshot(event.id).definitions.find((d) => d.key === "motto")!;
     expect(motto).toMatchObject({ scope: "guest", value_type: "text", constraints: { max_length: 20 }, required_rule: "going", creator: "organizer", vendor_field: { key: "motto", kind: "text" } });
     expect(giftView(event.id, gift.id).personalization_mappings).toContainEqual({ vendor_field_key: "motto", source: { type: "definition", definition_id: motto.id, subject_scope: "guest" } });
+  });
+
+  it("creates a vendor-namespace question under the canonical key with the store's field as provenance", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = createGiftFromBody(event.id, { product_id: "gid://shopify/Product/7", shop_domain: "customworks.myshopify.com", product_title: "Star map", personalization: { fields: [{ key: "customworks_star_map_location", label: "Location", kind: "location", required: true, constraints: {} }] } });
+    await requestFromAttendees(event.id, gift.id);
+    const location = snapshot(event.id).definitions.find((d) => d.vendor_field?.requirement_id === "customworks_star_map_location")!;
+    expect(location).toMatchObject({ namespace: "vendor", key: "star_map_location", scope: "guest", vendor_field: { key: "customworks_star_map_location", label: "Location", kind: "location", vendor_id: "customworks.myshopify.com", product_id: "gid://shopify/Product/7", requirement_schema_id: "customworks.myshopify.com/gid://shopify/Product/7", requirement_id: "customworks_star_map_location" } });
+    expect(giftView(event.id, gift.id).personalization_mappings).toContainEqual({ vendor_field_key: "customworks_star_map_location", source: { type: "definition", definition_id: location.id, subject_scope: "guest" } });
+    // The invite and the snapshot treat the question like any organizer question.
+    expect(inviteView(event.invite_code!).questions.map((q) => q.id)).toContain(location.id);
+    expect(snapshot(event.id).definitions.filter((d) => d.scope === "guest").map((d) => d.id)).toContain(location.id);
+  });
+
+  it("maps a second product's same-meaning field onto the existing definition instead of creating another", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const first = seedGift(event.id);
+    await requestFromAttendees(event.id, first.id);
+    const before = snapshot(event.id).definitions;
+    const location = before.find((d) => d.key === "star_map_location")!;
+    const second = createGiftFromBody(event.id, { product_id: "gid://shopify/Product/7", shop_domain: "customworks.myshopify.com", product_title: "Star map", personalization: { fields: [{ key: "customworks_star_map_location", label: "Where the stars were", kind: "location", required: true, constraints: {} }, { key: "customworks_engraving_text", label: "Engraving", kind: "text", required: true, constraints: {} }] } });
+    expect(giftRequirements(event.id, second.id).find((r) => r.key === "customworks_star_map_location")).toMatchObject({ source: "definition", definition_id: location.id, already: true });
+    expect(giftRequirements(event.id, second.id).find((r) => r.key === "customworks_engraving_text")).toMatchObject({ source: "question", already: false });
+    await requestFromAttendees(event.id, second.id);
+    const after = snapshot(event.id).definitions;
+    expect(after.filter((d) => d.key === "star_map_location")).toHaveLength(1);
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.find((d) => d.key === "engraving_text")).toMatchObject({ namespace: "vendor", vendor_field: { key: "customworks_engraving_text", vendor_id: "customworks.myshopify.com" } });
+    expect(giftView(event.id, second.id).personalization_mappings).toContainEqual({ vendor_field_key: "customworks_star_map_location", source: { type: "definition", definition_id: location.id, subject_scope: "guest" } });
   });
 
   it("turns the mug's image field into a file question that takes an https address and refuses plain text", async () => {
