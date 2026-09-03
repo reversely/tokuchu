@@ -8,22 +8,6 @@ export const INTRO_BEATS = [
   "Tokuchu can help. Using WebMCP across Shopify's catalog of stores it finds a full suite of personalized merchandise and fills every unit in from one source of truth: Tokuchu's RSVP list."
 ];
 
-const ART = String.raw`
-                 *                 .           *
-        .                 *               .
-                     .            __
-   *                        _.-'"  \`
-              .       _.-'"'    .        *
-                _.-'"'
-          _.-'"'      .
-        [==]                  o
-        /||\      *          /|\
-       / || \               / \
-      /  ||  \        .
-         ||
-       __||__
-`;
-
 const TYPE_MS = 22;
 const BEAT_PAUSE_MS = 1400;
 
@@ -62,7 +46,7 @@ export function Intro({ autoplay, onDone }: Props) {
 
   return (
     <div className="intro" data-testid="intro" data-beat={beat} role="dialog" aria-label="The story behind this walkthrough">
-      <pre className="intro-art" aria-label="A person standing beside a telescope under the stars">{ART}</pre>
+      <img className="intro-art" src="/media/jack.webp" alt="Jack at a telescope under a crescent moon" />
       <div className="intro-copy">
         <span className="intro-count">{beat + 1} of {INTRO_BEATS.length}</span>
         <p className="intro-text" data-testid="intro-text" aria-live="polite">
