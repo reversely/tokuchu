@@ -54,3 +54,17 @@ The store page registers the grant's tools on `document.modelContext` through `r
 The merchant tools and Shopify's page tools exist only on the store's pages. Tokuchu's server opens a page of the store in a headless browser (`src/server/store-page.ts`), injects the WebMCP polyfill before the page scripts run so that both Shopify's script and the theme asset register their tools, waits for `getTools()` to list them, and calls them with `executeTool`.js` beside the polyfill. The cart the tools build belongs to that browser session. The `checkoutUrl` the cart tool returns, `/cart/c/{token}?key=...`, opens the same cart at Shopify's checkout in any browser, which is how the cart leaves the session and reaches the organizer.
 
 The optional curation run (`POST /api/events/{id}/curate`) wraps hops 1 and 2 in an agent whose tool steps stream to the dashboard.
+
+## The agent trace
+
+Every hop above records one entry on the event (`src/server/trace.ts`, the `traces` list of the snapshot at `GET /api/events/{id}`): the side that answered, the transport, the endpoint, the tool, a summary of the arguments and the result, `ok`, `duration_ms`, and the gift or guest it concerns. The table names what each recorder writes in the `endpoint` field.
+
+| Recorder | Side | Transport | Endpoint recorded | Tools |
+| --- | --- | --- | --- | --- |
+| the catalog client, wrapped by `traceClient` | `catalog` at the Global Catalog, `store` at a shop's own endpoint | `ucp` | `https://catalog.shopify.com/api/ucp/mcp` or `https://{shop}/api/ucp/mcp` | `search_catalog`, `lookup_catalog`, `get_product`, `create_cart`, `update_cart`, `get_cart`, `create_checkout`, `get_order` |
+| the delivery probe | `store` | `ucp` | `https://{shop}/api/ucp/mcp` | `create_checkout` |
+| the headless store page, wrapped by `tracePage` | `store` | `page-tool` | the product page's URL | `get_customization`, `add_customized_to_cart` |
+| the MCP endpoint | `organizer` for the organizer's own token, `store` for a grant's holder | `mcp` | `/api/events/{id}/mcp` | every tool the token may call; the token id is the entry's `caller` |
+| the assistant's tools | `organizer` | `agent` | `assistant` | the assistant's tool names, the same lines the chat shows under a reply |
+
+The dashboard's Agent trace drawer lists the event's entries newest first; the store-facing page at `/store/{grantId}` lists the entries about the grant's procurement and no other.

@@ -5,7 +5,7 @@
  */
 import { syncGift } from "../agent/cart";
 import { giftsFor } from "../domain/gifts";
-import { cartDeps } from "./cart-api";
+import { cartDepsFor } from "./cart-api";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { noteRsvpWrite } from "./proactive";
 
@@ -23,7 +23,7 @@ export function afterRsvpWrite(eventId: string): void {
     if (!gift.cart_id || gift.locked_at) continue;
     const previous = pending.get(gift.id) ?? Promise.resolve();
     const next = Promise.all([previous, committed])
-      .then(() => withPersistedEvent(eventId, () => syncGift(eventId, gift.id, cartDeps())))
+      .then(() => withPersistedEvent(eventId, () => syncGift(eventId, gift.id, cartDepsFor(eventId, gift.id))))
       .catch((e: unknown) => console.error(`Cart sync for gift ${gift.id} failed: ${(e as Error).message}`));
     pending.set(gift.id, next);
   }

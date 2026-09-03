@@ -10,11 +10,12 @@ import type { CartBlocked, CartLine } from "../domain/types";
 import { personalized } from "../domain/personalization";
 import { moveProcurement } from "../domain/procurement";
 import { postUpdate, requireGift } from "./api";
-import { cartDeps } from "./cart-api";
+import { cartDepsFor } from "./cart-api";
 import { runCatalogCartFill } from "./catalog-cart";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { noteCartResult } from "./proactive";
 import { withStorePage, type StorePage } from "./store-page";
+import { recordTrace, tracePage, type TraceDraft } from "./trace";
 
 export type CartItem = { recipient_ref: string; variant_id: string; values: Record<string, string> };
 export type CartItems = { items: CartItem[]; skipped: { guest_id: string; reason: string }[] };
@@ -78,7 +79,7 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
  */
 export async function runCartFill(eventId: string, giftId: string, deps: CartJobDeps = liveDeps): Promise<void> {
   // A product with no customization fields has no merchant tool to call; its cart is the store's own UCP cart.
-  if (!personalized(requireGift(eventId, giftId))) return runCatalogCartFill(eventId, giftId, cartDeps());
+  if (!personalized(requireGift(eventId, giftId))) return runCatalogCartFill(eventId, giftId, cartDepsFor(eventId, giftId));
   const started = new Date().toISOString();
   const plan = await withPersistedEvent(eventId, () => {
     const gift = requireGift(eventId, giftId);
@@ -93,7 +94,9 @@ export async function runCartFill(eventId: string, giftId: string, deps: CartJob
   }
   let reply: ToolReply;
   try {
-    const call = await deps.withPage(plan.pageUrl, (page) => page.call("add_customized_to_cart", { items: plan.items, idempotency_key: plan.idempotencyKey }));
+    // The page call runs outside a persisted scope, so its trace entry writes through one of its own (#55).
+    const trace = { gift_id: giftId, record: (draft: TraceDraft) => withPersistedEvent(eventId, () => void recordTrace(eventId, draft)) };
+    const call = await deps.withPage(plan.pageUrl, (page) => tracePage(eventId, plan.pageUrl, page, trace).call("add_customized_to_cart", { items: plan.items, idempotency_key: plan.idempotencyKey }));
     reply = call.payload as ToolReply;
     if (call.isError && !Array.isArray(reply.ready)) throw new Error(String(reply.error ?? JSON.stringify(reply)));
   } catch (e) {

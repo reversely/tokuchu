@@ -16,6 +16,7 @@ import { GuestStatus, PersonalizationMapping, type Batch, type ChatMessage, type
 import { deliveryTarget } from "../lib/delivery";
 import { BadRequestError, createGiftFromBody, followUp, giftView, importGuests, patchRsvp, requestFromAttendees, requireEvent, requireGift, requireGuest, setPersonalizationMappings, snapshot, updateEventFromBody } from "../server/api";
 import { giftSearch } from "../server/search";
+import { summarize, traced } from "../server/trace";
 import type { Candidate, Funnel } from "./search";
 
 export const MODEL = "gpt-5.6-luna";
@@ -145,8 +146,24 @@ function candidateFromGift(gift: Batch): Candidate {
   };
 }
 
-/** Records every invocation for the endpoint's tool_calls and the UI's running state. */
-function summarized<T extends FunctionTool<CurationContext, never, unknown>>(state: RunState, options: RunOptions, t: T): T {
+/** The argument fields an entry keeps per tool where the input carries attendee text: the guest list's line count and the reply's ids without the answers. */
+const TRACE_ARGS: Record<string, (input: Record<string, unknown>) => unknown> = {
+  add_guests: (input) => ({ lines: String(input.text ?? "").split("\n").filter((l) => l.trim()).length }),
+  set_guest_reply: (input) => ({ guest_id: input.guest_id, status: input.status, answers: input.answers ? "given" : null })
+};
+
+/** The tool's JSON input as an object, for the trace's argument summary. */
+function parsedInput(input: string): Record<string, unknown> {
+  try {
+    const value = JSON.parse(input) as unknown;
+    return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Records every invocation for the endpoint's tool_calls, the UI's running state, and the event's trace (#55). */
+function summarized<T extends FunctionTool<CurationContext, never, unknown>>(state: RunState, options: RunOptions, eventId: string, t: T): T {
   const invoke = t.invoke;
   return {
     ...t,
@@ -154,13 +171,21 @@ function summarized<T extends FunctionTool<CurationContext, never, unknown>>(sta
       const call = { tool: t.name, label: LABELS[t.name] ?? t.name };
       state.calls.push(call);
       options.onTool?.(call);
-      return invoke.call(t, runContext, input, details);
+      const raw = parsedInput(input);
+      const args = TRACE_ARGS[t.name]?.(raw) ?? raw;
+      const giftId = typeof raw.gift_id === "string" ? raw.gift_id : state.giftId;
+      // The SDK hands the tool's return back as a JSON string; a tool that answered with an error field did not succeed.
+      const outcome = (out: unknown) => (typeof out === "string" ? parsedInput(out) : ((out ?? {}) as Record<string, unknown>));
+      return traced(eventId, { side: "organizer", transport: "agent", endpoint: "assistant", tool: t.name, args, gift_id: giftId, guest_id: typeof raw.guest_id === "string" ? raw.guest_id : null, caller: "assistant" }, () => invoke.call(t, runContext, input, details), {
+        ok: (out) => !("error" in outcome(out) || "errors" in outcome(out)),
+        result: (out) => summarize(outcome(out))
+      });
     }
   };
 }
 
 function makeTools(sdk: Sdk, ctx: CurationContext, state: RunState, options: RunOptions) {
-  return rawTools(sdk, ctx, state, options).map((t) => summarized(state, options, t as never));
+  return rawTools(sdk, ctx, state, options).map((t) => summarized(state, options, ctx.eventId, t as never));
 }
 
 function rawTools({ tool }: Sdk, ctx: CurationContext, state: RunState, options: RunOptions) {

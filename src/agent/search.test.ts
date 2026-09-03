@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CatalogClient } from "@webmcp/shopify-ucp";
-import { eligibility, personalizedRequest, priceFit, rank, searchCandidates, searchesForSentence, withDelivery, type Candidate, type EventContext } from "./search";
+import { eligibility, emptyFunnel, personalizedRequest, priceFit, rank, searchCandidates, searchesForSentence, withDelivery, type Candidate, type EventContext } from "./search";
 
 const CTX: EventContext = { event_date: "2030-01-10", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" }, budget_cents: 2000, quantity: 20, today: "2029-12-20" };
 
@@ -39,6 +39,20 @@ describe("searchCandidates", () => {
     expect((client.calls[0] as { filters: Record<string, unknown> }).filters).not.toHaveProperty("price");
     expect(funnel.searches[0]).toMatchObject({ query: "cookie favors", price_max: null, returned: 1 });
     expect(eligibility(out[0], { ...CTX, budget_cents: 0 }).eligible).toBe(true);
+  });
+
+  it("leaves a funnel row naming a failed search and keeps the other searches' products (#55)", async () => {
+    const client = fakeClient({ "gift sets": [product("p1", "a.myshopify.com", 1500)] });
+    client.searchCatalog = async (params: { query: string }) => {
+      if (params.query === "party favors") throw new Error("HTTP 503 from the catalog");
+      return { products: [product("p1", "a.myshopify.com", 1500)] } as never;
+    };
+    const funnel = emptyFunnel();
+    const out = await searchCandidates(client, [{ query: "gift sets" }, { query: "party favors" }, { query: "favour boxes" }], CTX, { funnel });
+    expect(out.map((c) => c.product_id)).toEqual(["p1"]);
+    expect(out[0].searches).toEqual(["gift sets", "favour boxes"]);
+    expect(funnel.searches.map((s) => [s.query, s.returned, s.error ?? null])).toEqual([["gift sets", 1, null], ["party favors", 0, "HTTP 503 from the catalog"], ["favour boxes", 1, null]]);
+    expect(funnel.merged).toBe(1);
   });
 
   it("maps a sentence to itself plus the cards it names", () => {

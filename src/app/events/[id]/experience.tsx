@@ -9,6 +9,7 @@ import type { AttributeDefinition, Batch, GuestStatus } from "../../../domain/ty
 import { dateOnly, dateTime, money } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
 import type { CurationProposal } from "../../../agent/curation-agent";
+import { LastCalls, tracesOfGift, tracesOfSearch } from "./trace";
 
 type Step = "pick" | "results" | "recipients" | "mapping" | "list";
 /** What the curate endpoint returns (#120); the stream wraps it as { kind: "done", ...reply }. */
@@ -397,6 +398,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
               <section aria-labelledby="gx-results">
                 <h1 className="title" id="gx-results">Results for {searchedFor}</h1>
                 <p className="lead">{Math.min(shown, reply.ranked.length)} of {reply.funnel?.ranked ?? reply.ranked.length} shown</p>
+                <LastCalls entries={tracesOfSearch(snap.traces)} testId="trace-inline-results" />
                 {reply.funnel && (
                   <div className="list" style={{ marginBottom: 24 }} data-testid="funnel">
                     {reply.funnel.searches.map((s, i) => (
@@ -485,6 +487,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
                       <div style={{ fontWeight: 600 }}>{g.product_title}</div>
                       <div className="m">{[g.shop_domain, `${units} ${units === 1 ? "unit" : "units"}`, money(total, currency), g.cutoff ? `checks out ${dateOnly(g.cutoff)}` : "checkout date on approval", g.cart_id ? "priced at the shop" : "", g.locked_at ? "checked out" : ""].filter(Boolean).join(" / ")}</div>
                       <div className="m">{g.quantities.map((q) => `${g.variants.find((v) => v.id === q.variant_id)?.title ?? "Variant"} ${q.quantity}`).join(" / ") || "no units yet"}</div>
+                      <LastCalls entries={tracesOfGift(snap.traces, g.id)} testId="trace-inline-gift" />
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button type="button" className="btn ghost small" onClick={() => beginEdit(g)} data-testid="edit-gift">Edit</button>

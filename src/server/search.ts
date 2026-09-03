@@ -4,7 +4,7 @@
  * and 2 rank the result (PRD Sections 8, 10, 11). Extracted from the search route so both access
  * paths run one code path.
  */
-import { catalogClient } from "@webmcp/shopify-ucp";
+import { catalogClient, storefrontEndpoint, type CatalogClient } from "@webmcp/shopify-ucp";
 import { CUSTOMSHOP_SOURCE, customshopCandidates } from "../agent/customshop";
 import {
   DEFAULT_SOURCES,
@@ -28,6 +28,8 @@ import {
 import { guestsFor } from "../domain/store";
 import { deliveryTarget } from "../lib/delivery";
 import { BadRequestError, requireEvent } from "./api";
+import { withStorePage } from "./store-page";
+import { summarize, traceClient, traced, tracedStorePage } from "./trace";
 
 export type GiftSearchBody = { card?: string; sentence?: string; probe?: number };
 export type GiftSearchReply = {
@@ -43,13 +45,34 @@ export type GiftSearchReply = {
 };
 
 /** The custom shop's products beside the catalog's; a shop that does not answer leaves a funnel row naming the error and no candidates. */
-async function customshopRows(ctx: EventContext, funnel: Funnel): Promise<Candidate[]> {
+async function customshopRows(eventId: string, client: CatalogClient, ctx: EventContext, funnel: Funnel): Promise<Candidate[]> {
   try {
-    return await customshopCandidates(ctx, { funnel });
+    return await customshopCandidates(ctx, { funnel, client, withPage: tracedStorePage(eventId, withStorePage), probe: probeFor(eventId, funnel) });
   } catch (e) {
     funnel.searches.push({ query: CUSTOMSHOP_SOURCE, returned: 0, total: null, error: (e as Error).message });
     return [];
   }
+}
+
+/** The endpoint a delivery probe posts its `create_checkout` to. */
+const probeEndpoint = (shop: string) => storefrontEndpoint(shop.replace(/^https?:\/\//, ""));
+
+/**
+ * The delivery probe with a trace entry per call (#55). A probe that throws records the failure,
+ * leaves a funnel row naming it, and returns the candidate with the error on its delivery, so the
+ * other candidates' verdicts stand.
+ */
+function probeFor(eventId: string, funnel: Funnel): typeof withDelivery {
+  return async (candidate, ctx, fetchImpl) => {
+    const call = { side: "store" as const, transport: "ucp" as const, endpoint: probeEndpoint(candidate.shop_domain), tool: "create_checkout", args: { product_id: candidate.product_id, destination: ctx.venue.postal_code } };
+    try {
+      return await traced(eventId, call, () => withDelivery(candidate, ctx, fetchImpl), { ok: (c) => !c.delivery?.error, result: (c) => summarize(c.delivery) });
+    } catch (e) {
+      const error = (e as Error).message;
+      funnel.searches.push({ query: `probe ${candidate.shop_domain}`, returned: 0, total: null, error });
+      return { ...candidate, delivery: { window: null, text: null, confidence: "unknown", verdict: "unknown", error } };
+    }
+  };
 }
 
 /**
@@ -70,17 +93,18 @@ export async function giftSearch(eventId: string, body: GiftSearchBody): Promise
   if (!target.needed_by) throw new BadRequestError("Set where the gifts are delivered and by when before searching.");
   const ctx: EventContext = { event_date: target.needed_by, venue: target.address, budget_cents: event.cost_per_person_cents, quantity: going, today: new Date().toISOString().slice(0, 10), personalized: card ? !!card.personalized : personalizedRequest(body.sentence ?? "") };
   const started = Date.now();
-  const client = catalogClient();
+  const client = traceClient(event.id, catalogClient());
   const funnel = emptyFunnel();
   const found = await searchCandidates(client, searches, ctx, { limit: 50, pages: 2, sleepMs: 1500, funnel });
-  const custom = sources.includes(CUSTOMSHOP_SOURCE) ? await customshopRows(ctx, funnel) : [];
+  const custom = sources.includes(CUSTOMSHOP_SOURCE) ? await customshopRows(event.id, client, ctx, funnel) : [];
+  const probe = probeFor(event.id, funnel);
   // The candidates that use the budget best and offer the most variants get the detail and a
   // delivery probe, a few shops at a time; the probe cap keeps a broad search inside a minute.
   const cap = Math.max(1, Math.min(body.probe ?? 30, 60));
   const preScore = (c: (typeof found)[number]) => priceFit(c.price_cents, ctx.budget_cents) * 2 + Math.min(c.variants.length, 6) / 6;
   const shortlist = [...found].filter((c) => ctx.budget_cents === null || c.price_cents === null || c.price_cents <= ctx.budget_cents).sort((a, b) => preScore(b) - preScore(a)).slice(0, cap);
   const probed: typeof shortlist = [];
-  for (let i = 0; i < shortlist.length; i += 6) probed.push(...(await Promise.all(shortlist.slice(i, i + 6).map(async (c) => withDelivery(await withDetail(client, c), ctx)))));
+  for (let i = 0; i < shortlist.length; i += 6) probed.push(...(await Promise.all(shortlist.slice(i, i + 6).map(async (c) => probe(await withDetail(client, c), ctx, fetch)))));
   funnel.probed = probed.length;
   const probedIds = new Set(probed.map((c) => c.product_id));
   const all = [...probed, ...found.filter((c) => !probedIds.has(c.product_id)), ...custom];

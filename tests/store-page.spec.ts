@@ -71,6 +71,15 @@ test("the signed link opens the grant's page with only the granted fields; a rev
   const changes = (await (await request.get(`/api/events/${id}/changes?gift=${giftId}&after=0`)).json()) as { changes: { type: string; actor_type: string }[] };
   expect(changes.changes.at(-1)).toMatchObject({ type: "exception_opened", actor_type: "vendor" });
 
+  // The page's Agent trace lists the store's own post through the endpoint (#55) and nothing about the rest of the event.
+  const traced = page.getByTestId("store-trace").locator('[data-testid="trace-entry"]');
+  await expect(traced).toHaveCount(1);
+  await expect(traced.first()).toHaveAttribute("data-tool", "post_procurement_update");
+  await expect(traced.first()).toHaveAttribute("data-side", "store");
+  await expect(traced.first()).toHaveAttribute("data-ok", "true");
+  await traced.first().locator("summary").click();
+  await expect(traced.first()).toContainText(`/api/events/${id}/mcp`);
+
   // A second link opens the same session; a tampered link opens nothing.
   await page.goto(`${grant.link.slice(0, -4)}0000`);
   await expect(page.getByTestId("not-found-title")).toHaveText("Page not found");

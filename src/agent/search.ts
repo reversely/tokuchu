@@ -4,7 +4,7 @@
  * the cards it names. Every candidate carries its seller, its variants, and a delivery probe.
  * Stage 1 (eligibility) and Stage 2 (scoring) read only those fields and the event.
  */
-import { addCalendarDays, deliveryVerdict, isOnOrBefore, parseArrivalWindow, probeCheckout, checkoutOptions, shippingPolicyUrl, type CatalogClient, type CatalogProduct, type CheckoutProbe, type DeliveryVerdict } from "@webmcp/shopify-ucp";
+import { addCalendarDays, deliveryVerdict, isOnOrBefore, parseArrivalWindow, probeCheckout, checkoutOptions, shippingPolicyUrl, type CatalogClient, type CatalogProduct, type CheckoutProbe, type DeliveryVerdict, type SearchCatalogResult } from "@webmcp/shopify-ucp";
 import cardsData from "./cards.json";
 
 export type CardSearch = { query: string; categories?: string[] };
@@ -90,7 +90,11 @@ function toCandidate(product: CatalogProduct, search: string): Candidate | null 
   };
 }
 
-/** Runs every search of a card (or the sentence's searches) and merges the products by id; a product found twice keeps both search labels. */
+/**
+ * Runs every search of a card (or the sentence's searches) and merges the products by id; a
+ * product found twice keeps both search labels. A search the catalog fails leaves a funnel row
+ * naming the error and the other searches' products stand (#55).
+ */
 export async function searchCandidates(client: CatalogClient, searches: CardSearch[], ctx: EventContext, options: { limit?: number; pages?: number; sleepMs?: number; funnel?: Funnel } = {}): Promise<Candidate[]> {
   const merged = new Map<string, Candidate>();
   for (const s of searches) {
@@ -103,8 +107,15 @@ export async function searchCandidates(client: CatalogClient, searches: CardSear
     let cursor: string | undefined;
     let returned = 0;
     let total: number | null = null;
+    let error: string | undefined;
     for (let page = 0; page < (options.pages ?? 1); page++) {
-      const result = await client.searchCatalog({ query: s.query, filters: filters as never, context: { address_country: ctx.venue.country, address_region: ctx.venue.region, postal_code: ctx.venue.postal_code } as never, pagination: { limit: options.limit ?? 50, ...(cursor ? { cursor } : {}) } });
+      let result: SearchCatalogResult;
+      try {
+        result = await client.searchCatalog({ query: s.query, filters: filters as never, context: { address_country: ctx.venue.country, address_region: ctx.venue.region, postal_code: ctx.venue.postal_code } as never, pagination: { limit: options.limit ?? 50, ...(cursor ? { cursor } : {}) } });
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+        break;
+      }
       const pg = result.pagination as { has_next_page?: boolean; cursor?: string; next_cursor?: string; total_count?: number } | undefined;
       total = pg?.total_count ?? total;
       for (const product of result.products ?? []) {
@@ -119,7 +130,7 @@ export async function searchCandidates(client: CatalogClient, searches: CardSear
       if (!pg?.has_next_page || !cursor) break;
       if (options.sleepMs) await new Promise((r) => setTimeout(r, options.sleepMs));
     }
-    options.funnel?.searches.push({ query: s.query, categories: s.categories, price_max: ceiling, returned, total });
+    options.funnel?.searches.push({ query: s.query, categories: s.categories, price_max: ceiling, returned, total, ...(error ? { error } : {}) });
     if (options.sleepMs) await new Promise((r) => setTimeout(r, options.sleepMs));
   }
   if (options.funnel) options.funnel.merged = merged.size;

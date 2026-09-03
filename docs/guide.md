@@ -165,6 +165,16 @@ The attendee opens the reply link and saves the full place name. The answer reso
 
 Re-approve records the approval at the new revision and runs the cart job again: `add_customized_to_cart` fills the store's cart with the corrected line and returns a fresh checkout link. The demo tour walks the same store steps after the approvals, with the store's page in a frame beside the callout.
 
+## 16. The agent trace
+
+Every WebMCP and UCP call Tokuchu makes or answers is recorded on the event: the catalog searches and the delivery probes, the store page's `get_customization` and `add_customized_to_cart`, the store's UCP cart and checkout calls, each call a token holder makes at the MCP endpoint, and each tool the assistant runs. One entry holds the side that answered (Tokuchu, the store, or the catalog), the transport, the endpoint or page it went to, the tool, a short summary of the arguments and the result, whether it succeeded, and how long it took. A summary keeps the top-level values and the shapes of nested ones, so an attendee's row never lands in it.
+
+Agent trace in the band opens the drawer on any tab. On a wide screen it is a column beside the sheet, after the assistant's column when both are open; on a narrow screen it opens over the page and Close collapses it. The entries arrive newest first with the four-second poll, and each one expands to where it went and what it carried.
+
+Guest Experience shows the same entries where they belong: the last calls of a search under the results heading, and the last calls about a gift under the gift in the list. The store-facing page shows the calls about its order, including the posts the store itself made through the endpoint.
+
+A catalog call that fails leaves a row in the search funnel naming the error and a failed entry in the trace; the other searches' products stand and the search still returns them.
+
 ## When something looks wrong
 
 - **A search shows 0 of 0 in the catalog.** The catalog answered with nothing for that query and ceiling. Try a broader sentence.

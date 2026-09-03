@@ -605,6 +605,41 @@ export const Request = z.object({
 });
 export type Request = z.infer<typeof Request>;
 
+/* ---- The agent trace ---- */
+
+/** Which end made or answered a call: the organizer's own tools, a store's tools or endpoint, or Shopify's Global Catalog. */
+export const TraceSide = z.enum(["organizer", "store", "catalog"]);
+export type TraceSide = z.infer<typeof TraceSide>;
+
+/** How the call travelled: a WebMCP page tool run in a page, a UCP JSON-RPC endpoint, Tokuchu's MCP endpoint, or the assistant's in-process tool. */
+export const TraceTransport = z.enum(["page-tool", "ucp", "mcp", "agent"]);
+export type TraceTransport = z.infer<typeof TraceTransport>;
+
+/**
+ * One WebMCP or UCP call the app made or answered (#55): where it went, what it carried in
+ * summary, whether it succeeded, and how long it took. Summaries hold top-level scalars and the
+ * shapes of nested values, never a secret or an attendee's full row.
+ */
+export const TraceEntry = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  at: z.string(),
+  side: TraceSide,
+  transport: TraceTransport,
+  /** The endpoint URL, the page URL, or the route the call went to. */
+  endpoint: z.string(),
+  tool: z.string(),
+  args: z.string(),
+  result: z.string(),
+  ok: z.boolean(),
+  duration_ms: z.number().int(),
+  gift_id: z.string().nullable().default(null),
+  guest_id: z.string().nullable().default(null),
+  /** Who made the call: Tokuchu itself, the assistant, or the token id of a holder calling the MCP endpoint. */
+  caller: z.string().nullable().default(null)
+});
+export type TraceEntry = z.infer<typeof TraceEntry>;
+
 /** A synonym row proposes a mapping when a variant title matches the pattern for an option label; the table ships empty. */
 export const SynonymRow = z.object({ option_label_pattern: z.string(), variant_title_pattern: z.string() });
 export type SynonymRow = z.infer<typeof SynonymRow>;

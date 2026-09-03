@@ -5,6 +5,7 @@ import { Overview } from "./overview";
 import { Experience, type SearchReply } from "./experience";
 import { Attendees } from "./attendees";
 import { Chat } from "./chat";
+import { TraceDrawer } from "./trace";
 import { WebMcpProvider } from "../../webmcp-provider";
 import { Tour } from "../../demo/tour";
 import { withDemoHeaders } from "../../../demo/token";
@@ -20,6 +21,8 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
   const [origin, setOrigin] = useState("");
   /** The last catalog search, kept across tab switches so the ask bar can answer from it. */
   const [lastSearch, setLastSearch] = useState<SearchReply | null>(null);
+  /** The Agent trace drawer (#55): a column beside the sheet on every tab while open, and a drawer over the page on a narrow screen. */
+  const [traceOpen, setTraceOpen] = useState(false);
   const event = snap.event;
 
   useEffect(() => {
@@ -55,6 +58,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
         <div className="right">
           <WebMcpProvider eventId={event.id} />
           <span className={`pill${event.status === "published" ? " live" : ""}`} data-testid="status">{event.status === "published" ? "Published" : "Draft"}</span>
+          <button className="btn ghost" type="button" onClick={() => setTraceOpen((open) => !open)} aria-pressed={traceOpen} data-testid="trace-toggle">Agent trace</button>
           {invite && (
             <button className="btn ghost" type="button" onClick={() => { navigator.clipboard?.writeText(invite); setCopied(true); setTimeout(() => setCopied(false), 1500); }} data-testid="copy-invite">
               {copied ? "Copied" : "Copy invite link"}
@@ -63,7 +67,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
           {account}
         </div>
       </header>
-      <main className={`sheet${snap.llm_enabled ? " with-chat" : ""}`}>
+      <main className={`sheet${snap.llm_enabled ? " with-chat" : ""}${traceOpen ? " with-trace" : ""}`}>
         <div className="sheet-main">
           {tab === "overview" ? (
             <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} onOpenExperience={() => setTab("experience")} />
@@ -74,6 +78,7 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
           )}
         </div>
         {snap.llm_enabled && <Chat eventId={event.id} messages={snap.messages} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />}
+        {traceOpen && <TraceDrawer entries={snap.traces} onClose={() => setTraceOpen(false)} />}
       </main>
       {snap.demo && <Tour snap={snap} />}
     </>

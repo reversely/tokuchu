@@ -4,11 +4,12 @@
  * tools and its update form call the MCP endpoint with the grant's token, so the token id travels
  * with the view.
  */
-import type { AccessGrant, GrantPermission, ProcurementException, VendorUpdate } from "../domain/types";
+import type { AccessGrant, GrantPermission, ProcurementException, TraceEntry, VendorUpdate } from "../domain/types";
 import { giftRequirements, requireEvent, updatesFor, type Requirement } from "./api";
 import { getGrant, grantStatus, tokenForGrant, tokenScope } from "./grants";
 import { NotFoundError } from "./errors";
 import { fulfillmentManifest, procurementSummary, visibleExceptions, type FulfillmentManifest, type ProcurementSummary } from "./procurement";
+import { TRACE_SNAPSHOT_CAP, tracesForGrant } from "./trace";
 
 export type StoreView = {
   grant: Pick<AccessGrant, "id" | "grantee_type" | "grantee_id" | "permissions" | "expires_at" | "acknowledged_revision">;
@@ -21,6 +22,8 @@ export type StoreView = {
   requirements: Requirement[] | null;
   exceptions: ProcurementException[] | null;
   updates: VendorUpdate[] | null;
+  /** The calls about this procurement (#55): the store's own posts through the endpoint and the app's calls to the store. */
+  traces: TraceEntry[];
 };
 
 /**
@@ -47,6 +50,7 @@ export function storeView(eventId: string, grantId: string): StoreView {
     manifest: may("manifest:read") ? fulfillmentManifest(eventId, giftId, readable) : null,
     requirements: may("requirements:read") ? giftRequirements(eventId, giftId).filter((r) => !r.definition_id || readable.includes(r.definition_id)) : null,
     exceptions: may("manifest:read") ? visibleExceptions(eventId, giftId, readable) : null,
-    updates: may("updates:read") ? updatesFor(eventId, giftId) : null
+    updates: may("updates:read") ? updatesFor(eventId, giftId) : null,
+    traces: tracesForGrant(eventId, grant, { limit: TRACE_SNAPSHOT_CAP })
   };
 }

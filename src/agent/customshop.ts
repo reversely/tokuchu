@@ -8,6 +8,7 @@
  * candidate gets the shared checkout probe for a real delivery verdict.
  */
 import { catalogClient, storefrontEndpoint, type CatalogClient, type CatalogProduct } from "@webmcp/shopify-ucp";
+import type { StorePage } from "../server/store-page";
 import { withDelivery, type Candidate, type EventContext, type Funnel, type PersonalizationField, type Variant } from "./search";
 
 export const CUSTOMSHOP_SOURCE = "customshop";
@@ -54,11 +55,14 @@ export function bareProductId(productId: string): string {
 
 const fieldsCache = new Map<string, PersonalizationField[] | null>();
 
+/** Opens a store page and runs the calls against it; `withStorePage` is the live opener and the search hands in a traced one. */
+export type PageOpener = <T>(pageUrl: string, fn: (page: StorePage) => Promise<T>) => Promise<T>;
+
 /** The default reader: one headless store page, one `get_customization` call per product. */
-async function readFieldsThroughStorePage(pageUrl: string, productIds: string[]): Promise<Map<string, PersonalizationField[] | null>> {
-  const { withStorePage } = await import("../server/store-page");
+async function readFieldsThroughStorePage(pageUrl: string, productIds: string[], open?: PageOpener): Promise<Map<string, PersonalizationField[] | null>> {
+  const withPage = open ?? (await import("../server/store-page")).withStorePage;
   const { parseCustomization } = await import("../server/customization");
-  return withStorePage(pageUrl, async (page) => {
+  return withPage(pageUrl, async (page) => {
     const out = new Map<string, PersonalizationField[] | null>();
     for (const id of productIds) {
       const reply = await page.call("get_customization", { product_id: id });
@@ -111,7 +115,7 @@ function toCandidate(product: CatalogProduct, host: string, url: string, shopNam
  * answers and the shared checkout probe's delivery verdict. Returns nothing without a configured
  * shop, so a run degrades to the other sources.
  */
-export async function customshopCandidates(ctx: EventContext, options: { client?: CatalogClient; fetchImpl?: typeof fetch; funnel?: Funnel; readFields?: FieldsReader } = {}): Promise<Candidate[]> {
+export async function customshopCandidates(ctx: EventContext, options: { client?: CatalogClient; fetchImpl?: typeof fetch; funnel?: Funnel; readFields?: FieldsReader; withPage?: PageOpener; probe?: typeof withDelivery } = {}): Promise<Candidate[]> {
   const url = customshopUrl();
   if (!url) return [];
   const host = new URL(url).host;
@@ -119,8 +123,9 @@ export async function customshopCandidates(ctx: EventContext, options: { client?
   const result = await client.searchCatalog({ pagination: { limit: 50 } });
   const products = result.products ?? [];
   const meta = await storeMeta(url, options.fetchImpl);
-  const fields = await storeFields(url, products.map((p) => bareProductId(p.id)), options.readFields ?? readFieldsThroughStorePage);
-  const candidates = await Promise.all(products.map((p) => withDelivery(toCandidate(p, host, url, meta.name, fields.get(bareProductId(p.id)) ?? null), ctx, options.fetchImpl ?? fetch)));
+  const fields = await storeFields(url, products.map((p) => bareProductId(p.id)), options.readFields ?? ((pageUrl, ids) => readFieldsThroughStorePage(pageUrl, ids, options.withPage)));
+  const probe = options.probe ?? withDelivery;
+  const candidates = await Promise.all(products.map((p) => probe(toCandidate(p, host, url, meta.name, fields.get(bareProductId(p.id)) ?? null), ctx, options.fetchImpl ?? fetch)));
   options.funnel?.searches.push({ query: CUSTOMSHOP_SOURCE, returned: products.length, total: (result.pagination as { total_count?: number } | undefined)?.total_count ?? products.length });
   return candidates;
 }

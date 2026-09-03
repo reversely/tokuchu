@@ -17,6 +17,7 @@ import { grantStatus, tokenScope, writeAsGrantee } from "./grants";
 import { noteUpdatePosted } from "./proactive";
 import { fulfillmentManifest, postProcurementUpdate, procurementSummary } from "./procurement";
 import { cartOperations } from "./registry";
+import { summarize, traced } from "./trace";
 
 export type McpResult = { content: [{ type: "text"; text: string }]; isError?: true };
 const text = (payload: unknown, isError = false): McpResult => (isError ? { content: [{ type: "text", text: JSON.stringify(payload) }], isError: true } : { content: [{ type: "text", text: JSON.stringify(payload) }] });
@@ -236,6 +237,12 @@ async function searchOperation(eventId: string, args: ToolArgs): Promise<unknown
   return body;
 }
 
+/** The gift a call concerns, by either name the tools take. */
+function giftIdOf(args: ToolArgs): string | null {
+  const id = args.gift_id ?? args.procurement_id;
+  return typeof id === "string" ? id : null;
+}
+
 /* ---- JSON-RPC ---- */
 
 export type RpcRequest = { jsonrpc?: string; id?: string | number | null; method: string; params?: Record<string, unknown> };
@@ -266,13 +273,12 @@ export async function handleRpc(eventId: string, stored: CallerToken | null, rpc
     const args = ((rpc.params?.arguments as Record<string, unknown>) ?? {}) as ToolArgs;
     const profile = (args.meta as { "ucp-agent"?: { profile?: string } } | undefined)?.["ucp-agent"]?.profile;
     if (profile) state().tokens.set(stored.id, { ...stored, last_profile_url: profile });
-    try {
-      const result = await dispatch(eventId, token, grant, tool, args);
-      return reply({ ...text(result), structuredContent: result, seq: readLatestSeq() });
-    } catch (e) {
-      if (e instanceof NotFoundError || e instanceof BadRequestError) return reply(text({ error: e.message }, true));
-      throw e;
-    }
+    // Every call records a trace entry (#55): the organizer's own token on the organizer side, a store's holder on the store side.
+    const { meta: _meta, ...shown } = args;
+    const call = { side: token.callable_tools.includes("set_gift_plan") ? ("organizer" as const) : ("store" as const), transport: "mcp" as const, endpoint: `/api/events/${eventId}/mcp`, tool: tool.name, args: shown, gift_id: giftIdOf(args), guest_id: typeof args.guest_id === "string" ? args.guest_id : null, caller: token.id };
+    const outcome = await traced(eventId, call, () => dispatch(eventId, token, grant, tool, args).then((result) => ({ result }), (e: unknown) => (e instanceof NotFoundError || e instanceof BadRequestError ? { error: e.message } : Promise.reject(e))), { ok: (o) => !("error" in o), result: (o) => ("error" in o ? o.error : summarize(o.result)) });
+    if ("error" in outcome) return reply(text({ error: outcome.error }, true));
+    return reply({ ...text(outcome.result), structuredContent: outcome.result, seq: readLatestSeq() });
   }
   return error(-32601, `Unknown method ${rpc.method}.`);
 }

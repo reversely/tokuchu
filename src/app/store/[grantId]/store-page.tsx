@@ -5,6 +5,7 @@ import type { StoreView } from "../../../server/store-view";
 import type { ProcurementUpdateType } from "../../../server/procurement";
 import { executeThroughMcp, registerStoreTools } from "../../../webmcp/register";
 import { useWebMcp, WebMcpPill } from "../../webmcp-provider";
+import { TraceList } from "../../events/[id]/trace";
 
 const UPDATE_TYPES: { value: ProcurementUpdateType; label: string }[] = [
   { value: "accepted", label: "Accepted" },
@@ -154,6 +155,11 @@ export function StorePage({ view }: { view: StoreView }) {
           )}
 
           {grant.permissions.includes("updates:write") && <UpdateForm eventId={event.id} tokenId={view.token_id} procurementId={procurement.procurement_id} attendees={manifest?.attendees.map((a) => a.attendee_ref) ?? []} requirements={keys} />}
+
+          <section className="block" data-testid="store-trace">
+            <div className="labelrow"><h2>Agent trace</h2><span className="tag quiet">{view.traces.length} {view.traces.length === 1 ? "call" : "calls"} about this order</span></div>
+            <TraceList entries={view.traces} empty="No calls about this order yet" />
+          </section>
         </div>
       </main>
     </div>

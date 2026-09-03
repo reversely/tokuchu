@@ -56,6 +56,7 @@ import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } fro
 import { approvalState } from "./approval";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
+import { TRACE_SNAPSHOT_CAP, tracesFor } from "./trace";
 import { grantsFor, grantView } from "./grants";
 import { afterRsvpWrite } from "./hooks";
 import { reconcileGift, requirementsFor, type RequirementConfirmation } from "./reconcile";
@@ -195,7 +196,7 @@ export function snapshot(eventId: string) {
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   tickAfterRead(eventId);
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, procurements: procurementsFor(eventId), requests: requestViews(eventId), exceptions: exceptionsFor(eventId), grants: grantsFor(eventId).map(grantView), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, procurements: procurementsFor(eventId), requests: requestViews(eventId), exceptions: exceptionsFor(eventId), grants: grantsFor(eventId).map(grantView), messages: messagesFor(eventId), traces: tracesFor(eventId, { limit: TRACE_SNAPSHOT_CAP }), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
 }
 
 /* ---- Gifts ---- */

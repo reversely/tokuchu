@@ -7,6 +7,7 @@ import { z } from "zod";
 import { approveGift, CartStateError, liveDeps, lockAndCheckout, lockIsDue, pollOrder, refreshCart, sendGift, syncGift, type CartDeps, type ShortLine } from "../agent/cart";
 import { CartBuyer, DeliveryWindow } from "../domain/types";
 import { BadRequestError, giftView, requireGift } from "./api";
+import { traceClient } from "./trace";
 
 let deps: CartDeps = liveDeps;
 
@@ -23,6 +24,11 @@ export function setCartDeps(next: CartDeps): void {
 
 export function cartDeps(): CartDeps {
   return deps;
+}
+
+/** The deps with the shop client traced on the event and the gift (#55), so every cart call records itself. */
+export function cartDepsFor(eventId: string, giftId: string): CartDeps {
+  return { ...deps, client: () => traceClient(eventId, deps.client(), { gift_id: giftId }) };
 }
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -47,7 +53,7 @@ const SendBody = z.object({ buyer: CartBuyer.nullable().default(null) });
 export async function sendGiftOp(eventId: string, giftId: string, body: unknown) {
   requireGift(eventId, giftId);
   const { buyer } = parseBody(SendBody, body);
-  const proposal = await step(() => sendGift(eventId, giftId, deps, buyer));
+  const proposal = await step(() => sendGift(eventId, giftId, cartDepsFor(eventId, giftId), buyer));
   return { ...giftView(eventId, giftId), proposal };
 }
 
@@ -57,21 +63,21 @@ const ApproveBody = z.object({ delivery_window: DeliveryWindow.nullable().defaul
 export async function approveGiftOp(eventId: string, giftId: string, body: unknown) {
   requireGift(eventId, giftId);
   const { delivery_window } = parseBody(ApproveBody, body);
-  await step(async () => approveGift(eventId, giftId, deps, delivery_window));
+  await step(async () => approveGift(eventId, giftId, cartDepsFor(eventId, giftId), delivery_window));
   return giftView(eventId, giftId);
 }
 
 /** POST .../sync: recompute the quantities and rewrite the cart when they changed. */
 export async function syncGiftOp(eventId: string, giftId: string) {
   requireGift(eventId, giftId);
-  const result = await step(() => syncGift(eventId, giftId, deps));
+  const result = await step(() => syncGift(eventId, giftId, cartDepsFor(eventId, giftId)));
   return { ...giftView(eventId, giftId), ...result };
 }
 
 /** POST .../lock: the checkout now, whatever the cutoff says. */
 export async function lockGiftOp(eventId: string, giftId: string) {
   requireGift(eventId, giftId);
-  await step(() => lockAndCheckout(eventId, giftId, deps));
+  await step(() => lockAndCheckout(eventId, giftId, cartDepsFor(eventId, giftId)));
   return giftView(eventId, giftId);
 }
 
@@ -83,8 +89,8 @@ export async function cartView(eventId: string, giftId: string) {
   let gift = requireGift(eventId, giftId);
   let follow_ups: ShortLine[] = [];
   let update = null;
-  if (lockIsDue(gift, deps.now())) gift = await step(() => lockAndCheckout(eventId, giftId, deps));
-  if (gift.order_id) update = await pollOrder(eventId, giftId, deps);
-  else if (gift.cart_id) follow_ups = (await step(() => refreshCart(eventId, giftId, deps))).follow_ups;
+  if (lockIsDue(gift, deps.now())) gift = await step(() => lockAndCheckout(eventId, giftId, cartDepsFor(eventId, giftId)));
+  if (gift.order_id) update = await pollOrder(eventId, giftId, cartDepsFor(eventId, giftId));
+  else if (gift.cart_id) follow_ups = (await step(() => refreshCart(eventId, giftId, cartDepsFor(eventId, giftId)))).follow_ups;
   return { ...giftView(eventId, giftId), follow_ups, update };
 }

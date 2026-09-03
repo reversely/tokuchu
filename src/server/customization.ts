@@ -9,6 +9,7 @@ import { deriveSchemaId, deriveSchemaVersion, type VendorRequirementSchema } fro
 import { PERSONALIZATION_KINDS, PersonalizationField, type Variant } from "../domain/types";
 import { BadRequestError } from "./errors";
 import { withStorePage, type StorePage } from "./store-page";
+import { tracedStorePage, type TraceDraft } from "./trace";
 
 export type StoreCustomization = { title: string; fields: PersonalizationField[]; variants: Variant[]; selected_variant_id: string | null; schema: VendorRequirementSchema };
 
@@ -67,34 +68,40 @@ const recent = new Map<string, { at: number; value: StoreCustomization }>();
  * a browser on the store page, which takes tens of seconds and most of a small instance's memory, and
  * a second gift write for the same product within minutes gets the same answer.
  */
-async function cachedRead(read: typeof readThroughStorePage, pageUrl: string, productId: string, currency: string): Promise<StoreCustomization> {
+async function cachedRead(read: Reader, pageUrl: string, productId: string, currency: string, trace?: CustomizationTrace): Promise<StoreCustomization> {
   const key = `${pageUrl}|${productId}|${currency}`;
   const hit = recent.get(key);
   if (hit && Date.now() - hit.at < CUSTOMIZATION_TTL_MS) return hit.value;
-  const value = await read(pageUrl, productId, currency);
+  const value = await read(pageUrl, productId, currency, trace);
   recent.set(key, { at: Date.now(), value });
   return value;
 }
 
 type GiftBodyShape = { product_id?: string; shop_domain?: string; product_url?: string | null; variants?: Variant[]; mapping?: { variant_id: string }[]; default_variant_id?: string | null };
 
+/** Where the read's trace entries go (#55): the route collects them and records them on the gift once it exists. */
+export type CustomizationTrace = { eventId: string; record: (draft: TraceDraft) => void };
+
+type Reader = (pageUrl: string, productId: string, currency: string, trace?: CustomizationTrace) => Promise<StoreCustomization>;
+
 /**
  * The gift body with the store's fields and variants in place of the catalog's when the shop answers
  * the merchant tools; any other shop's body passes through unchanged. Mapping rows that name a
  * catalog variant the store does not list drop, since the store's ids replace the catalog's.
  */
-export async function withStoreCustomization(body: unknown, read = readThroughStorePage): Promise<unknown> {
+export async function withStoreCustomization(body: unknown, read: Reader = readThroughStorePage, trace?: CustomizationTrace): Promise<unknown> {
   const gift = (body ?? {}) as GiftBodyShape;
   if (!gift.product_id || !answersMerchantTools(gift.shop_domain)) return body;
   const shopUrl = customshopUrl()!;
   const meta = await storeMeta(shopUrl);
-  const customization = await cachedRead(read, gift.product_url || shopUrl, gift.product_id, meta.currency);
+  const customization = await cachedRead(read, gift.product_url || shopUrl, gift.product_id, meta.currency, trace);
   const known = new Set(customization.variants.map((v) => v.id));
   const mapping = (gift.mapping ?? []).filter((row) => known.has(row.variant_id));
   const defaultVariant = gift.default_variant_id && known.has(gift.default_variant_id) ? gift.default_variant_id : customization.selected_variant_id;
   return { ...gift, variants: customization.variants, mapping, default_variant_id: defaultVariant, personalization: { fields: customization.fields, schema_id: customization.schema.schema_id, schema_version: customization.schema.version } };
 }
 
-function readThroughStorePage(pageUrl: string, productId: string, currency: string): Promise<StoreCustomization> {
-  return withStorePage(pageUrl, (page) => readCustomization(page, productId, currency, new URL(pageUrl).host));
+function readThroughStorePage(pageUrl: string, productId: string, currency: string, trace?: CustomizationTrace): Promise<StoreCustomization> {
+  const open = trace ? tracedStorePage(trace.eventId, withStorePage, { record: trace.record }) : withStorePage;
+  return open(pageUrl, (page) => readCustomization(page, productId, currency, new URL(pageUrl).host));
 }

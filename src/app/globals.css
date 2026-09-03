@@ -204,6 +204,36 @@ table.guests .quiet { color: var(--muted); }
   .chat-toggle { display: inline-flex; position: fixed; right: 16px; bottom: 16px; z-index: 6; box-shadow: 0 8px 24px rgba(11, 16, 32, 0.2); }
 }
 
+/* The agent trace (#55): a column beside the sheet's content on a wide screen, after the chat's column when both are open, and a drawer over the page below 900px. */
+.sheet.with-trace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+.sheet.with-chat.with-trace { grid-template-columns: minmax(0, 1fr) 360px 340px; }
+.trace { display: flex; flex-direction: column; position: sticky; top: 88px; height: calc(100vh - 88px); border-left: 1px solid var(--line); background: var(--white); min-width: 0; }
+.trace-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+.trace-head h2 { font-size: 18px; margin: 0; flex: 1; }
+.trace-count { font-size: 13px; color: var(--muted); }
+.trace-list { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.trace-empty { color: var(--muted); margin: auto 0; text-align: center; }
+.trace-entry { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.trace-entry summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; cursor: pointer; list-style: none; }
+.trace-entry summary::-webkit-details-marker { display: none; }
+.trace-entry code { color: var(--sky-dark); overflow-wrap: anywhere; }
+.trace-side { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.trace-ok { color: #1d6b3a; white-space: nowrap; }
+.trace-fail { color: #b3261e; white-space: nowrap; }
+.trace-detail { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 10px 0 2px; }
+.trace-detail dt { color: var(--muted); }
+.trace-detail dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.trace-detail pre { margin: 0; padding: 6px 8px; border-radius: 8px; background: var(--pale); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trace-inline { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: -20px 0 24px; font-size: 13px; color: var(--muted); }
+.item .trace-inline { margin: 4px 0 0; }
+.trace-inline-label { font-weight: 600; }
+.trace-inline code { color: var(--sky-dark); }
+.store .trace-list { padding: 0; }
+@media (max-width: 900px) {
+  .sheet.with-trace, .sheet.with-chat.with-trace { grid-template-columns: 1fr; }
+  .trace { position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: min(72vh, 600px); border-left: 0; border-top: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 -12px 40px rgba(11, 16, 32, 0.18); z-index: 7; }
+}
+
 /* Attendees records grid: a spreadsheet layout, one row per attendee, one column per answer. */
 table.records { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.records th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 10px 14px; background: var(--pale); border: 1px solid var(--line); white-space: nowrap; }
