@@ -104,10 +104,14 @@ export default async function Page() {
               <li><a href="#contract">The contract</a></li>
               <li><a href="#story">Walkthrough</a></li>
               <li><a href="#why">Why WebMCP</a></li>
-              <li><a href="/events" data-testid="my-events-link">Your events</a></li>
             </ul>
+            <a className="iconbtn" href="/events" aria-label="Your events" title="Your events" data-testid="my-events-link">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+            </a>
+            <a className="iconbtn primary" href={start} aria-label="Create an event" title="Create an event" data-testid="start">
+              <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            </a>
             <SessionPill />
-            <a className="btn primary" href={start} data-testid="start">Create an event</a>
           </div>
         </div>
       </header>
