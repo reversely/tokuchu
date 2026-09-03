@@ -48,6 +48,24 @@ export async function readCustomization(page: StorePage, productId: string, curr
   return parseCustomization(reply.payload, currency);
 }
 
+/** How long one product's customization answer serves later gift writes before the store page is read again. */
+const CUSTOMIZATION_TTL_MS = 5 * 60 * 1000;
+const recent = new Map<string, { at: number; value: StoreCustomization }>();
+
+/**
+ * The store's customization for one product, read once and reused for five minutes. Each read opens
+ * a browser on the store page, which takes tens of seconds and most of a small instance's memory, and
+ * a second gift write for the same product within minutes gets the same answer.
+ */
+async function cachedRead(read: typeof readThroughStorePage, pageUrl: string, productId: string, currency: string): Promise<StoreCustomization> {
+  const key = `${pageUrl}|${productId}|${currency}`;
+  const hit = recent.get(key);
+  if (hit && Date.now() - hit.at < CUSTOMIZATION_TTL_MS) return hit.value;
+  const value = await read(pageUrl, productId, currency);
+  recent.set(key, { at: Date.now(), value });
+  return value;
+}
+
 type GiftBodyShape = { product_id?: string; shop_domain?: string; product_url?: string | null; variants?: Variant[]; mapping?: { variant_id: string }[]; default_variant_id?: string | null };
 
 /**
@@ -60,7 +78,7 @@ export async function withStoreCustomization(body: unknown, read = readThroughSt
   if (!gift.product_id || !answersMerchantTools(gift.shop_domain)) return body;
   const shopUrl = customshopUrl()!;
   const meta = await storeMeta(shopUrl);
-  const customization = await read(gift.product_url || shopUrl, gift.product_id, meta.currency);
+  const customization = await cachedRead(read, gift.product_url || shopUrl, gift.product_id, meta.currency);
   const known = new Set(customization.variants.map((v) => v.id));
   const mapping = (gift.mapping ?? []).filter((row) => known.has(row.variant_id));
   const defaultVariant = gift.default_variant_id && known.has(gift.default_variant_id) ? gift.default_variant_id : customization.selected_variant_id;

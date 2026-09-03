@@ -109,7 +109,11 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
       setReply((await res.json()) as SearchReply);
       setShown(5);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // A TypeError from fetch means the connection dropped before the reply, most often a server restart mid-request; the gift may still have saved.
+      if (e instanceof TypeError) {
+        setError("The connection to Tokuchu dropped before the reply arrived. Check the gifts list and try again if the gift is not there.");
+        onChanged();
+      } else setError(e instanceof Error ? e.message : String(e));
       setStep("pick");
     } finally {
       setSearching(false);
