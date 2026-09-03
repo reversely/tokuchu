@@ -72,24 +72,37 @@ const line = (event) => {
   return `\n${event.text}`;
 };
 
+/** AGENT_START=landing starts the model on the home page with no event, so it creates one through create_event (the demo's first prompt). */
+const START = process.env.AGENT_START === "landing" ? "landing" : "event";
+
 async function main() {
-  const { eventId, token } = await demoSession();
-  const snap = await api("GET", `/api/events/${eventId}`, token);
-  if (!snap.static) throw new Error(`The server at ${BASE} is not in static mode; start it with TOKUCHU_STATIC=1.`);
-  const inviteCode = snap.event.invite_code;
-  console.log(`Tokuchu event ${eventId} at ${BASE} with ${snap.guests.length} guests; model ${MODEL}; transcript ${transcriptPath}`);
+  let context = [];
+  if (START === "landing") {
+    const home = await fetch(`${BASE}/`).catch(() => null);
+    if (!home || !home.ok) throw new Error(`No server at ${BASE}; start it with TOKUCHU_STATIC=1.`);
+    console.log(`Tokuchu landing page ${BASE}/; model ${MODEL}; transcript ${transcriptPath}`);
+    context = [
+      `Tokuchu landing page: ${BASE}/ (it registers the tools that create an event; the event page the reply names carries the rest).`,
+      `Store product page: ${PRODUCT_URL} (product id ${PRODUCT_ID}, shop domain ${SHOP_DOMAIN}).`,
+      `Attendee invite pages: <invite_url from create_event>?guest=<guest id> with the guest id from list_guests; each registers submit_rsvp.`
+    ];
+  } else {
+    const { eventId, token } = await demoSession();
+    const snap = await api("GET", `/api/events/${eventId}`, token);
+    if (!snap.static) throw new Error(`The server at ${BASE} is not in static mode; start it with TOKUCHU_STATIC=1.`);
+    const inviteCode = snap.event.invite_code;
+    console.log(`Tokuchu event ${eventId} at ${BASE} with ${snap.guests.length} guests; model ${MODEL}; transcript ${transcriptPath}`);
+    context = [
+      `Tokuchu event page: ${BASE}/demo?t=${encodeURIComponent(token)} (opens the guest event ${eventId}).`,
+      `Store product page: ${PRODUCT_URL} (product id ${PRODUCT_ID}, shop domain ${SHOP_DOMAIN}).`,
+      `Attendee invite pages: ${BASE}/i/${inviteCode}?guest=<guest id> with the guest id from list_guests; each registers submit_rsvp. When Tokuchu names an attendee as missing an answer, open that attendee's invite page and answer for them with the details the sample reply holds.`,
+      "The event starts with no guests; the event page offers a tool that loads a sample list and returns each attendee's offline details."
+    ];
+  }
   save();
 
   const playbook = readFileSync("docs/agent-runtime.md", "utf8");
-  const prompt = [
-    goal,
-    "",
-    "Context for this run:",
-    `Tokuchu event page: ${BASE}/demo?t=${encodeURIComponent(token)} (opens the guest event ${eventId}).`,
-    `Store product page: ${PRODUCT_URL} (product id ${PRODUCT_ID}, shop domain ${SHOP_DOMAIN}).`,
-    `Attendee invite pages: ${BASE}/i/${inviteCode}?guest=<guest id> with the guest id from list_guests; each registers submit_rsvp. When Tokuchu names an attendee as missing an answer, open that attendee's invite page and answer for them with submit_rsvp, using their existing display_name and status going.`,
-    "The event starts with no guests; the event page offers a tool that loads a sample list and returns each attendee's offline details."
-  ].join("\n");
+  const prompt = [goal, "", "Context for this run:", ...context].join("\n");
 
   const browser = await localBrowser.launch({ headless: false, viewport: { width: 1440, height: 900 } });
   const stagehand = await Stagehand.create({ browser });
