@@ -1,6 +1,7 @@
 import { listOwnedEvents } from "../../server/persistence";
 import { MyEvents } from "../my-events";
 import { accountOrSignIn } from "../organizer-gate";
+import { LandingWebMcp } from "../landing-webmcp";
 import { SessionPill } from "../session-pill";
 
 /** The signed-in organizer's events with a link into each and one to a new draft. */
@@ -12,6 +13,7 @@ export default async function Page() {
         <a className="brand" href="/">Tokuchu</a>
         <div className="right">
           <a className="btn primary" href="/events/new" data-testid="new-event-link">Create a new event</a>
+          <LandingWebMcp pill />
           <SessionPill />
         </div>
       </header>

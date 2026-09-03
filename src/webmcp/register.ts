@@ -40,6 +40,31 @@ export async function executeThroughApi(tool: ToolDefinition, eventId: string, a
   }
 }
 
+/** Registers the landing tools (create_event, add_guests) on a page with no event: the home page and the events list. */
+export async function registerLandingTools({ fetchImpl, signal, onToolCall }: { fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void }): Promise<RegisterResult> {
+  const modelContext = document.modelContext;
+  if (!modelContext) return { supported: false };
+  const doFetch = fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const landing = TOOLS.filter((t) => t.scopes.includes("landing"));
+  for (const tool of landing) {
+    await modelContext.registerTool(
+      {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        execute: async (args, options) => {
+          const started = Date.now();
+          const result = await executeThroughApi(tool, "", (args ?? {}) as ToolArgs, doFetch, options?.signal);
+          onToolCall?.({ name: tool.name, args: (args ?? {}) as ToolArgs, result, ok: !result.isError, duration_ms: Date.now() - started });
+          return result;
+        }
+      },
+      { signal }
+    );
+  }
+  return { supported: true, toolNames: landing.map((t) => t.name) };
+}
+
 /** Registers the organizer's tools; `exclude` names the ones a static-mode page leaves off (#56). */
 export async function registerTokuchuTools({ eventId, fetchImpl, signal, onToolCall, exclude = [] }: { eventId: string; fetchImpl?: typeof fetch; signal: AbortSignal; onToolCall?: (event: ToolCallEvent) => void; exclude?: readonly string[] }): Promise<RegisterResult> {
   const modelContext = document.modelContext;

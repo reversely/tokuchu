@@ -4,7 +4,7 @@
  * `tokuchu-agent-task` meta tag, so an agent that reads the DOM and one that reads the head both
  * find it. docs/agent-playbook.md spells the same order out for a person.
  */
-export type AgentPage = "event" | "invite" | "store";
+export type AgentPage = "landing" | "event" | "invite" | "store";
 export type AgentTask = { summary: string; steps: string[] };
 
 export const AGENT_TASK_META = "tokuchu-agent-task";
@@ -45,7 +45,17 @@ const STORE: AgentTask = {
   ]
 };
 
-const TASKS: Record<AgentPage, AgentTask> = { event: EVENT, invite: INVITE, store: STORE };
+const LANDING: AgentTask = {
+  summary: "Tokuchu's landing page registers the tools that start an event: create_event and add_guests. The event page the reply names carries the rest.",
+  steps: [
+    "List the tools with document.modelContext.getTools().",
+    "Call create_event with the title and the start and the venue and the guest list; keep the event_id and open the url it returns.",
+    "Call add_guests with the event_id to add more guests later; a name already on the list is skipped.",
+    "On the event page list the tools again and continue with list_guests."
+  ]
+};
+
+const TASKS: Record<AgentPage, AgentTask> = { landing: LANDING, event: EVENT, invite: INVITE, store: STORE };
 
 export function agentTask(page: AgentPage): AgentTask {
   return TASKS[page];

@@ -165,6 +165,8 @@ Report each tool call you make and a one-line summary of its result, then the ch
 | `record_checkout(tab_id, gift_id)` | Posts the checkout link the runtime captured from the cart fill onto the gift through the page's `post_update` with kind `confirmed`, so the model never copies the token |
 | `switch_tab(tab_id)` | Brings a tab to the front |
 
+The home page and the events list register `create_event` and `add_guests`, so a run can start with no event: `create_event` takes the title, the start, the venue, and the guest list and answers with the event URL that carries the session owning it. The event page registers `import_guests` for later additions.
+
 The runtime names no Tokuchu or store tool. The launcher is a demonstration rather than a fully generic agent: before the run it opens `/demo` for a guest event and hands the model the event URL, the demo store's product page and id, the invite page pattern, and the fact that the event starts empty. The event page registers `load_sample_attendees`, a WebMCP tool that adds ten sample attendees as going and returns each one's offline details (`src/demo/sample-attendees.json`); the model discovers it like any other tool and every call from there is its choice. It needs the static server (`TOKUCHU_STATIC=1 npm run dev -- -p 3114`, or another address in `AGENT_BASE`), `OPENAI_API_KEY` in `.env` or the environment, Chrome 149 or later, and the network for the demo store. Each run writes a transcript to `tests/videos/agent-run-<stamp>.json`; the transcript carries the demo guest token in the event URL, so redact `?t=` before sharing one.
 
 ## The scripted run

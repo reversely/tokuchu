@@ -7,7 +7,7 @@
 import type { AttributeDefinition, GuestStatus } from "../domain/types";
 
 export type ToolArgs = Record<string, unknown>;
-export type Scope = "organizer" | "vendor" | "attendee";
+export type Scope = "organizer" | "vendor" | "attendee" | "landing";
 
 export interface JsonSchemaProperty {
   type: "string" | "integer" | "number" | "boolean" | "object" | "array";
@@ -19,6 +19,9 @@ export interface JsonSchemaProperty {
   format?: "date" | "uri";
   minimum?: number;
   maximum?: number;
+  /** A nested object's own properties and required keys. */
+  properties?: Record<string, JsonSchemaProperty>;
+  required?: readonly string[];
 }
 export interface JsonObjectSchema {
   type: "object";
@@ -201,6 +204,47 @@ export const TOOLS: ToolDefinition[] = [
     },
     scopes: ["organizer"],
     route: (a) => (a.gift_id ? { method: "PATCH", path: "/api/events/:eventId/gifts/{gift_id}", body: (x) => ({ rules: x.rules }) } : { method: "POST", path: "/api/events/:eventId/gifts", body: (x) => giftCreateBody(x) })
+  },
+  {
+    name: "create_event",
+    description: "Creates and publishes an event with its guest list and returns the event page URL and the invite URL. A signed-in organizer owns it; a browser with no session gets a guest event whose URL carries the guest's token, so open that URL next. Guests are one per line as a name or Name <email> or a bare email.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "The event's title" },
+        starts_at: { type: "string", description: "When it starts as an ISO 8601 date and time with a zone" },
+        host: { type: "string", description: "Who hosts it" },
+        description: { type: "string", description: "A line for the invite" },
+        venue: { type: "object", description: "Where it happens and where gifts are delivered", properties: { name: { type: "string", description: "The venue's name" }, line1: { type: "string", description: "The street address" }, city: { type: "string", description: "The city" }, region: { type: "string", description: "The province or state code" }, postal_code: { type: "string", description: "The postal code" }, country: { type: "string", description: "A two-letter country code" } }, required: ["name"] },
+        spots: { type: "integer", description: "The capacity when there is one" },
+        rsvp_deadline: { type: "string", description: "The last day to reply as YYYY-MM-DD" },
+        needed_by: { type: "string", description: "The day gifts must arrive as YYYY-MM-DD" },
+        guests: { type: "array", description: "The guest list, one line per guest", items: { type: "string" } }
+      },
+      required: ["title", "starts_at", "venue"],
+      additionalProperties: false
+    },
+    scopes: ["landing"],
+    route: { method: "POST", path: "/api/agent/events", body: (a) => ({ title: a.title, starts_at: a.starts_at, host: a.host, description: a.description, venue: a.venue, spots: a.spots, rsvp_deadline: a.rsvp_deadline, needed_by: a.needed_by, guests: a.guests ?? [] }) }
+  },
+  {
+    name: "add_guests",
+    description: "Adds guests to an event this browser owns, one per line as a name or Name <email> or a bare email; a name already on the list is skipped. Returns how many were added and their guest ids.",
+    inputSchema: {
+      type: "object",
+      properties: { event_id: { type: "string", description: "The event id create_event returned" }, guests: { type: "array", description: "One line per guest", items: { type: "string" } } },
+      required: ["event_id", "guests"],
+      additionalProperties: false
+    },
+    scopes: ["landing"],
+    route: { method: "POST", path: "/api/events/{event_id}/guests/import", body: (a) => ({ lines: a.guests }) }
+  },
+  {
+    name: "import_guests",
+    description: "Adds guests to this event, one per line as a name or Name <email> or a bare email; a name already on the list is skipped. Returns how many were added and their guest ids.",
+    inputSchema: { type: "object", properties: { guests: { type: "array", description: "One line per guest", items: { type: "string" } } }, required: ["guests"], additionalProperties: false },
+    scopes: ["organizer"],
+    route: { method: "POST", path: "/api/events/:eventId/guests/import", body: (a) => ({ lines: a.guests }) }
   },
   {
     name: "load_sample_attendees",

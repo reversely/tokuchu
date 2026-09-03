@@ -9,7 +9,7 @@
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs } from "./api";
+import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs, importGuests } from "./api";
 import { setGiftCustomization, withStoreCustomization } from "./customization";
 import { loadSampleAttendees } from "./sample-attendees";
 import { newId, state } from "../domain/store";
@@ -176,6 +176,8 @@ async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant 
       // Without a gift the plan creates one from its first rule's product (#56); the store read the route makes stays off in static mode.
       if (!args.gift_id) return createGiftFromBody(eventId, await withStoreCustomization(giftCreateBody(args)));
       return updateGiftFromBody(eventId, String(args.gift_id), { rules: args.rules });
+    case "import_guests":
+      return importGuests(eventId, { lines: args.guests });
     case "load_sample_attendees":
       return loadSampleAttendees(eventId);
     case "set_gift_customization":
