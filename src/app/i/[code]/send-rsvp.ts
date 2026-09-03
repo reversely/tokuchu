@@ -5,9 +5,10 @@
  */
 import type { GuestStatus } from "../../../domain/types";
 
-export type RecordedGuest = { id: string; display_name: string; status: GuestStatus; values: Record<string, unknown> };
+export type RecordedGuest = { id: string; display_name: string; status: GuestStatus; email: string | null; values: Record<string, unknown> };
 export type RsvpOutcome = { ok: true; guest: RecordedGuest } | { ok: false; status: number; error: string };
-export type RsvpSend = { eventId: string; guestId: string | null; displayName: string; status: GuestStatus; answers: Record<string, unknown> };
+/** The email is where a later request for the attendee's details goes; a reply without one cannot be reached. */
+export type RsvpSend = { eventId: string; guestId: string | null; displayName: string; status: GuestStatus; email?: string | null; answers: Record<string, unknown> };
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -25,14 +26,14 @@ export async function sendRsvp(send: RsvpSend, fetchImpl: typeof fetch = fetch):
   }
 }
 
-async function request({ eventId, guestId, displayName, status, answers }: RsvpSend, fetchImpl: typeof fetch): Promise<RsvpOutcome> {
+async function request({ eventId, guestId, displayName, status, email, answers }: RsvpSend, fetchImpl: typeof fetch): Promise<RsvpOutcome> {
   const events = `/api/events/${encodeURIComponent(eventId)}`;
   if (guestId) {
-    const response = await fetchImpl(`${events}/rsvp/${encodeURIComponent(guestId)}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ status, answers }) });
+    const response = await fetchImpl(`${events}/rsvp/${encodeURIComponent(guestId)}`, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ status, answers, ...(email ? { email: email.trim() } : {}) }) });
     if (!response.ok) return failure(response);
     return { ok: true, guest: (await response.json()) as RecordedGuest };
   }
-  const created = await fetchImpl(`${events}/rsvp`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ guests: [{ display_name: displayName.trim(), status, answers }] }) });
+  const created = await fetchImpl(`${events}/rsvp`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ ...(email ? { party: { contact: { email: email.trim() } } } : {}), guests: [{ display_name: displayName.trim(), status, answers }] }) });
   if (!created.ok) return failure(created);
   const { guest_ids } = (await created.json()) as { guest_ids: string[] };
   const guest = await fetchImpl(`${events}/rsvp/${encodeURIComponent(guest_ids[0])}`);

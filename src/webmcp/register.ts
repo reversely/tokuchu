@@ -81,7 +81,7 @@ export async function registerRsvpTool({ eventId, guestId, definitions, response
       execute: async (raw) => {
         const started = Date.now();
         const args = (raw ?? {}) as ToolArgs;
-        const outcome = await sendRsvp({ eventId, guestId: typeof args.guest_id === "string" && args.guest_id ? args.guest_id : guestId, displayName: String(args.display_name ?? ""), status: args.status as GuestStatus, answers: rsvpAnswers(definitions, args) }, fetchImpl ?? globalThis.fetch.bind(globalThis));
+        const outcome = await sendRsvp({ eventId, guestId: typeof args.guest_id === "string" && args.guest_id ? args.guest_id : guestId, displayName: String(args.display_name ?? ""), status: args.status as GuestStatus, email: typeof args.email === "string" ? args.email : null, answers: rsvpAnswers(definitions, args) }, fetchImpl ?? globalThis.fetch.bind(globalThis));
         const result = outcome.ok
           ? textResult({ guest_id: outcome.guest.id, display_name: outcome.guest.display_name, status: outcome.guest.status, answers: Object.fromEntries(Object.entries(outcome.guest.values).map(([id, value]) => [keyOf.get(id) ?? id, value])) }, false)
           : textResult({ error: outcome.error, status: outcome.status }, true);

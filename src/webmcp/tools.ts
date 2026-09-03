@@ -45,6 +45,7 @@ export interface ToolDefinition {
 
 const REPLY = { type: "string", description: "The attendee's reply", enum: ["going", "maybe", "cant_go"] } as const;
 const DISPLAY_NAME = { type: "string", description: "The attendee's name as the organizer's list shows it" } as const;
+const EMAIL = { type: "string", description: "The attendee's email address; a later request for missing details goes there. Required for a reply of going or maybe" } as const;
 const GUEST_ID = { type: "string", description: "The guest id an earlier reply returned; send it to edit the same record" } as const;
 
 const FILTER = { type: "string", description: "A filter as field:op:value clauses joined by ';' (fields: status, role, attendance.<segment id>, party.size, or a definition id; ops: eq, neq, in, not_in, gt, gte, lt, lte, contains, present, missing). Empty means every guest." } as const;
@@ -56,10 +57,10 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "submit_rsvp",
     description: "Records the attendee's reply and answers on this invite. The schema lists one property per question the attendee has been asked with the store's limits. A first call creates the guest and returns a guest_id; a call with that guest_id edits the same record.",
-    inputSchema: { type: "object", properties: { display_name: DISPLAY_NAME, status: REPLY, guest_id: GUEST_ID }, required: ["display_name", "status"], additionalProperties: false },
+    inputSchema: { type: "object", properties: { display_name: DISPLAY_NAME, status: REPLY, email: EMAIL, guest_id: GUEST_ID }, required: ["display_name", "status", "email"], additionalProperties: false },
     scopes: ["attendee"],
     // The invite page rebuilds inputSchema from its questions with rsvpInputSchema and sends an edit as PATCH /rsvp/{guest_id} (send-rsvp.ts).
-    route: { method: "POST", path: "/api/events/:eventId/rsvp", body: (a) => ({ guests: [{ display_name: a.display_name, status: a.status, answers: a.answers ?? {} }] }) }
+    route: { method: "POST", path: "/api/events/:eventId/rsvp", body: (a) => ({ ...(a.email ? { party: { contact: { email: a.email } } } : {}), guests: [{ display_name: a.display_name, status: a.status, answers: a.answers ?? {} }] }) }
   },
   {
     name: "get_guest",
@@ -236,15 +237,15 @@ function questionProperty(def: AttributeDefinition): JsonSchemaProperty {
 }
 
 /**
- * The submit_rsvp schema for one invite: the name, the event's response options, an optional guest
- * id, and one property per guest-scope question named by its key. A question required when going is
+ * The submit_rsvp schema for one invite: the name, the event's response options, the email a later
+ * request goes to, an optional guest id, and one property per guest-scope question named by its key. A question required when going is
  * required in the schema, since the tool exists to answer the organizer's request.
  */
 export function rsvpInputSchema(definitions: AttributeDefinition[], responseOptions: GuestStatus[]): JsonObjectSchema {
   const asked = definitions.filter((d) => d.scope === "guest" && d.required_rule !== "never" && askable(d));
-  const properties: Record<string, JsonSchemaProperty> = { display_name: DISPLAY_NAME, status: { ...REPLY, enum: responseOptions }, guest_id: GUEST_ID };
+  const properties: Record<string, JsonSchemaProperty> = { display_name: DISPLAY_NAME, status: { ...REPLY, enum: responseOptions }, email: EMAIL, guest_id: GUEST_ID };
   for (const def of asked) properties[def.key] = questionProperty(def);
-  const required = ["display_name", "status", ...asked.filter((d) => d.required_rule === "going" || d.required_rule === "always").map((d) => d.key)];
+  const required = ["display_name", "status", "email", ...asked.filter((d) => d.required_rule === "going" || d.required_rule === "always").map((d) => d.key)];
   return { type: "object", properties, required, additionalProperties: false };
 }
 

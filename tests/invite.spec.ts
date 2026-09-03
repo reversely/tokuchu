@@ -16,7 +16,9 @@ test("a guest replies going with answers, then edits, then cancels from the same
   await expect(page.getByTestId("send")).toBeDisabled();
   await page.getByTestId("guest-name").fill("Guest One");
   await page.getByTestId("status").getByRole("button", { name: "Going" }).click();
-  // Going makes the required questions required; the button waits for them.
+  // Going makes the email and the required questions required; the button waits for them.
+  await expect(page.getByTestId("send")).toBeDisabled();
+  await page.getByTestId("guest-email").fill("one@example.com");
   await expect(page.getByTestId("send")).toBeDisabled();
   await page.getByTestId("answer-printed_name").getByRole("textbox").fill("One");
   await page.getByTestId("answer-dietary").getByRole("button", { name: "Choice A" }).click();
@@ -27,11 +29,14 @@ test("a guest replies going with answers, then edits, then cancels from the same
 
   let snap = (await (await request.get(`/api/events/${id}`)).json()) as { guests: { display_name: string; status: string; values: Record<string, unknown> }[]; counts: Record<string, number> };
   expect(snap.guests[0]).toMatchObject({ display_name: "Guest One", status: "going" });
+  const guestId = url.slice(url.indexOf("?guest=") + 7);
+  expect(await (await request.get(`/api/events/${id}/rsvp/${guestId}`)).json()).toMatchObject({ email: "one@example.com" });
   expect(Object.values(snap.guests[0].values)).toEqual(expect.arrayContaining(["One", ["a"]]));
 
   // The same link reloads the reply and saves a change.
   await page.goto(url);
   await expect(page.getByTestId("guest-name")).toHaveValue("Guest One");
+  await expect(page.getByTestId("guest-email")).toHaveValue("one@example.com");
   await page.getByTestId("answer-printed_name").getByRole("textbox").fill("One R.");
   await page.getByTestId("send").click();
   await expect(page.getByTestId("saved")).toHaveText("Saved as Going");

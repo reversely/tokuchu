@@ -574,10 +574,10 @@ export function submitRsvp(eventId: string, body: unknown) {
     const invited = invitedMatch(eventId, g.display_name, email, used);
     let guest: Guest;
     if (invited) {
-      // A listed guest replies: their row takes the status and the answers; the party keeps its contact.
+      // A listed guest replies: their row takes the status and the answers, and an address in the reply becomes the party's contact.
       guest = g.status ? setGuestStatus(invited.id, g.status, "guest") : invited;
       for (const [segment, present] of Object.entries(g.attendance ?? {})) guest = setGuestAttendance(guest.id, segment, present);
-      if (email) { const p = state().parties.get(guest.party_id); if (p && !p.contact.email) state().parties.set(p.id, { ...p, contact: { ...p.contact, email } }); }
+      if (email) setPartyEmail(guest.party_id, email);
     } else {
       created.party ??= createParty(eventId, parsed.data.party);
       guest = createGuest(eventId, created.party.id, { display_name: g.display_name, role: g.role, status: g.status, attendance: g.attendance });
@@ -604,7 +604,7 @@ function writeAnswer(eventId: string, guest: Guest, definitionId: string, raw: u
   }
 }
 
-export const RsvpPatch = z.object({ status: GuestStatus.optional(), attendance: z.record(z.string(), z.boolean()).optional(), answers: Answers.optional(), source: z.string().default("guest") });
+export const RsvpPatch = z.object({ status: GuestStatus.optional(), attendance: z.record(z.string(), z.boolean()).optional(), answers: Answers.optional(), email: z.string().email().optional(), source: z.string().default("guest") });
 
 /** A guest edits or cancels from the same link at any time; an edit after approval marks the row changed. */
 export function patchRsvp(eventId: string, guestId: string, body: unknown) {
@@ -616,9 +616,10 @@ export function patchRsvp(eventId: string, guestId: string, body: unknown) {
   for (const [definitionId, raw] of Object.entries(parsed.data.answers ?? {})) writeAnswer(eventId, guest, definitionId, raw, parsed.data.source);
   for (const [segment, present] of Object.entries(parsed.data.attendance ?? {})) guest = setGuestAttendance(guestId, segment, present);
   if (parsed.data.status) guest = setGuestStatus(guestId, parsed.data.status, parsed.data.source);
+  if (parsed.data.email) setPartyEmail(guest.party_id, parsed.data.email);
   requestFromLateAttendees(eventId);
   afterRsvpWrite(eventId);
-  return { ...guest, values: valuesFor(guest) };
+  return { ...guest, email: partyEmail(guest.party_id), values: valuesFor(guest) };
   });
 }
 
@@ -632,10 +633,21 @@ export function readFilter(raw: unknown): Filter {
   }
 }
 
+/** The address a request for the guest's details goes to: the party's contact. */
+function partyEmail(partyId: string): string | null {
+  return state().parties.get(partyId)?.contact.email ?? null;
+}
+
+/** A reply's address replaces the party's contact: the attendee's own address beats whatever the list carried. */
+function setPartyEmail(partyId: string, email: string): void {
+  const p = state().parties.get(partyId);
+  if (p && p.contact.email !== email) state().parties.set(p.id, { ...p, contact: { ...p.contact, email } });
+}
+
 export function guestView(eventId: string, guestId: string, fields?: string[]) {
   const guest = requireGuest(eventId, guestId);
   const values = valuesFor(guest);
-  return { ...guest, values: fields ? Object.fromEntries(Object.entries(values).filter(([k]) => fields.includes(k))) : values };
+  return { ...guest, email: partyEmail(guest.party_id), values: fields ? Object.fromEntries(Object.entries(values).filter(([k]) => fields.includes(k))) : values };
 }
 
 export function guestList(eventId: string, filter: Filter, fields?: string[]) {

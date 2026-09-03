@@ -36,9 +36,9 @@ test("the invite registers submit_rsvp with the requested questions; a call reco
   expect(schema.properties.name_on_map).toMatchObject({ type: "string", maxLength: 20 });
   expect(schema.properties.variant_size).toMatchObject({ type: "string", enum: ["s", "m", "l"] });
   expect(schema.properties.status).toMatchObject({ enum: ["going", "maybe", "cant_go"] });
-  expect(schema.required).toEqual(expect.arrayContaining(["display_name", "status", "name_on_map", "variant_size"]));
+  expect(schema.required).toEqual(expect.arrayContaining(["display_name", "status", "email", "name_on_map", "variant_size"]));
 
-  const recorded = await execute(page, { display_name: "Maya", status: "going", name_on_map: "Maya M.", variant_size: "m" });
+  const recorded = await execute(page, { display_name: "Maya", status: "going", email: "maya@example.com", name_on_map: "Maya M.", variant_size: "m" });
   expect(recorded.isError).toBe(false);
   const reply = JSON.parse(recorded.text) as { guest_id: string; status: string; answers: Record<string, unknown> };
   expect(reply.guest_id).toMatch(/^guest_/);
@@ -48,6 +48,7 @@ test("the invite registers submit_rsvp with the requested questions; a call reco
   expect(guests.guests).toHaveLength(1);
   expect(guests.guests[0]).toMatchObject({ id: reply.guest_id, display_name: "Maya", status: "going" });
   expect(Object.values(guests.guests[0].values)).toEqual(expect.arrayContaining(["Maya M.", "m"]));
+  expect(await (await request.get(`/api/events/${id}/rsvp/${reply.guest_id}`)).json()).toMatchObject({ email: "maya@example.com" });
 
   // The returned guest id edits the same record; the edit shows on the dashboard.
   const edited = await execute(page, { guest_id: reply.guest_id, display_name: "Maya", status: "going", variant_size: "l" });

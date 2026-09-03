@@ -69,6 +69,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
   const { event, questions } = invite;
   const [name, setName] = useState("");
   const [status, setStatus] = useState<GuestStatus | null>(null);
+  const [email, setEmail] = useState("");
   const [answers, setAnswers] = useState<Answers>({});
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<{ guest_id: string } | null>(guestId ? { guest_id: guestId } : null);
@@ -87,8 +88,9 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
           setBadLink(true);
           return;
         }
-        const g = (await r.json()) as { display_name: string; status: GuestStatus; values: Answers };
+        const g = (await r.json()) as { display_name: string; status: GuestStatus; email: string | null; values: Answers };
         setName(g.display_name);
+        setEmail(g.email ?? "");
         setStatus(g.status === "no_reply" ? null : g.status);
         setAnswers(g.values);
       })
@@ -98,14 +100,17 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
 
   const required = (q: AttributeDefinition) => q.required_rule === "always" || (q.required_rule === "going" && status === "going");
   const missing = questions.filter((q) => required(q) && (answers[q.id] === undefined || answers[q.id] === "" || (Array.isArray(answers[q.id]) && (answers[q.id] as unknown[]).length === 0)));
-  const canSend = name.trim() && status && missing.length === 0;
+  /** A reply of going or maybe needs an address, since a later request for missing details is emailed. */
+  const needsEmail = status === "going" || status === "maybe";
+  const emailOk = !needsEmail || /^\S+@\S+\.\S+$/.test(email.trim());
+  const canSend = name.trim() && status && emailOk && missing.length === 0;
 
   async function send(nextStatus?: GuestStatus) {
     setSaving(true);
     setError(null);
     const finalStatus = nextStatus ?? status!;
     // A cancel keeps the saved answers; an edit sends the form's.
-    const outcome = await sendRsvp({ eventId: event.id, guestId: done?.guest_id ?? null, displayName: name, status: finalStatus, answers: nextStatus ? {} : answers });
+    const outcome = await sendRsvp({ eventId: event.id, guestId: done?.guest_id ?? null, displayName: name, status: finalStatus, email: email.trim() || null, answers: nextStatus ? {} : answers });
     if (outcome.ok) {
       if (!done) {
         setDone({ guest_id: outcome.guest.id });
@@ -156,6 +161,11 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                   <input id="name" value={name} onChange={(e) => setName(e.target.value)} data-testid="guest-name" />
                 </div>
                 <div className="field">
+                  <label htmlFor="email">Your email</label>
+                  <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="guest-email" />
+                  <p className="hint" style={{ color: "var(--muted)" }}>If the organizer needs a detail from you for your gift, the request comes to this address.</p>
+                </div>
+                <div className="field">
                   <label>Your reply</label>
                   <div className="chips" data-testid="status">
                     {event.response_options.map((s) => (
@@ -166,7 +176,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                 {questions.map((q) => (
                   <Question key={q.id} def={q} value={answers[q.id]} disabled={saving} onChange={(v) => setAnswers({ ...answers, [q.id]: v })} />
                 ))}
-                {missing.length > 0 && status && <p className="hint" style={{ color: "var(--muted)" }}>Still needed: {missing.map((q) => q.label).join(" and ")}</p>}
+                {status && (!emailOk || missing.length > 0) && <p className="hint" style={{ color: "var(--muted)" }}>Still needed: {[...(!emailOk ? ["your email"] : []), ...missing.map((q) => q.label)].join(" and ")}</p>}
                 <div className="foot">
                   <p className="note">{done ? "Saved for this link" : "This link keeps your reply"}</p>
                   <div style={{ display: "flex", gap: 10 }}>

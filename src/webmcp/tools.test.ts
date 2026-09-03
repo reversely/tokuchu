@@ -52,12 +52,13 @@ describe("the submit_rsvp schema", () => {
       type: "object",
       properties: {
         display_name: { type: "string", description: expect.any(String) },
+        email: { type: "string", description: expect.any(String) },
         status: { type: "string", description: expect.any(String), enum: ["going", "cant_go"] },
         guest_id: { type: "string", description: expect.any(String) },
         name_on_map: { type: "string", description: "Name on the map; required when going", maxLength: 20 },
         variant_size: { type: "string", description: "Size; required when going", enum: ["s", "m"] }
       },
-      required: ["display_name", "status", "name_on_map", "variant_size"],
+      required: ["display_name", "status", "email", "name_on_map", "variant_size"],
       additionalProperties: false
     });
   });
@@ -66,8 +67,8 @@ describe("the submit_rsvp schema", () => {
     const { properties, required } = rsvpInputSchema(defs, ["going"]);
     expect(properties.map_time).toMatchObject({ type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" });
     expect(properties.map_date).toMatchObject({ type: "string", format: "date" });
-    expect(Object.keys(properties)).toEqual(["display_name", "status", "guest_id", "map_time", "map_date"]);
-    expect(required).toEqual(["display_name", "status", "map_time", "map_date"]);
+    expect(Object.keys(properties)).toEqual(["display_name", "status", "email", "guest_id", "map_time", "map_date"]);
+    expect(required).toEqual(["display_name", "status", "email", "map_time", "map_date"]);
   });
   it("keys the answers by definition id and drops the tool's own arguments", () => {
     expect(rsvpAnswers(asked, { display_name: "A", status: "going", name_on_map: "Maya", variant_size: "m", other: 1 })).toEqual({ def_1: "Maya", def_2: "m" });
