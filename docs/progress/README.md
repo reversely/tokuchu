@@ -18,3 +18,5 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-02-tour-intro-desktop.png` and `2026-09-02-tour-intro-mobile.png`: the tour's opening story, Jack beside a telescope in ASCII with the first beat typed out.
 - `2026-09-02-issue-27-contract-before.png`: the contract section before issue 27 with the first two columns stretched to the form mock and a blank block under their last rows.
 - `2026-09-02-issue-27-contract-after.png`: the contract section after issue 27 with each column ending at its last row and the three tops still aligned.
+- `2026-09-02-issue-28-header-before.png`: the signed-in home header at 1440 and 1280 wide with the anchors breaking inside their labels and Sign out and Create an event on two lines.
+- `2026-09-02-issue-28-header-after.png`: the same header after the fix: every label on one line and the address pill truncated with an ellipsis.

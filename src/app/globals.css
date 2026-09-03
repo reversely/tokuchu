@@ -245,6 +245,15 @@ table.records .quiet { color: var(--muted); }
 .home .navlinks { display: flex; align-items: center; gap: 20px; }
 .home .session { display: flex; align-items: center; gap: 10px; margin: 0; }
 .home .pill { background: var(--soft); color: var(--navy); border-color: transparent; }
+/* The header stays one line: no label breaks inside itself and the signed-in address truncates instead of pushing the links. */
+.home .nav ul a, .home .nav .btn { white-space: nowrap; }
+.home .nav .pill { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A signed-in row carries the address and Sign out as well, so it runs wider than the sheet and packs tighter, and below 1280 it drops the section anchors, keeping Your events. */
+.home .nav .row:has(.session) { width: min(1280px, 100% - 48px); }
+.home .nav .row:has(.session) ul { gap: 18px; }
+.home .nav .row:has(.session) .navlinks { gap: 14px; }
+.home .nav .row:has(.session) .session { gap: 8px; }
+@media (max-width: 1279px) { .home .nav .row:has(.session) li:not(:has([data-testid="my-events-link"])) { display: none; } }
 @media (max-width: 760px) { .home .nav ul { display: none; } }
 .home .btn { gap: 8px; font-weight: 600; font-size: 15px; padding: 11px 20px; border-radius: 999px; border: 1px solid transparent; transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s, box-shadow 0.18s; }
 .home .btn.primary { background: var(--sky-dark); color: #fff; }
@@ -360,8 +369,9 @@ table.records .quiet { color: var(--muted); }
   .tabs button { padding: 8px 10px; font-size: 14px; white-space: nowrap; }
   .tour-callout { width: calc(100vw - 32px); padding: 14px 16px 14px; }
   .tour-callout h2 { font-size: 19px; }
-  .home .nav .row { height: auto; padding: 10px 0; }
-  .home .nav .navlinks { gap: 8px; }
+  .home .nav .row { height: auto; padding: 10px 0; flex-wrap: wrap; }
+  .home .nav .navlinks { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .home .nav .pill { display: none; }
   .home .nav .btn { white-space: nowrap; padding: 8px 12px; font-size: 14px; }
   .home .hero { padding: 16px 0 28px; }
   .home .hero-banner { margin: 0 auto; max-width: 100%; -webkit-mask-image: none; mask-image: none; }
