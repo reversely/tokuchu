@@ -1,15 +1,16 @@
-/** The landing page at the root: the sequence lists its thirteen arrows, the story's beats name a tool on each page, and the primary action opens the draft at /events/new. */
+/** The landing page groups WebMCP tools into four utilities and explains the Stagehand browser-agent runtime. */
 import { expect, test } from "@playwright/test";
 
 const TOOLS = ["get_customization", "set_gift_customization", "add_customized_to_cart"];
 
-test("the root renders the sequence and the story and the primary action leads to the draft", async ({ page, request }) => {
+test("the root renders the two-site flow and Stagehand architecture and the primary action opens a draft", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByTestId("arrows").locator("li")).toHaveCount(14);
-  await expect(page.getByTestId("sequence").locator("img")).toHaveAttribute("src", "/media/agent-sequence.webp");
-  await expect(page.getByTestId("walkthrough-step")).toHaveCount(9);
-  await expect(page.getByTestId("arrows-ref").first()).toHaveText("Arrows 1 to 3");
+  await expect(page.getByTestId("sites").locator("article")).toHaveCount(2);
+  await expect(page.getByTestId("sites")).toContainText("Tokuchu: RSVP Application with Attendee States");
+  await expect(page.getByTestId("sites")).toContainText("Customworks: Shopify Store with WebMCP-enabled Customization");
+  await expect(page.getByTestId("walkthrough-step")).toHaveCount(4);
   for (const tool of TOOLS) await expect(page.getByTestId("walkthrough").locator("code", { hasText: tool }).first()).toBeVisible();
+  await expect(page.getByTestId("stagehand-runtime")).toContainText("Page.tools()");
   for (const src of await page.getByTestId("walkthrough").locator("img").evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src")))) {
     expect(src).toMatch(/^\/media\//);
     expect((await request.get(src!)).status(), src!).toBe(200);

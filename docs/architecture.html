@@ -1,0 +1,331 @@
+<title>Tokuchu Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Zilla+Slab:wght@500;600&display=swap">
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --bg-surface: #ffffff;
+    --text: #2e2a25;
+    --text-secondary: #6b6560;
+    --text-tertiary: #9b9590;
+    --heading: #1a2744;
+    --accent: #2d8a7e;
+    --accent-soft: #d6eeeb;
+    --external: #b06d20;
+    --external-soft: #f5e6d0;
+    --actor: #4a6fa5;
+    --actor-soft: #dce6f2;
+    --border: #ddd8d0;
+    --code-bg: #edeae4;
+    --diagram-bg: #faf9f7;
+    --diagram-border: #e0dcd5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1a1816;
+      --bg-surface: #242120;
+      --text: #dcd6d0;
+      --text-secondary: #a09890;
+      --text-tertiary: #706860;
+      --heading: #c8d8f0;
+      --accent: #4ec4b4;
+      --accent-soft: #1e3a35;
+      --external: #e0a050;
+      --external-soft: #3a2e1a;
+      --actor: #7aa0d0;
+      --actor-soft: #1e2a3a;
+      --border: #3a3632;
+      --code-bg: #2e2a28;
+      --diagram-bg: #201e1c;
+      --diagram-border: #3a3632;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1a1816;
+    --bg-surface: #242120;
+    --text: #dcd6d0;
+    --text-secondary: #a09890;
+    --text-tertiary: #706860;
+    --heading: #c8d8f0;
+    --accent: #4ec4b4;
+    --accent-soft: #1e3a35;
+    --external: #e0a050;
+    --external-soft: #3a2e1a;
+    --actor: #7aa0d0;
+    --actor-soft: #1e2a3a;
+    --border: #3a3632;
+    --code-bg: #2e2a28;
+    --diagram-bg: #201e1c;
+    --diagram-border: #3a3632;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+  h1, h2, h3 {
+    font-family: 'Zilla Slab', Georgia, serif;
+    color: var(--heading);
+    text-wrap: balance;
+    line-height: 1.25;
+  }
+  h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+  .subtitle {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    margin: 0 0 2.5rem;
+    line-height: 1.5;
+  }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 2.8rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 2rem 0 0.6rem; color: var(--accent); }
+  p { margin: 0 0 1rem; max-width: 65ch; }
+  code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+  }
+  figure {
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--diagram-bg);
+    border: 1px solid var(--diagram-border);
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figure text { font-family: 'Inter', system-ui, sans-serif; }
+  figcaption {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 1rem;
+    text-align: center;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.5rem;
+    justify-content: center;
+    margin-top: 0.6rem;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 0.8rem;
+  }
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .legend .sw {
+    width: 12px; height: 12px; border-radius: 2px;
+    border: 1.5px solid;
+  }
+  .section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.25rem 0;
+  }
+  .section p { color: var(--text-secondary); font-size: 0.95rem; }
+  .section p:last-child { margin-bottom: 0; }
+  .runtime-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr) 24px) minmax(0, 1fr); align-items: stretch; margin: 1.5rem 0; }
+  .runtime-node { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 5px; background: var(--bg-surface); }
+  .runtime-node.stagehand { border-color: var(--accent); box-shadow: inset 0 3px var(--accent); }
+  .runtime-node small { display: block; color: var(--accent); font: 600 .7rem/1.2 ui-monospace, Menlo, monospace; text-transform: uppercase; }
+  .runtime-node strong { display: block; margin: .4rem 0; font-family: 'Zilla Slab', Georgia, serif; font-size: 1.1rem; line-height: 1.15; }
+  .runtime-node p { margin: 0; font-size: .78rem; line-height: 1.45; }
+  .runtime-arrow { display: grid; place-items: center; color: var(--accent); font-size: 1.2rem; }
+  .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1rem 0; }
+  .control-grid div { padding: .8rem; border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); font-size: .85rem; }
+  .control-grid code { display: block; width: fit-content; margin-bottom: .35rem; color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+  @media (max-width: 600px) {
+    body { padding: 2rem 1rem 3rem; }
+    h1 { font-size: 1.6rem; }
+    .runtime-flow, .control-grid { grid-template-columns: 1fr; gap: .5rem; }
+    .runtime-arrow { transform: rotate(90deg); }
+  }
+</style>
+
+<h1>Tokuchu Architecture</h1>
+<p class="subtitle">System context: who and what interacts with Tokuchu, and what each relationship carries.</p>
+
+<figure>
+  <svg viewBox="0 0 820 560" role="img" aria-label="C4 Context diagram. Tokuchu is the central system. Three actors — Organizer, Attendee, Vendor Agent — interact with it. Three external systems — Shopify Global Catalog, per-shop storefronts, and the custom shop — are called by Tokuchu over WebMCP.">
+    <defs>
+      <marker id="a-ext" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#b06d20"/>
+      </marker>
+      <marker id="a-act" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#4a6fa5"/>
+      </marker>
+      <marker id="a-sys" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#2d8a7e"/>
+      </marker>
+    </defs>
+
+    <!-- ============ THE SYSTEM ============ -->
+    <rect x="260" y="185" width="300" height="110" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+    <text x="410" y="225" font-family="'DM Sans', sans-serif" font-size="18" font-weight="700" fill="var(--accent)" text-anchor="middle">Tokuchu</text>
+    <text x="410" y="248" font-family="'DM Sans', sans-serif" font-size="10.5" fill="var(--text-secondary)" text-anchor="middle">Collects event attendance and survey data,</text>
+    <text x="410" y="264" font-family="'DM Sans', sans-serif" font-size="10.5" fill="var(--text-secondary)" text-anchor="middle">turns it into orders at Shopify stores via WebMCP</text>
+    <text x="410" y="284" font-family="'IBM Plex Mono', monospace" font-size="9" fill="var(--text-tertiary)" text-anchor="middle">[Next.js application]</text>
+
+    <!-- ============ ACTORS ============ -->
+
+    <!-- Organizer (top left) -->
+    <rect x="60" y="30" width="150" height="70" rx="6" fill="var(--actor-soft)" stroke="var(--actor)" stroke-width="1.5"/>
+    <text x="135" y="58" font-family="'DM Sans', sans-serif" font-size="13" font-weight="600" fill="var(--actor)" text-anchor="middle">Organizer</text>
+    <text x="135" y="76" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[Person]</text>
+    <text x="135" y="90" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">Creates events, configures gifts</text>
+
+    <!-- Arrow: Organizer → Tokuchu -->
+    <line x1="175" y1="100" x2="310" y2="185" stroke="var(--actor)" stroke-width="1.2" marker-end="url(#a-act)"/>
+    <rect x="168" y="128" width="160" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="248" y="140" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">Creates events, approves attendees,</text>
+    <text x="248" y="152" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">searches and configures merchandise</text>
+
+    <!-- Attendee (top right) -->
+    <rect x="610" y="30" width="150" height="70" rx="6" fill="var(--actor-soft)" stroke="var(--actor)" stroke-width="1.5"/>
+    <text x="685" y="58" font-family="'DM Sans', sans-serif" font-size="13" font-weight="600" fill="var(--actor)" text-anchor="middle">Attendee</text>
+    <text x="685" y="76" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[Person]</text>
+    <text x="685" y="90" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">RSVPs and fills the survey</text>
+
+    <!-- Arrow: Attendee → Tokuchu -->
+    <line x1="645" y1="100" x2="510" y2="185" stroke="var(--actor)" stroke-width="1.2" marker-end="url(#a-act)"/>
+    <rect x="518" y="128" width="145" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="590" y="140" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">Submits RSVP status</text>
+    <text x="590" y="152" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">and personalization answers</text>
+
+    <!-- Vendor Agent (right) -->
+    <rect x="660" y="210" width="150" height="70" rx="6" fill="var(--actor-soft)" stroke="var(--actor)" stroke-width="1.5"/>
+    <text x="735" y="238" font-family="'DM Sans', sans-serif" font-size="13" font-weight="600" fill="var(--actor)" text-anchor="middle">Vendor Agent</text>
+    <text x="735" y="256" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[External agent]</text>
+    <text x="735" y="270" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">Reads orders, posts updates</text>
+
+    <!-- Arrow: Vendor Agent → Tokuchu -->
+    <line x1="658" y1="245" x2="562" y2="245" stroke="var(--actor)" stroke-width="1.2" marker-end="url(#a-act)"/>
+    <rect x="568" y="219" width="90" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="613" y="231" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">Reads manifest,</text>
+    <text x="613" y="243" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--actor)" text-anchor="middle">posts updates via MCP</text>
+
+    <!-- ============ EXTERNAL SYSTEMS ============ -->
+
+    <!-- Shopify Global Catalog (bottom left) -->
+    <rect x="30" y="400" width="200" height="80" rx="6" fill="var(--external-soft)" stroke="var(--external)" stroke-width="1.5"/>
+    <text x="130" y="428" font-family="'DM Sans', sans-serif" font-size="12" font-weight="600" fill="var(--external)" text-anchor="middle">Shopify Global Catalog</text>
+    <text x="130" y="446" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[External system]</text>
+    <text x="130" y="466" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--text-tertiary)" text-anchor="middle">catalog.shopify.com/api/ucp/mcp</text>
+
+    <!-- Arrow: Tokuchu → Catalog -->
+    <line x1="310" y1="295" x2="190" y2="398" stroke="var(--external)" stroke-width="1.2" marker-end="url(#a-ext)"/>
+    <rect x="168" y="328" width="158" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="247" y="340" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">Searches products via WebMCP</text>
+    <text x="247" y="352" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--external)" text-anchor="middle">search_catalog, get_product</text>
+
+    <!-- Per-Shop Storefront (bottom center) -->
+    <rect x="280" y="430" width="200" height="80" rx="6" fill="var(--external-soft)" stroke="var(--external)" stroke-width="1.5"/>
+    <text x="380" y="458" font-family="'DM Sans', sans-serif" font-size="12" font-weight="600" fill="var(--external)" text-anchor="middle">Shopify Storefronts</text>
+    <text x="380" y="476" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[External system, per shop]</text>
+    <text x="380" y="496" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--text-tertiary)" text-anchor="middle">{shop}/api/ucp/mcp</text>
+
+    <!-- Arrow: Tokuchu → Storefronts -->
+    <line x1="390" y1="295" x2="385" y2="428" stroke="var(--external)" stroke-width="1.2" marker-end="url(#a-ext)"/>
+    <rect x="392" y="348" width="156" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="470" y="360" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">Manages carts and orders</text>
+    <text x="470" y="372" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--external)" text-anchor="middle">create_cart, create_checkout, …</text>
+
+    <!-- Custom Shop (bottom right) -->
+    <rect x="530" y="400" width="200" height="80" rx="6" fill="var(--external-soft)" stroke="var(--external)" stroke-width="1.5"/>
+    <text x="630" y="428" font-family="'DM Sans', sans-serif" font-size="12" font-weight="600" fill="var(--external)" text-anchor="middle">Custom Shop</text>
+    <text x="630" y="446" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--text-secondary)" text-anchor="middle">[External Shopify store + Customily]</text>
+    <text x="630" y="466" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--text-tertiary)" text-anchor="middle">CUSTOMILY_SHOP_URL</text>
+
+    <!-- Arrow: Tokuchu → Custom Shop -->
+    <line x1="500" y1="295" x2="590" y2="398" stroke="var(--external)" stroke-width="1.2" marker-end="url(#a-ext)"/>
+    <rect x="520" y="324" width="148" height="28" rx="3" fill="var(--diagram-bg)"/>
+    <text x="594" y="336" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">Reads personalization schemas,</text>
+    <text x="594" y="348" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">places personalized orders via WebMCP</text>
+
+    <!-- Protocol note -->
+    <text x="410" y="545" font-family="'DM Sans', sans-serif" font-size="10" fill="var(--text-tertiary)" text-anchor="middle">All external calls use WebMCP (Shopify's Universal Commerce Protocol).</text>
+    <text x="410" y="558" font-family="'DM Sans', sans-serif" font-size="10" fill="var(--text-tertiary)" text-anchor="middle">Vendor agents call in via Tokuchu's MCP endpoint (JSON-RPC, scoped by caller token).</text>
+  </svg>
+  <figcaption>
+    System context diagram.
+    <div class="legend">
+      <span><span class="sw" style="background: var(--accent-soft); border-color: var(--accent);"></span> This system</span>
+      <span><span class="sw" style="background: var(--actor-soft); border-color: var(--actor);"></span> Person / agent</span>
+      <span><span class="sw" style="background: var(--external-soft); border-color: var(--external);"></span> External system</span>
+    </div>
+  </figcaption>
+</figure>
+
+<hr>
+
+<h2>Inside the app</h2>
+
+<p>Internally, Tokuchu has two halves that share a data layer but otherwise don't know about each other.</p>
+
+<div class="section">
+  <h3>RSVP site</h3>
+  <p>The attendee-facing half. Handles event creation, the invite link, RSVP collection, approval, and the survey. Survey questions are <code>AttributeDefinition</code> rows; answers are <code>AttributeValue</code> rows. Everything lives in an in-memory store. This half has no knowledge of Shopify.</p>
+</div>
+
+<div class="section">
+  <h3>Shopify side</h3>
+  <p>The procurement half. Searches products across Shopify stores via WebMCP, ranks them, manages carts and checkouts, and serves the MCP endpoint that vendor agents call into. A curation agent (OpenAI Agents SDK) interprets the organizer's search intent; the actual search and ranking are deterministic.</p>
+</div>
+
+<div class="section">
+  <h3>The manifest — the bridge</h3>
+  <p>The single point where the two halves meet. The RSVP site writes survey answers. The Shopify side never reads those values directly. The manifest resolves each guest's answers through variant mapping and personalization transforms into one row per recipient — and that resolved row is the only thing the cart agents, the MCP endpoint, and any vendor ever see.</p>
+</div>
+
+<hr>
+
+<h2>Stagehand browser-agent runtime</h2>
+
+<p>Stagehand is the browser integration layer in agent handoff mode. It is not a source of procurement data and it does not encode the product workflow. It launches and wraps the Chrome browser context, keeps Tokuchu and Customworks open as separate pages, and exposes the native WebMCP tools registered by each page to the agent runtime.</p>
+
+<div class="runtime-flow" role="img" aria-label="A goal and playbook pass to the OpenAI Agents SDK, which operates Stagehand, which discovers native WebMCP tools from both websites.">
+  <div class="runtime-node"><small>Intent</small><strong>Goal + playbook</strong><p>The desired outcome and operating constraints.</p></div><span class="runtime-arrow">→</span>
+  <div class="runtime-node"><small>Reasoning</small><strong>OpenAI Agents SDK</strong><p>Selects the next tab and capability from live schemas and results.</p></div><span class="runtime-arrow">→</span>
+  <div class="runtime-node stagehand"><small>Browser</small><strong>Stagehand</strong><p>Owns the context and provides <code>Page.tools()</code>.</p></div><span class="runtime-arrow">→</span>
+  <div class="runtime-node"><small>Pages</small><strong>Native WebMCP</strong><p><code>document.modelContext</code> registrations from Tokuchu and Customworks.</p></div>
+</div>
+
+<p><code>scripts/agent-run.mjs</code> launches local Chrome through <code>localBrowser.launch</code>, creates Stagehand around that browser, initializes the demo session, and passes the resulting browser context to <code>src/agent/agent-run.ts</code>. The runtime deliberately exposes only five generic controls to the model:</p>
+
+<div class="control-grid">
+  <div><code>open_page</code>Opens a URL in the shared Stagehand browser context and assigns the tab an ID.</div>
+  <div><code>list_webmcp_tools</code>Calls <code>Page.tools()</code> and returns each registered tool's name, description, input schema, and frame ID.</div>
+  <div><code>call_webmcp_tool</code>Resolves a discovered tool by page and frame, invokes it with structured input, waits for completion, and normalizes WebMCP content and errors.</div>
+  <div><code>switch_tab</code>Changes the active Stagehand page so the agent can move between Tokuchu state and the storefront.</div>
+  <div><code>record_checkout</code>Uses the checkout URL captured by the runtime to call Tokuchu's <code>post_update</code>; the raw URL is withheld from the model.</div>
+</div>
+
+<p>The business operations are therefore not hard-coded as agent tools. The model discovers names such as <code>get_customization</code>, <code>get_fulfillment_manifest</code>, and <code>add_customized_to_cart</code> from the page where they are registered, reads their current schemas, and calls them through the generic Stagehand adapter. This lets either website change the capabilities it exposes without requiring a new agent wrapper for every function.</p>
+
+<p>With <code>TOKUCHU_STATIC=1</code>, Tokuchu omits its server-side storefront actions, including product search, vendor handoff, and approval-driven cart work. That makes the browser agent the explicit bridge between the two sites. The runtime records every model decision, browser-tool call, WebMCP result, and final outcome under <code>tests/videos/agent-run-*.json</code>. The separate <code>npm run agent-playbook</code> path is a deterministic Playwright fallback: it uses the WebMCP polyfill and a fixed sequence, whereas the Stagehand runtime discovers and chooses calls dynamically.</p>
+
+<hr>
+
+<h2>The flow</h2>
+
+<div class="section">
+  <p><strong>1. Create and publish</strong> — the organizer builds the event and publishes it, minting the invite link. RSVP side only.</p>
+  <p><strong>2. Configure merchandise</strong> — the organizer searches Shopify stores via WebMCP, picks a product, and the product's personalization schema becomes the survey. Shopify side only.</p>
+  <p><strong>3. Collect answers</strong> — attendees open the invite link and fill the survey. Each answer is stored as an attribute value. RSVP side only.</p>
+  <p><strong>4. Send to vendor</strong> — the manifest resolves answers into vendor rows. Tokuchu calls <code>create_cart</code> at the shop via WebMCP. As more RSVPs arrive, quantities stay current. This is where the two halves meet.</p>
+  <p><strong>5. Lock and order</strong> — at the cutoff, values freeze, the manifest grades each unit (ready, incomplete, excluded), and Tokuchu creates a checkout via WebMCP.</p>
+  <p><strong>6. Vendor reporting</strong> — the vendor's agent calls into Tokuchu's MCP endpoint with a scoped token, reads the manifest, and posts status updates.</p>
+</div>
