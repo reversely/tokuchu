@@ -40,3 +40,4 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-03-homepage-refresh-mobile.png`: the same page at 390 wide with the chain, the cards, and the walkthrough steps stacked in one column.
 - `2026-09-03-homepage-sequence.png`: The sequence section of the homepage at 1440 wide after the demo-script rebuild: the agent sequence diagram rendered from `docs/diagrams/agent-sequence.mmd` beside the thirteen numbered arrows, each with the tool in mono, the tab it lands on, and a six-word clause for what comes back.
 - `2026-09-03-homepage-script.png`: the homepage rebuilt around the demo script and the sequence diagram at 1440 wide (half scale).
+- `2026-09-03-homepage-features.png`: the homepage as a product explanation in nine stages with the fourteen-arrow sequence at 1440 wide (half scale).

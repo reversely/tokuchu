@@ -422,6 +422,7 @@ table.records .cellwhy { font-size: 12px; }
 .home .story-step:nth-of-type(even) .copy { order: 2; }
 .home .stepno { font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; background: var(--sky-dark); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; margin-bottom: 16px; }
 .home .story-step h3 { font-size: clamp(23px, 2.6vw, 30px); line-height: 1.12; }
+.home .story-step .example { color: var(--ink-2); font-style: italic; border-left: 3px solid var(--line); padding-left: 12px; }
 .home .story-step .copy p { margin-top: 14px; font-size: 16.5px; color: var(--ink-2); max-width: 46ch; }
 @media (max-width: 900px) { .home .story-step { grid-template-columns: 1fr; gap: 24px; padding: 40px 0; } .home .story-step:nth-of-type(even) .copy { order: 0; } .home .story-step .copy p { max-width: none; } }
 .home footer { padding: 44px 0 60px; border-top: 1px solid var(--line); }

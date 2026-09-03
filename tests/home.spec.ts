@@ -5,10 +5,10 @@ const TOOLS = ["get_customization", "set_gift_customization", "add_customized_to
 
 test("the root renders the sequence and the story and the primary action leads to the draft", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByTestId("arrows").locator("li")).toHaveCount(13);
+  await expect(page.getByTestId("arrows").locator("li")).toHaveCount(14);
   await expect(page.getByTestId("sequence").locator("img")).toHaveAttribute("src", "/media/agent-sequence.webp");
-  await expect(page.getByTestId("walkthrough-step")).toHaveCount(8);
-  await expect(page.getByTestId("arrows-ref").first()).toHaveText("Arrow 3");
+  await expect(page.getByTestId("walkthrough-step")).toHaveCount(9);
+  await expect(page.getByTestId("arrows-ref").first()).toHaveText("Arrows 1 to 3");
   for (const tool of TOOLS) await expect(page.getByTestId("walkthrough").locator("code", { hasText: tool }).first()).toBeVisible();
   for (const src of await page.getByTestId("walkthrough").locator("img").evaluateAll((imgs) => imgs.map((img) => img.getAttribute("src")))) {
     expect(src).toMatch(/^\/media\//);
