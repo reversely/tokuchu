@@ -1,9 +1,10 @@
 "use client";
+import { replyError } from "../lib/reply-error";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import type { Library, LibraryQuestion } from "../domain/store";
 import type { GuestStatus, ValueType } from "../domain/types";
-import { dateTime, money } from "../lib/format";
+import { dateTime } from "../lib/format";
 
 type Draft = {
   title: string;
@@ -11,7 +12,6 @@ type Draft = {
   starts_at: string;
   venue: { name: string; line1: string; city: string; region: string; postal_code: string; country: string };
   spots: string;
-  cost_per_person: string;
   rsvp_deadline: string;
   description: string;
   invite_extras: string[];
@@ -48,7 +48,6 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
     starts_at: "",
     venue: { name: "", line1: "", city: "", region: "", postal_code: "", country: "" },
     spots: "",
-    cost_per_person: "",
     rsvp_deadline: "",
     description: "",
     invite_extras: [],
@@ -95,7 +94,6 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
         starts_at: new Date(draft.starts_at).toISOString(),
         venue: draft.venue,
         spots: draft.spots ? Number(draft.spots) : null,
-        cost_per_person_cents: draft.cost_per_person ? Math.round(Number(draft.cost_per_person) * 100) : null,
         rsvp_deadline: draft.rsvp_deadline || null,
         description: draft.description,
         invite_extras: draft.invite_extras,
@@ -104,7 +102,7 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
         delivery: { destination: draft.delivery.destination, address: draft.delivery.destination === "address" ? draft.delivery.address : null, needed_by: draft.delivery.needed_by || null }
       };
       const created = await fetch("/api/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!created.ok) throw new Error(((await created.json()) as { error: string }).error);
+      if (!created.ok) throw new Error(await replyError(created));
       const { id } = (await created.json()) as { id: string };
       const defs = await fetch(`/api/events/${id}/definitions`, {
         method: "PUT",
@@ -120,13 +118,13 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
           }))
         })
       });
-      if (!defs.ok) throw new Error(((await defs.json()) as { error: string }).error);
+      if (!defs.ok) throw new Error(await replyError(defs));
       if (guestList.trim()) {
         const imported = await fetch(`/api/events/${id}/guests/import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: guestList }) });
-        if (!imported.ok) throw new Error(((await imported.json()) as { error: string }).error);
+        if (!imported.ok) throw new Error(await replyError(imported));
       }
       const published = await fetch(`/api/events/${id}/publish`, { method: "POST" });
-      if (!published.ok) throw new Error(((await published.json()) as { error: string }).error);
+      if (!published.ok) throw new Error(await replyError(published));
       router.push(`/events/${id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -160,27 +158,27 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
                 <div className="field"><label htmlFor="starts_at">Date and time</label><input id="starts_at" type="datetime-local" value={draft.starts_at} onChange={(e) => set("starts_at", e.target.value)} data-testid="starts_at" /></div>
                 <div className="field"><label htmlFor="host">Host</label><input id="host" value={draft.host} onChange={(e) => set("host", e.target.value)} data-testid="host" /></div>
               </div>
-              <div className="field"><label htmlFor="venue_name">Venue</label><input id="venue_name" value={draft.venue.name} onChange={(e) => setVenue("name", e.target.value)} data-testid="venue_name" /></div>
-              <div className="field"><label htmlFor="line1">Street address</label><input id="line1" value={draft.venue.line1} onChange={(e) => setVenue("line1", e.target.value)} data-testid="line1" /></div>
+              <div className="field"><label htmlFor="venue_name">Venue</label><input id="venue_name" autoComplete="organization" value={draft.venue.name} onChange={(e) => setVenue("name", e.target.value)} data-testid="venue_name" /></div>
+              <div className="field"><label htmlFor="line1">Street address</label><input id="line1" autoComplete="address-line1" value={draft.venue.line1} onChange={(e) => setVenue("line1", e.target.value)} data-testid="line1" /></div>
               <div className="grid3">
-                <div className="field"><label htmlFor="city">City</label><input id="city" value={draft.venue.city} onChange={(e) => setVenue("city", e.target.value)} data-testid="city" /></div>
-                <div className="field"><label htmlFor="region">Region</label><input id="region" value={draft.venue.region} onChange={(e) => setVenue("region", e.target.value)} data-testid="region" /></div>
-                <div className="field"><label htmlFor="postal_code">Postal code</label><input id="postal_code" value={draft.venue.postal_code} onChange={(e) => setVenue("postal_code", e.target.value)} data-testid="postal_code" /></div>
+                <div className="field"><label htmlFor="city">City</label><input id="city" autoComplete="address-level2" value={draft.venue.city} onChange={(e) => setVenue("city", e.target.value)} data-testid="city" /></div>
+                <div className="field"><label htmlFor="region">Region</label><input id="region" autoComplete="address-level1" value={draft.venue.region} onChange={(e) => setVenue("region", e.target.value)} data-testid="region" /></div>
+                <div className="field"><label htmlFor="postal_code">Postal code</label><input id="postal_code" autoComplete="postal-code" value={draft.venue.postal_code} onChange={(e) => setVenue("postal_code", e.target.value)} data-testid="postal_code" /></div>
               </div>
               <div className="grid3">
-                <div className="field"><label htmlFor="country">Country code</label><input id="country" value={draft.venue.country} onChange={(e) => setVenue("country", e.target.value.toUpperCase())} maxLength={2} data-testid="country" /></div>
+                <div className="field"><label htmlFor="country">Country code</label><input id="country" autoComplete="country" value={draft.venue.country} onChange={(e) => setVenue("country", e.target.value.toUpperCase())} maxLength={2} data-testid="country" /></div>
                 <div className="field"><label htmlFor="spots">Spots</label><input id="spots" type="number" min={1} value={draft.spots} onChange={(e) => set("spots", e.target.value)} data-testid="spots" /></div>
-                <div className="field"><label htmlFor="cost">Cost per person</label><input id="cost" type="number" min={0} step="0.01" value={draft.cost_per_person} onChange={(e) => set("cost_per_person", e.target.value)} data-testid="cost" /></div>
               </div>
               <div className="grid2">
                 <div className="field"><label htmlFor="deadline">RSVP deadline</label><input id="deadline" type="date" value={draft.rsvp_deadline} onChange={(e) => set("rsvp_deadline", e.target.value)} data-testid="deadline" /></div>
                 <div className="field">
-                  <label htmlFor="extra">Invite extras</label>
+                  <label htmlFor="extra">Notes on the invite</label>
+                  <p className="hint" style={{ color: "var(--muted)", margin: "0 0 8px" }}>Short lines shown under the event details such as the dress code or where to park. Type one and press Enter. Click a note to remove it.</p>
                   <div className="chips" data-testid="extras">
                     {draft.invite_extras.map((x) => (
                       <button key={x} type="button" className="chip on" onClick={() => set("invite_extras", draft.invite_extras.filter((y) => y !== x))} aria-label={`Remove ${x}`}>{x}</button>
                     ))}
-                    <span className="chip"><input id="extra" placeholder="Add a line" value={extraDraft} onChange={(e) => setExtraDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && extraDraft.trim()) { set("invite_extras", [...draft.invite_extras, extraDraft.trim()]); setExtraDraft(""); } }} /></span>
+                    <span className="chip"><input id="extra" placeholder="Add a note and press Enter" value={extraDraft} onChange={(e) => setExtraDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && extraDraft.trim()) { set("invite_extras", [...draft.invite_extras, extraDraft.trim()]); setExtraDraft(""); } }} /></span>
                   </div>
                 </div>
               </div>
@@ -286,7 +284,6 @@ export function DraftPage({ library, account }: { library: Library; account: Rea
                 <div className="when">
                   {draft.starts_at ? dateTime(new Date(draft.starts_at).toISOString()) : "Date and time"}
                   {(draft.venue.name || draft.venue.line1 || draft.venue.city) && <><br /><span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap" }}>{[draft.venue.name, draft.venue.line1, draft.venue.city].filter(Boolean).map((part) => <span key={part}>{part}</span>)}</span></>}
-                  {draft.cost_per_person && <><br />{money(Math.round(Number(draft.cost_per_person) * 100))} per person</>}
                 </div>
                 {draft.invite_extras.length > 0 && <div className="extras">{draft.invite_extras.map((x) => <span key={x}>{x}</span>)}</div>}
                 <div className="options">{draft.response_options.map((s) => <span key={s}>{STATUS_LABEL[s]}</span>)}</div>

@@ -136,7 +136,6 @@ test("1: create the event", async () => {
   await page.getByTestId("postal_code").fill(EVENT.venue.postal_code);
   await page.getByTestId("country").fill(EVENT.venue.country);
   await page.getByTestId("spots").fill(EVENT.spots);
-  await page.getByTestId("cost").fill(EVENT.cost);
   await page.getByTestId("deadline").fill(EVENT.deadline);
   await page.getByTestId("needed_by").fill(EVENT.needed_by);
   await page.getByTestId("publish").click();

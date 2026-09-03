@@ -56,7 +56,6 @@ test("the draft page renders no comma in the details or the invite preview", asy
   await page.getByTestId("venue_name").fill(VENUE.name);
   await page.getByTestId("line1").fill(VENUE.line1);
   await page.getByTestId("city").fill(VENUE.city);
-  await page.getByTestId("cost").fill("10");
   await page.getByTestId("deadline").fill("2030-01-03");
   await page.getByTestId("needed_by").fill("2030-01-08");
   await page.getByRole("button", { name: "Allergies and dietary restrictions" }).click();

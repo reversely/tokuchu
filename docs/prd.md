@@ -134,7 +134,7 @@ The interaction between the two runs over WebMCP in both directions:
 
 **Hand-off.** A request that carries a session and a valid guest token moves every event the guest owns under the session's user id, keeps `demo: true` on the seeded event so the tour still mounts, and records the guest id as consumed, so the token names no caller from then on. The sign-in return path carries the token, so the first signed-in request completes the hand-off and the organizer lands on the event under the account without the token in the address.
 
-**Draft.** The page at `/events/new` holds Details (title, date and time, host, location, spots, cost per person, RSVP deadline, description), Delivery (one address for every unit and a needed-by date), and Settings. The right column renders the invite from the same data. One button publishes and creates the link.
+**Draft.** The page at `/events/new` holds Details (title, date and time, host, location, spots, RSVP deadline, description, notes on the invite), Delivery (one address for every unit and a needed-by date), and Settings. The right column renders the invite from the same data. One button publishes and creates the link.
 
 **Dashboard.** The published event shows three tabs.
 

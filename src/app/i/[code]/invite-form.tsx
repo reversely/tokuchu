@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { inviteView } from "../../../server/api";
 import type { AttributeDefinition, GuestStatus } from "../../../domain/types";
 import { controlFor } from "../../../domain/values";
-import { dateTime, money } from "../../../lib/format";
+import { dateTime } from "../../../lib/format";
 import { InviteWebMcp } from "./invite-webmcp";
 import { sendRsvp } from "./send-rsvp";
 
@@ -142,7 +142,6 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                 <div className="when">
                   <div>{dateTime(event.starts_at)}</div>
                   {venue.length > 0 && <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{venue.map((part) => <span key={part}>{part}</span>)}</div>}
-                  {event.cost_per_person_cents !== null && <div>{money(event.cost_per_person_cents)} per person</div>}
                   {event.rsvp_deadline && <div>Reply by {event.rsvp_deadline}</div>}
                 </div>
                 {event.invite_extras.length > 0 && <div className="extras">{event.invite_extras.map((x) => <span key={x}>{x}</span>)}</div>}
@@ -163,7 +162,7 @@ export function InviteForm({ invite, guestId }: { invite: Invite; guestId: strin
                 <div className="field">
                   <label htmlFor="email">Your email</label>
                   <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="guest-email" />
-                  <p className="hint" style={{ color: "var(--muted)" }}>If the organizer needs a detail from you for your gift, the request comes to this address.</p>
+                  <p className="hint" style={{ color: "var(--muted)" }}>Any request for a detail about your gift comes to this address.</p>
                 </div>
                 <div className="field">
                   <label>Your reply</label>

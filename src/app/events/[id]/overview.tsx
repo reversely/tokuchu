@@ -1,9 +1,10 @@
 "use client";
+import { replyError } from "../../../lib/reply-error";
 import { useState } from "react";
 import type { Snapshot } from "./dashboard";
 import { withDemoHeaders } from "../../../demo/token";
 import type { GuestStatus } from "../../../domain/types";
-import { dateOnly, dateTime, money } from "../../../lib/format";
+import { dateOnly, dateTime } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
 
 const STATUS_LABEL: Record<GuestStatus, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
@@ -22,7 +23,7 @@ function describe(f: Snapshot["follow_ups"][number], snap: Snapshot): string {
   return `${n} ${guests} without a reply`;
 }
 
-export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: string | null; onChanged: () => void }) {
+export function Overview({ snap, invite, onChanged, onOpenExperience }: { snap: Snapshot; invite: string | null; onChanged: () => void; onOpenExperience?: () => void }) {
   const { event, guests, counts, definitions, follow_ups } = snap;
   const [only, setOnly] = useState<string[] | null>(null);
   const [editing, setEditing] = useState(false);
@@ -103,7 +104,7 @@ export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: 
         <section className="block" aria-labelledby="gifts">
           <div className="labelrow"><h2 id="gifts">Gifts</h2><span className="eyebrow">{snap.gifts.length} chosen</span></div>
           {snap.gifts.length === 0 ? (
-            <p className="hint" style={{ color: "var(--muted)" }} data-testid="gifts-empty">No gift chosen yet</p>
+            <p className="hint" style={{ color: "var(--muted)" }} data-testid="gifts-empty">No gift chosen yet. <a href="#experience" onClick={(e) => { e.preventDefault(); onOpenExperience?.(); }} data-testid="gifts-open-experience">Find one in Guest Experience</a></p>
           ) : (
             <div className="list" data-testid="gifts">
               {snap.gifts.map((g) => {
@@ -126,7 +127,7 @@ export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: 
             <div className="list">
               <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>{event.title}{event.host ? ` hosted by ${event.host}` : ""}</span><button type="button" className="btn ghost small" onClick={() => setEditing(true)} data-testid="edit-setup">Edit</button></div>
               <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[dateTime(event.starts_at), event.venue.name, event.venue.line1, event.venue.city, event.venue.region, event.venue.postal_code, event.venue.country].filter(Boolean).join(" / ")}</span></div>
-              <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[event.spots ? `${event.spots} spots` : "no spot limit", event.cost_per_person_cents !== null ? `${money(event.cost_per_person_cents)} per person` : "no cost per person", event.rsvp_deadline ? `replies by ${dateOnly(event.rsvp_deadline)}` : "no RSVP deadline"].join(" / ")}</span></div>
+              <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[event.spots ? `${event.spots} spots` : "no spot limit", event.rsvp_deadline ? `replies by ${dateOnly(event.rsvp_deadline)}` : "no RSVP deadline"].join(" / ")}</span></div>
               <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type" data-testid="setup-delivery">Gifts to {deliveryTarget(event).label}{deliveryTarget(event).needed_by ? ` by ${dateOnly(deliveryTarget(event).needed_by)}` : " with no date yet"}</span></div>
             </div>
           )}
@@ -161,11 +162,11 @@ export function Overview({ snap, invite, onChanged }: { snap: Snapshot; invite: 
 /** The editable details after publish; PATCH writes them and the snapshot follows. */
 function SetupForm({ snap, onDone }: { snap: Snapshot; onDone: () => void }) {
   const e = snap.event;
-  const [form, setForm] = useState({ title: e.title, host: e.host, starts_at: e.starts_at.slice(0, 16), spots: e.spots?.toString() ?? "", cost: e.cost_per_person_cents !== null ? (e.cost_per_person_cents / 100).toString() : "", rsvp_deadline: e.rsvp_deadline ?? "", description: e.description, venue: e.venue, needed_by: e.delivery?.needed_by ?? "", destination: e.delivery?.destination ?? "venue" });
+  const [form, setForm] = useState({ title: e.title, host: e.host, starts_at: e.starts_at.slice(0, 16), spots: e.spots?.toString() ?? "", rsvp_deadline: e.rsvp_deadline ?? "", description: e.description, venue: e.venue, needed_by: e.delivery?.needed_by ?? "", destination: e.delivery?.destination ?? "venue" });
   const [error, setError] = useState<string | null>(null);
   async function save() {
-    const res = await fetch(`/api/events/${e.id}`, withDemoHeaders({ method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, host: form.host, starts_at: new Date(form.starts_at).toISOString(), spots: form.spots ? Number(form.spots) : null, cost_per_person_cents: form.cost ? Math.round(Number(form.cost) * 100) : null, rsvp_deadline: form.rsvp_deadline || null, description: form.description, venue: form.venue, delivery: { destination: form.destination, address: e.delivery?.address ?? null, needed_by: form.needed_by || null } }) }));
-    if (!res.ok) { setError(((await res.json()) as { error: string }).error); return; }
+    const res = await fetch(`/api/events/${e.id}`, withDemoHeaders({ method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, host: form.host, starts_at: new Date(form.starts_at).toISOString(), spots: form.spots ? Number(form.spots) : null, rsvp_deadline: form.rsvp_deadline || null, description: form.description, venue: form.venue, delivery: { destination: form.destination, address: e.delivery?.address ?? null, needed_by: form.needed_by || null } }) }));
+    if (!res.ok) { setError(await replyError(res)); return; }
     onDone();
   }
   return (
@@ -177,7 +178,6 @@ function SetupForm({ snap, onDone }: { snap: Snapshot; onDone: () => void }) {
       </div>
       <div className="grid3">
         <div className="field"><label htmlFor="s-spots">Spots</label><input id="s-spots" type="number" value={form.spots} onChange={(ev) => setForm({ ...form, spots: ev.target.value })} /></div>
-        <div className="field"><label htmlFor="s-cost">Cost per person</label><input id="s-cost" type="number" step="0.01" value={form.cost} onChange={(ev) => setForm({ ...form, cost: ev.target.value })} /></div>
         <div className="field"><label htmlFor="s-deadline">RSVP deadline</label><input id="s-deadline" type="date" value={form.rsvp_deadline} onChange={(ev) => setForm({ ...form, rsvp_deadline: ev.target.value })} /></div>
       </div>
       <div className="grid2">
