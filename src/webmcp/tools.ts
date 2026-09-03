@@ -105,6 +105,20 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/manifest" }
   },
   {
+    name: "get_fulfillment_manifest",
+    description: "Returns the fulfillment manifest of a procurement: its revision and approved revision, its status, and one row per attendee with a status (ready, incomplete, invalid, or exception), the values keyed by the store's requirement key, and the issues per requirement. A store's agent sees only the requirements its token may read. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procurement_id: { type: "string", description: "The procurement's id; the gift's id until a Procurement record exists" },
+        gift_id: { type: "string", description: "The gift's id; the same record as procurement_id" }
+      },
+      additionalProperties: false
+    },
+    scopes: ["organizer", "vendor"],
+    route: { method: "GET", path: "/api/events/:eventId/gifts/{gift_id}/fulfillment" }
+  },
+  {
     name: "get_changes",
     description: "Returns the changes to a procurement after a revision: each with its revision, timestamp, actor, type, the attendee and requirement it concerns, and a one-line summary. Call it with the current_revision of the last manifest or change list you read. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record. Without a gift the call returns the event's whole change log after since_seq.",
     inputSchema: {
@@ -272,7 +286,8 @@ export function rsvpAnswers(definitions: AttributeDefinition[], args: ToolArgs):
 /** Builds the URL and init for one call: path arguments in braces, then the query or the body. */
 export function buildRequest(tool: ToolDefinition, eventId: string, args: ToolArgs): { url: string; init: RequestInit } {
   let path = tool.route.path.replace(":eventId", encodeURIComponent(eventId));
-  path = path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(String(args[key] ?? "")));
+  // The gift is the procurement until a Procurement record exists, so procurement_id fills a gift_id path segment.
+  path = path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(String(args[key] ?? (key === "gift_id" ? args.procurement_id : undefined) ?? "")));
   const init: RequestInit = { method: tool.route.method, headers: { Accept: "application/json" } };
   if (tool.route.query) {
     const params = new URLSearchParams();

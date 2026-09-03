@@ -34,6 +34,7 @@ A store's agent holds a token (`POST /api/events/{id}/tokens`) that names the gi
 
 | Tool | Who calls | Route | What it returns |
 | --- | --- | --- | --- |
+| `get_fulfillment_manifest` | the organizer's page, or a token holder over JSON-RPC | `GET /api/events/{id}/gifts/{giftId}/fulfillment` | `{ procurement_id, revision, approved_revision, requirement_schema_id?, status, attendees[] }`; each attendee carries `attendee_ref`, `status` (ready, incomplete, invalid, or exception), `variant_id`, `values` keyed by the store's requirement key, and `issues[]` with `requirement_id`, `status`, `message`. A token holder sees a value and its issues only for a requirement whose definition the token may read; the organizer sees every requirement. `get_manifest` keeps its row shape for the page |
 | `get_changes` | the organizer's page, or a token holder over JSON-RPC | `GET /api/events/{id}/changes?gift={giftId}&after={revision}` | `{ procurement_id, from_revision, current_revision, changes[] }`; each change carries `revision`, `timestamp`, `actor_type`, `actor_id?`, `type`, `attendee_ref?`, `requirement_id?`, `summary`. A token holder sees a value write only for a definition the gift maps and the token may read. Without a gift the call keeps its earlier form: `?since={seq}` returns the event's whole change log |
 
 ## The bridge

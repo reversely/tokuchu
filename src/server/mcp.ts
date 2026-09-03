@@ -11,6 +11,7 @@ import { changeReader, changes, counts, followUp, giftRequirements, guestList, g
 import { newId, state } from "../domain/store";
 import type { CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
+import { fulfillmentManifest } from "./procurement";
 import { cartOperations } from "./registry";
 
 export type McpResult = { content: [{ type: "text"; text: string }]; isError?: true };
@@ -120,6 +121,11 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       if (organizer) return view;
       const ids = token.readable_definition_ids;
       return { ...view, rows: (view.rows ?? []).map((r) => filterPersonalization(filterValues(r, ids), ids)) };
+    }
+    case "get_fulfillment_manifest": {
+      const giftId = strArg("gift_id") ?? strArg("procurement_id") ?? "";
+      if (!organizer) requireGiftScope(token, giftId);
+      return fulfillmentManifest(eventId, giftId, organizer ? undefined : token.readable_definition_ids);
     }
     case "get_changes": {
       const giftId = strArg("gift_id") ?? strArg("procurement_id");

@@ -33,7 +33,7 @@ describe("the tool definitions", () => {
   });
   it("keeps the money-spending tools away from vendor scope", () => {
     for (const name of ["set_gift_plan", "set_personalization_mapping", "send_to_vendor", "approve", "approve_specs", "list_guests", "get_guest", "list_missing", "search_gifts", "get_requirements", "request_from_attendees", "follow_up"]) expect(tool(name).scopes).toEqual(["organizer"]);
-    for (const name of ["get_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"]) expect(tool(name).scopes).toContain("vendor");
+    for (const name of ["get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"]) expect(tool(name).scopes).toContain("vendor");
     expect(tool("submit_rsvp").scopes).toEqual(["attendee"]);
   });
 });

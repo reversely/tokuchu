@@ -31,7 +31,7 @@ function seed() {
     order_id: null
   } as never);
   const organizer = createToken(event.id, { holder: "organizer", callable_tools: TOOLS.map((t) => t.name) });
-  const vendor = createToken(event.id, { holder: "shop.myshopify.com", gift_ids: [gift.id], readable_definition_ids: [choice.id], callable_tools: ["get_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"] });
+  const vendor = createToken(event.id, { holder: "shop.myshopify.com", gift_ids: [gift.id], readable_definition_ids: [choice.id], callable_tools: ["get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"] });
   return { event, name, choice, gift, organizer, vendor, guestIds: reply.guest_ids };
 }
 const call = (eventId: string, token: ReturnType<typeof createToken> | null, name: string, args: Record<string, unknown> = {}) => handleRpc(eventId, token, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
@@ -55,7 +55,7 @@ describe("the MCP endpoint", () => {
     const all = await handleRpc(event.id, organizer, { method: "tools/list", id: 1 });
     expect((all.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort()).toEqual(TOOLS.map((t) => t.name).sort());
     const some = await handleRpc(event.id, vendor, { method: "tools/list", id: 2 });
-    expect((some.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(["count_by", "get_summary", "get_manifest", "get_changes", "post_update", "get_updates"]);
+    expect((some.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(["count_by", "get_summary", "get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "get_updates"]);
     const none = await handleRpc(event.id, null, { method: "tools/list", id: 3 });
     expect(isError(none)).toBe(true);
     expect((await call("evt_none", organizer, "get_summary")).error).toMatchObject({ code: -32004 });
@@ -87,6 +87,20 @@ describe("the MCP endpoint", () => {
     const feed = payload(await call(event.id, vendor, "get_changes", { since_seq: before })).entries as { kind: string }[];
     expect(feed.map((e) => e.kind)).toEqual(["update"]);
     expect(tokenFrom(event.id, new Request("http://x", { headers: { authorization: `Bearer ${vendor.id}` } }))?.last_profile_url).toBe("https://vendor.example/profile.json");
+  });
+
+  it("serves the fulfillment manifest under the token's scope and the whole of it to the organizer", async () => {
+    const { event, vendor, gift, organizer, name, choice } = seed();
+    updateGift(gift.id, { personalization: { fields: [{ key: "caption", label: "Caption", kind: "name", required: true }, { key: "flavour", label: "Flavour", kind: "word_list", required: false }] }, personalization_mappings: [{ vendor_field_key: "caption", source: { type: "definition", definition_id: name.id, subject_scope: "guest" } }, { vendor_field_key: "flavour", source: { type: "definition", definition_id: choice.id, subject_scope: "guest" } }] } as never);
+    const scoped = payload(await call(event.id, vendor, "get_fulfillment_manifest", { procurement_id: gift.id }));
+    expect(scoped).toMatchObject({ procurement_id: gift.id, status: "draft", approved_revision: null });
+    expect(scoped.attendees).toHaveLength(2);
+    for (const row of scoped.attendees) expect(Object.keys(row.values)).toEqual(["flavour"]);
+    const whole = payload(await call(event.id, organizer, "get_fulfillment_manifest", { gift_id: gift.id }));
+    expect(whole.attendees.map((a: { values: Record<string, unknown> }) => Object.keys(a.values).sort())).toEqual([["caption", "flavour"], ["caption", "flavour"]]);
+    expect(whole.attendees[1]).toMatchObject({ status: "invalid", issues: [{ requirement_id: "caption", status: "incomplete" }, { requirement_id: "flavour", status: "invalid" }] });
+    expect(scoped.attendees[1].issues.map((i: { requirement_id: string }) => i.requirement_id)).toEqual(["flavour"]);
+    expect(isError(await call(event.id, vendor, "get_fulfillment_manifest", { gift_id: "gift_other" }))).toBe(true);
   });
 
   it("reads a gift's changes after a revision through the token's scope", async () => {
