@@ -369,3 +369,17 @@ table.records .quiet { color: var(--muted); }
   .home .chain { margin-top: 20px; }
   .home .cta { flex-wrap: wrap; }
 }
+
+/* The tour's opening story: the field's cream over the dashboard, the figure in mono, the beats in the display face. */
+.intro { position: fixed; inset: 0; z-index: 45; background: #e9d8bf; color: #1b2b3f; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 40px; align-items: center; padding: 48px min(8vw, 96px); }
+.intro-art { margin: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: clamp(11px, 1.3vw, 17px); line-height: 1.25; color: #1b2b3f; white-space: pre; overflow: hidden; }
+.intro-copy { display: grid; gap: 22px; }
+.intro-count { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #bc451b; }
+.intro-text { margin: 0; font-family: var(--font-display), "Zilla Slab", serif; font-size: clamp(26px, 3.2vw, 44px); line-height: 1.22; text-wrap: balance; min-height: 4.8em; }
+.intro-caret { display: inline-block; width: 0.5em; height: 1em; margin-left: 4px; vertical-align: -0.1em; background: #bc451b; animation: intro-blink 900ms steps(2, start) infinite; }
+@keyframes intro-blink { to { visibility: hidden; } }
+.intro-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.intro .btn.primary { background: #bc451b; color: #fff; }
+.intro .btn.ghost { border-color: #d3c0a2; color: #1b2b3f; }
+@media (max-width: 900px) { .intro { grid-template-columns: 1fr; align-content: start; gap: 20px; padding: 24px 20px; overflow-y: auto; } .intro-art { font-size: 9px; } .intro-text { font-size: 24px; min-height: 0; } }
+@media (prefers-reduced-motion: reduce) { .intro-caret { animation: none; } }

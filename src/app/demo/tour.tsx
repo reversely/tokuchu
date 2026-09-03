@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
 import { DEMO_ATTENDEES, DEMO_STORE } from "../../demo/seed";
+import { Intro } from "./intro";
 import { STEPS, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
 import { withDemoHeaders } from "../../demo/token";
 
@@ -176,6 +177,8 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
  */
 export function Tour({ snap }: { snap: Snapshot }) {
   const [index, setIndex] = useState(() => startIndex(snap));
+  const introKey = `tokuchu_intro:${snap.event.id}`;
+  const [intro, setIntro] = useState(() => startIndex(snap) === 0);
   const [phase, setPhase] = useState<Phase>("entering");
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -198,6 +201,11 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
   useEffect(() => {
     setAutoplay(new URLSearchParams(window.location.search).get("autoplay") === "1");
+    try {
+      if (window.sessionStorage.getItem(introKey)) setIntro(false);
+    } catch {
+      /* storage can be unavailable; the story shows again */
+    }
     const read = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
     read();
     window.addEventListener("resize", read);
@@ -306,7 +314,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
   // Autoplay: once the callout is in place the step reads for a moment and then runs.
   useEffect(() => {
-    if (!autoplay || phase !== "ready" || last) return;
+    if (!autoplay || intro || phase !== "ready" || last) return;
     const timer = setTimeout(() => void advance(), READ_MS);
     return () => clearTimeout(timer);
   }, [autoplay, phase, last, advance]);
@@ -321,12 +329,22 @@ export function Tour({ snap }: { snap: Snapshot }) {
 
   const checkout = last ? (snap.gifts[0]?.checkout_url ?? null) : null;
   const box = viewport ? calloutPosition(rect, height, viewport) : { top: 0, left: 0, visibility: "hidden" as const };
+  const closeIntro = useCallback(() => {
+    setIntro(false);
+    try {
+      window.sessionStorage.setItem(introKey, "1");
+    } catch {
+      /* storage can be unavailable */
+    }
+  }, [introKey]);
+
   const wire = markWorking(step.wire?.({ snap, gift: snap.gifts[0] ?? null, page, updates, phase }) ?? [], phase);
 
   return (
-    <div className="tour" data-testid="tour" data-step={step.id} data-phase={phase}>
-      {rect && <div className="tour-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} aria-hidden="true" />}
-      <div className="tour-callout" ref={calloutRef} style={box} role="dialog" aria-labelledby="tour-title" data-testid="tour-step" data-step={index + 1}>
+    <div className="tour" data-testid="tour" data-step={step.id} data-phase={phase} data-intro={intro ? "open" : "done"}>
+      {intro && <Intro autoplay={autoplay} onDone={closeIntro} />}
+      {!intro && rect && <div className="tour-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} aria-hidden="true" />}
+      <div className="tour-callout" ref={calloutRef} style={intro ? { ...box, visibility: "hidden" } : box} role="dialog" aria-labelledby="tour-title" data-testid="tour-step" data-step={index + 1}>
         <div className="tour-count">Step {index + 1} of {STEPS.length}</div>
         <h2 id="tour-title">{step.title}</h2>
         <p data-testid="tour-narration">{step.narration}</p>

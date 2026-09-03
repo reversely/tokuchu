@@ -67,6 +67,7 @@ test("a guest who creates an account keeps the demo event and the guest token st
   const landed = new URL(page.url());
   const id = landed.pathname.split("/")[2];
   const token = landed.searchParams.get("t")!;
+  await page.getByTestId("intro-skip").click();
   await page.getByTestId("keep-event-link").click();
   await expect(page).toHaveURL(/\/sign-in\?next=/);
   await followMagicLink(page, request);

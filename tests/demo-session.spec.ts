@@ -49,6 +49,8 @@ test("a visitor gets one demo event and keeps it across visits", async ({ page, 
   await expect(page.getByTestId("status")).toHaveText("Published");
   await expect(page.getByTestId("event-title")).toHaveText(DEMO_TITLE);
   await expect(page.getByTestId("guest-pill")).toHaveText("Guest demo");
+  await expect(page.getByTestId("intro-text")).toContainText("Meet Jack");
+  await page.getByTestId("intro-skip").click();
   await expect(page.getByTestId("tour-narration")).toHaveText(STEPS[0].narration);
   await expect(page.getByTestId("tour-step")).toHaveAttribute("data-step", "1");
   await expect(page.getByTestId("tour-autoplay")).not.toBeChecked();

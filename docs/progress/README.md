@@ -15,3 +15,4 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-02-home-contract.png`: the merchant's contract section: what Customworks returns, the source Tokuchu resolves per field, and the attendee form generated from it.
 - `2026-09-02-home-problem.png`: the problem section with the scale cards, three attendees in the demo against 1,500 values at a real event.
 - `2026-09-02-home-parties.png`: the three-parties section: Shopify WebMCP with its ten page tools, Customworks with the store screenshot and its two tools, Tokuchu with the Attendees tab and its page tools.
+- `2026-09-02-tour-intro-desktop.png` and `2026-09-02-tour-intro-mobile.png`: the tour's opening story, Jack beside a telescope in ASCII with the first beat typed out.
