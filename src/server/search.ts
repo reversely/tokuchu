@@ -85,6 +85,8 @@ export async function giftSearch(eventId: string, body: GiftSearchBody): Promise
   const probedIds = new Set(probed.map((c) => c.product_id));
   const all = [...probed, ...found.filter((c) => !probedIds.has(c.product_id)), ...custom];
   const { ranked, excluded } = rank(all, ctx, config, funnel);
+  // The custom shop's eligible products stay in view past the page cap: they are the ones whose customization tools the app can call.
+  const page = [...ranked.slice(0, 15), ...ranked.slice(15).filter((c) => c.searches.includes(CUSTOMSHOP_SOURCE))];
   return {
     searches,
     sources,
@@ -92,7 +94,7 @@ export async function giftSearch(eventId: string, body: GiftSearchBody): Promise
     funnel,
     found: all.length,
     probed: probed.length,
-    ranked: ranked.slice(0, 15),
+    ranked: page,
     excluded: excluded.map((e) => ({ product_id: e.product_id, title: e.title, shop_name: e.shop_name, rule: e.verdict.rule, reason: e.verdict.reason })),
     duration_ms: Date.now() - started
   };

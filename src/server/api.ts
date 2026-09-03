@@ -48,6 +48,7 @@ import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
 import { changesAfter, exceptionsFor, recordProcurementChange, resolveExceptionsByAnswer } from "../domain/procurement";
+import { slugValue } from "../domain/values";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
@@ -278,11 +279,6 @@ export function approveSpecs(eventId: string, giftId: string, now = new Date()) 
   return giftView(eventId, giftId);
 }
 
-/** An option label as a stable value token, matching the invite form's option values. */
-function slugValue(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
-}
-
 /** Where one requirement's value comes from; `question` means a guest question the request creates. */
 export type RequirementSource = MappingSource["type"] | "question";
 
@@ -304,10 +300,11 @@ export type Requirement = {
 
 const isBlank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** The question a store field becomes: a date for a date kind, a choice for an allowed set, and text with the store's cap otherwise. */
+/** The question a store field becomes: a date for a date kind, a file address for an image, a choice for an allowed set, and text with the store's cap otherwise. */
 function questionFor(field: PersonalizationField): Requirement["question"] {
   const { max_length, allowed } = fieldConstraints(field);
   if (field.kind === "date") return { value_type: "date", constraints: {} };
+  if (field.kind === "image") return { value_type: "file", constraints: {} };
   if (allowed.length) return { value_type: "enum", constraints: { options: field.constraints?.options ?? allowed.map((value) => ({ value, label: value })) } };
   const constraints: Constraints = {};
   if (max_length !== undefined) constraints.max_length = max_length;

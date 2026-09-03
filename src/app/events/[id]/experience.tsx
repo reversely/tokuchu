@@ -366,7 +366,10 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
               <button type="button" className="btn primary small" onClick={() => sentence.trim() && search({ sentence })} disabled={!!busy || !sentence.trim() || !target.needed_by} data-testid="search">Search</button>
             </div>
             {curateBlock}
-            {gifts.length > 0 && <button type="button" className="btn ghost" onClick={() => setStep("list")}>Back to the gifts</button>}
+            <div style={{ display: "flex", gap: 10 }}>
+              {reply && <button type="button" className="btn ghost" onClick={() => setStep("results")} data-testid="last-results">Back to the results</button>}
+              {gifts.length > 0 && <button type="button" className="btn ghost" onClick={() => setStep("list")}>Back to the gifts</button>}
+            </div>
           </section>
         )}
 
@@ -408,7 +411,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
                 )}
                 <div className="results" data-testid="results">
                   {reply.ranked.slice(0, shown).map((p) => (
-                    <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result" data-shop={p.shop_domain}>
+                    <button key={p.product_id} type="button" className="prod" onClick={() => pick(p)} data-testid="result" data-shop={p.shop_domain} data-delivery={p.delivery?.verdict ?? "unknown"}>
                       {p.image_url ? <img className="ph" src={p.image_url} alt="" /> : <span className="ph" />}
                       <span className="body">
                         <span className="name">{p.title}</span>

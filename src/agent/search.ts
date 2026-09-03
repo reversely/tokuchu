@@ -141,11 +141,11 @@ export function personalizedRequest(sentence: string): boolean {
   return /\bnames?\b|personali[sz]/i.test(sentence);
 }
 
-/** The sources a sentence searches: the catalog, plus the sources of every card it names, plus the custom shop when it asks for sweatshirts. */
+/** The sources a sentence searches: the catalog, plus the sources of every card it names, plus the custom shop when it asks for sweatshirts or mugs. */
 export function sourcesForSentence(sentence: string, config = cardsConfig()): Source[] {
   const sources = new Set<Source>(DEFAULT_SOURCES);
   for (const card of cardsNamed(sentence, config)) for (const s of card.sources ?? []) sources.add(s);
-  if (/\bsweatshirts?\b|\bcrewnecks?\b/i.test(sentence)) sources.add("customshop");
+  if (/\bsweatshirts?\b|\bcrewnecks?\b|\bhoodies?\b|\bmugs?\b/i.test(sentence)) sources.add("customshop");
   return [...sources];
 }
 

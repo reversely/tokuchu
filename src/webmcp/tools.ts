@@ -16,7 +16,7 @@ export interface JsonSchemaProperty {
   items?: { type: string; enum?: readonly string[] };
   maxLength?: number;
   pattern?: string;
-  format?: "date";
+  format?: "date" | "uri";
   minimum?: number;
   maximum?: number;
 }
@@ -277,6 +277,8 @@ function questionProperty(def: AttributeDefinition): JsonSchemaProperty {
       return { type: "array", description, items: { type: "string", enum: values } };
     case "date":
       return { type: "string", description, format: "date" };
+    case "file":
+      return { type: "string", description, format: "uri" };
     default:
       return { type: "string", description, ...(max_length !== undefined && { maxLength: max_length }), ...(pattern && { pattern }) };
   }

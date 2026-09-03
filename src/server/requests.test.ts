@@ -94,6 +94,19 @@ describe("comparing the store's fields with what the event holds", () => {
     expect(motto).toMatchObject({ scope: "guest", value_type: "text", constraints: { max_length: 20 }, required_rule: "going", creator: "organizer", vendor_field: { key: "motto", kind: "text" } });
     expect(giftView(event.id, gift.id).personalization_mappings).toContainEqual({ vendor_field_key: "motto", source: { type: "definition", definition_id: motto.id, subject_scope: "guest" } });
   });
+
+  it("turns the mug's image field into a file question that takes an https address and refuses plain text", async () => {
+    const event = publishEvent(createEventFromBody(BODY).id);
+    const gift = seedGift(event.id, [{ key: "photo", label: "Image Upload 1", kind: "image", required: true, constraints: {} }]);
+    expect(giftRequirements(event.id, gift.id).find((r) => r.key === "photo")).toMatchObject({ source: "question", already: false, question: { value_type: "file" } });
+    await requestFromAttendees(event.id, gift.id);
+    const photo = snapshot(event.id).definitions.find((d) => d.key === "photo")!;
+    expect(photo).toMatchObject({ scope: "guest", value_type: "file", required_rule: "going", vendor_field: { key: "photo", kind: "image" } });
+    expect(() => submitRsvp(event.id, { party: {}, guests: [{ display_name: "Avery Chen", status: "going", answers: { [photo.id]: "a picture of me" } }] })).toThrow(/file address/);
+    submitRsvp(event.id, { party: {}, guests: [{ display_name: "Avery Chen", status: "going", answers: { [photo.id]: "https://cdn.example.com/avery.jpg" } }] });
+    const [row] = giftView(event.id, gift.id).manifest;
+    expect(row).toMatchObject({ personalization_status: "ready", personalization: { photo: { value: "https://cdn.example.com/avery.jpg" } } });
+  });
 });
 
 describe("requesting the missing values from attendees", () => {

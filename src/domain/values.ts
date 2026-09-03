@@ -95,6 +95,11 @@ export function aggregate(def: AttributeDefinition, values: (unknown | undefined
 }
 
 /** The form control a value type renders as; the page reads this, never the type name. */
+/** An option label as a stable value token: the invite form's option values and the variant question's key share it. */
+export function slugValue(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "option";
+}
+
 export function controlFor(def: AttributeDefinition): "text" | "textarea" | "number" | "checkbox" | "radio" | "checkboxes" | "date" | "file" | "select" {
   switch (def.value_type) {
     case "text":

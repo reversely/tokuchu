@@ -7,7 +7,10 @@
  */
 import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domain/gifts";
 import type { CartBlocked, CartLine } from "../domain/types";
+import { personalized } from "../domain/personalization";
 import { postUpdate, requireGift } from "./api";
+import { cartDeps } from "./cart-api";
+import { runCatalogCartFill } from "./catalog-cart";
 import { afterCommit, withPersistedEvent } from "./persistence";
 import { noteCartResult } from "./proactive";
 import { withStorePage, type StorePage } from "./store-page";
@@ -73,6 +76,8 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
  * gift, so a failure reads as a `failed` cart_fill with the reason.
  */
 export async function runCartFill(eventId: string, giftId: string, deps: CartJobDeps = liveDeps): Promise<void> {
+  // A product with no customization fields has no merchant tool to call; its cart is the store's own UCP cart.
+  if (!personalized(requireGift(eventId, giftId))) return runCatalogCartFill(eventId, giftId, cartDeps());
   const started = new Date().toISOString();
   const plan = await withPersistedEvent(eventId, () => {
     const gift = requireGift(eventId, giftId);

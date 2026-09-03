@@ -76,9 +76,9 @@ The results are ranked real products from real stores. Each card names the store
 
 ![The ranked results](media/guide/07-search-results.png)
 
-## 7. Pick a product and read its customization
+## 7. Pick the products and read their customization
 
-Click a result. The next step chooses who receives it, by default everyone going.
+The demo chooses three gifts: the store's crewneck, the store's ceramic mug as the favour, and a food and beverage item from Shopify's catalog. Click a result. The next step chooses who receives it, by default everyone going.
 
 ![Choosing the recipients](media/guide/08-recipients.png)
 
@@ -90,11 +90,13 @@ Add this gift is where the store's own WebMCP tool comes in. For the demo store,
 
 ![The gift with the store's fields and variants](media/guide/10-gift-with-customization.png)
 
-For a product from any other store the catalog's variants stand in, and there is no customization step.
+The mug goes the same way: Back to the results reopens the last search, whose list keeps the store's eligible products, and the store answers `get_customization` with one field, an image each attendee supplies as the address of a picture.
+
+For a product from any other store the catalog's variants stand in, and there is no customization step. The food and drink card runs its searches in Shopify's food and beverage category and checks that each product ships to the venue by the needed-by date; the first result whose delivery check passed is a plain product, and its order goes through the store's own UCP cart at approval.
 
 ## 8. Request the missing details from attendees
 
-The Attendees tab compares the store's fields with what the RSVP list already holds. A field that matches an existing answer, such as the printed name, is resolved from the list. The rest are shown as questions to ask.
+The Attendees tab shows one gift at a time; with more than one gift a row of buttons at the top switches between them. For the gift shown it compares the store's fields with what the RSVP list already holds. A field that matches an existing answer, such as the printed name, is resolved from the list. The rest are shown as questions to ask.
 
 ![The fields the product needs](media/guide/11-requested-fields.png)
 
@@ -104,27 +106,29 @@ Request from attendees turns each open field into a question with the store's li
 
 Send follow-up emails everyone whose request still has an unanswered question. An attendee with no email address is listed as such; they add one by opening their reply link again.
 
+The mug's image field becomes a file question: the form takes the address of a picture, and the store's cart tool takes an https address or an image data URL. The food gift has no fields, so its panel reads that there is nothing to ask.
+
 ## 9. The records grid and the routing
 
-Each reply fills a row: one column per requirement, with the attendee's answer or a marker for what is still missing. An answer changed after approval is marked so you can re-approve.
+Each reply fills a row: one column per requirement of the gift shown, with the attendee's answer or a marker for what is still missing. Switching the gift switches the columns. An answer changed after approval is marked so you can re-approve.
 
 ![The records grid](media/guide/13-records-grid.png)
 
-Under the grid, How this reaches the store lists every WebMCP hop for this gift: the store, its endpoint, the Shopify page tools on its pages, the store's `get_customization` and `add_customized_to_cart`, and Tokuchu's own `request_from_attendees`.
+Under the grid, How this reaches the store lists every WebMCP hop for this gift: the store, its endpoint, the Shopify page tools on its pages, the store's `get_customization` and `add_customized_to_cart`, and Tokuchu's own `request_from_attendees`. For a plain product the panel names `approve_specs` and the store's UCP cart tools `create_cart`, `update_cart`, and `create_checkout` instead.
 
 ![The WebMCP routing to the store](media/guide/14-webmcp-routing.png)
 
-## 10. Approve and fill the cart
+## 10. Approve and fill the carts
 
-Approve and fill the cart records the approval and starts the cart job. Tokuchu opens the store's product page on the server and calls `add_customized_to_cart` once, with one item per attendee: the variant their size resolved to and their values for every field. The store adds the lines to a cart and returns its checkout link, which appears under the approval.
+Approve and fill the cart records the approval of the gift shown and starts its cart job; each gift is approved on its own. For the crewneck and the mug Tokuchu opens the store's product page on the server and calls `add_customized_to_cart` once, with one item per attendee: the variant their size resolved to and their values for every field. The store adds the lines to a cart and returns its checkout link, which appears under the approval. For the food gift Tokuchu calls the store's UCP endpoint instead: `create_cart` with one unit per attendee going, then `create_checkout`, and the checkout link appears in the same place.
 
 ![The approval and the cart link](media/guide/15-approved-cart-link.png)
 
 A row that is not ready is listed under the button with the reason. When attendees have not confirmed their specifications yet, a Send email reminders button is beside the message; when a field was never requested, the request button is.
 
-## 11. Review the cart at the store
+## 11. Review the carts at the stores
 
-The link opens the store's cart in any browser, with a personalized line per attendee. Checkout happens at the store, with the store's own payment.
+Three gifts from two stores give three links. The crewneck's and the mug's open the store's cart in any browser, with a personalized line per attendee; the food's opens its store's checkout with the going count. Checkout happens at each store, with the store's own payment.
 
 ![The store's cart with one line per attendee](media/guide/16-store-cart.png)
 

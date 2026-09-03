@@ -25,7 +25,8 @@ export const KIND_VALUE_TYPES: Record<PersonalizationKind, ValueType[]> = {
   location: ["text"],
   star_map: ["text", "date"],
   color: ["text", "enum"],
-  word_list: ["text", "multi_enum"]
+  word_list: ["text", "multi_enum"],
+  image: ["file"]
 };
 
 /** The event keys each field kind accepts without a transform. */
@@ -38,7 +39,8 @@ export const KIND_EVENT_KEYS: Record<PersonalizationKind, EventKey[]> = {
   location: ["venue"],
   star_map: ["starts_at", "venue"],
   color: [],
-  word_list: []
+  word_list: [],
+  image: []
 };
 
 /** The guest row fields each field kind accepts: the display name fills a name or a text field. */
@@ -51,7 +53,8 @@ export const KIND_GUEST_KEYS: Record<PersonalizationKind, GuestKey[]> = {
   location: [],
   star_map: [],
   color: [],
-  word_list: []
+  word_list: [],
+  image: []
 };
 
 /** The definition value types each transform accepts. */
@@ -176,6 +179,8 @@ function valueIssue(field: PersonalizationField, value: unknown): Pick<Personali
     if (typeof value !== "string" || !ISO_DATE.test(value) || Number.isNaN(Date.parse(value))) return { code: "invalid_type", message: `${field.label} needs a date` };
   } else if (field.kind === "time") {
     if (typeof value !== "string" || !CLOCK_TIME.test(value)) return { code: "invalid_type", message: `${field.label} needs a time as HH:MM` };
+  } else if (field.kind === "image") {
+    if (typeof value !== "string" || !/^(https:\/\/|data:image\/)/.test(value)) return { code: "invalid_type", message: `${field.label} needs an https address or an image data URL` };
   } else if (field.kind === "word_list") {
     const list = Array.isArray(value) ? value : typeof value === "string" ? [value] : null;
     if (!list || list.some((v) => typeof v !== "string")) return { code: "invalid_type", message: `${field.label} needs words` };

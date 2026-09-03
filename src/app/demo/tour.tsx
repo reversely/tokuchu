@@ -2,27 +2,32 @@
 import { replyError } from "../../lib/reply-error";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "../events/[id]/dashboard";
-import { DEMO_ATTENDEES, DEMO_STORE } from "../../demo/seed";
+import { DEMO_ATTENDEES, DEMO_GIFT_ORDER, DEMO_GIFTS, DEMO_STORE, type DemoGiftKey } from "../../demo/seed";
 import { Intro } from "./intro";
-import { STEPS, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
+import { STEPS, demoGift, demoGifts, startIndex, type TourAction, type TourPhase, type TourStep, type TourTarget, type WireLine, type WirePage, type WireUpdate } from "../../demo/steps";
 import { withDemoHeaders } from "../../demo/token";
 
 /** The pause between a step settling and autoplay moving on, so the result reads before the next callout. */
 const READ_MS = 3000;
 const POLL_MS = 250;
-/** How often the wire re-reads the gift's updates thread while a step that lists it runs. */
+/** How often the wire re-reads the gifts' updates threads while a step that lists them runs. */
 const THREAD_MS = 3000;
 const KEY_MS = 18;
 const STORE_MS = 240_000;
 const PAGE_MS = 15_000;
 const CALLOUT_WIDTH = 580;
+/** How many pages of five the tour reveals while looking for one result. */
+const RESULT_PAGES = 12;
 
 type Phase = TourPhase;
 type Rect = { top: number; left: number; width: number; height: number };
 type Viewport = { width: number; height: number };
 type Note = (text: string | null) => void;
+/** What an action reads: the event, the note setter, the step's gift, and the latest snapshot. */
+type ActionContext = { eventId: string; setNote: Note; gift?: DemoGiftKey; snap: () => Snapshot };
 
 const EMPTY_PAGE: WirePage = { funnelRows: [], rankedCount: 0, askedLabels: [], attendeeRows: 0 };
+const CHECKOUT_LABEL: Record<DemoGiftKey, string> = { crewneck: "Crewneck checkout", mug: "Mug checkout", food: "Food checkout" };
 
 const text = (el: Element) => (el.textContent || "").replace(/\s+/g, " ").trim();
 const texts = (selector: string) => Array.from(document.querySelectorAll(selector)).map(text);
@@ -53,6 +58,11 @@ function selector({ testId, shop }: TourTarget): string {
 
 function find<T extends HTMLElement>(target: TourTarget): T | null {
   return document.querySelector<T>(selector(target));
+}
+
+/** The result card from `shop` whose title matches, among the cards shown so far. */
+function findResult(shop: string, title: RegExp | null): HTMLElement | null {
+  return Array.from(document.querySelectorAll<HTMLElement>(selector({ testId: "result", shop }))).find((el) => title === null || title.test(text(el))) ?? null;
 }
 
 /** Polls `probe` until it returns a value; the note names the wait for the callout while it lasts. */
@@ -100,68 +110,133 @@ function changed(): void {
   window.dispatchEvent(new Event("event:changed"));
 }
 
-async function search(setNote: Note): Promise<void> {
-  const input = await waitFor(() => find<HTMLInputElement>({ testId: "sentence" }), "Opening the sentence box", PAGE_MS, setNote);
-  await typeInto(input, DEMO_STORE.search);
-  click({ testId: "search" });
-  await waitFor(orFailure({ testId: "results" }, "gx-error"), "Searching the catalog and checking delivery", STORE_MS, setNote);
-  const store: TourTarget = { testId: "result", shop: DEMO_STORE.shop_domain };
-  // The store's crewneck ranks near the top; each page of five shows more until it appears.
-  for (let i = 0; i < 6 && !find(store); i++) find<HTMLElement>({ testId: "show-more" })?.click();
-  await waitFor(() => find(store), "Looking for the store's crewneck in the results", PAGE_MS, setNote);
+/** Selects one of the three gifts on the Attendees tab, when the event holds it and the tab shows a switcher. */
+async function selectGift(key: DemoGiftKey, ctx: ActionContext): Promise<void> {
+  const gift = demoGift(ctx.snap().gifts, key);
+  if (!gift) throw new Error(`The event has no ${DEMO_GIFTS[key].label} yet`);
+  const tab = document.querySelector<HTMLElement>(`[data-testid="gift-tab"][data-gift="${gift.id}"]`);
+  if (!tab || tab.getAttribute("aria-current") === "true") return;
+  tab.click();
+  await waitFor(() => document.querySelector(`[data-testid="requested-info"][data-gift="${gift.id}"]`), `Opening ${DEMO_GIFTS[key].label}`, PAGE_MS, ctx.setNote);
 }
 
-async function pick(setNote: Note): Promise<void> {
-  click({ testId: "result", shop: DEMO_STORE.shop_domain });
+/** Reveals pages of results until the probe finds a card. */
+async function revealResult(probe: () => HTMLElement | null, note: string, setNote: Note): Promise<HTMLElement> {
+  for (let i = 0; i < RESULT_PAGES && !probe(); i++) {
+    const more = find<HTMLElement>({ testId: "show-more" });
+    if (!more) break;
+    more.click();
+    await new Promise((r) => setTimeout(r, POLL_MS));
+  }
+  return waitFor(probe, note, PAGE_MS, setNote);
+}
+
+/** The pick flow from a result card: the recipients, the variants, and the confirm that saves the gift and reads the store's fields. */
+async function pickCard(card: HTMLElement, expectedGifts: number, setNote: Note): Promise<void> {
+  card.scrollIntoView({ block: "center" });
+  card.click();
   await waitFor(() => find({ testId: "recipients" }), "Opening the recipients", PAGE_MS, setNote);
   click({ testId: "next" });
   await waitFor(() => find({ testId: "confirm" }), "Opening the variants", PAGE_MS, setNote);
   click({ testId: "confirm" });
-  await waitFor(orFailure({ testId: "gift" }, "gx-error"), "Asking the store for its customization fields", STORE_MS, setNote);
+  await waitFor(() => {
+    if (find({ testId: "gx-error" })) throw new Error(find({ testId: "gx-error" })!.textContent || "The pick failed");
+    return document.querySelectorAll('[data-testid="gift"]').length >= expectedGifts;
+  }, "Asking the store for its customization fields", STORE_MS, setNote);
 }
 
-async function request(setNote: Note): Promise<void> {
+async function search({ setNote }: ActionContext): Promise<void> {
+  const input = await waitFor(() => find<HTMLInputElement>({ testId: "sentence" }), "Opening the sentence box", PAGE_MS, setNote);
+  await typeInto(input, DEMO_STORE.search);
+  click({ testId: "search" });
+  await waitFor(orFailure({ testId: "results" }, "gx-error"), "Searching the catalog and checking delivery", STORE_MS, setNote);
+  await revealResult(() => findResult(DEMO_STORE.shop_domain, DEMO_GIFTS.crewneck.title), "Looking for the store's crewneck in the results", setNote);
+}
+
+async function pick({ setNote }: ActionContext): Promise<void> {
+  const card = await revealResult(() => findResult(DEMO_STORE.shop_domain, DEMO_GIFTS.crewneck.title), "Looking for the store's crewneck in the results", setNote);
+  await pickCard(card, 1, setNote);
+}
+
+/** Back to the last results from the gifts list, then the store's mug. */
+async function pickMug({ setNote }: ActionContext): Promise<void> {
+  click({ testId: "add-gift" });
+  const back = await waitFor(() => find<HTMLElement>({ testId: "last-results" }), "Returning to the results", PAGE_MS, setNote);
+  back.click();
+  await waitFor(() => find({ testId: "results" }), "Opening the results", PAGE_MS, setNote);
+  const card = await revealResult(() => findResult(DEMO_STORE.shop_domain, DEMO_GIFTS.mug.title), "Looking for the store's mug in the results", setNote);
+  await pickCard(card, 2, setNote);
+}
+
+/** The food card's search, then the top result. */
+async function pickFood({ setNote }: ActionContext): Promise<void> {
+  click({ testId: "add-gift" });
+  const card = await waitFor(() => find<HTMLElement>({ testId: `card-${DEMO_GIFTS.food.card}` }), "Opening the cards", PAGE_MS, setNote);
+  card.click();
+  await waitFor(orFailure({ testId: "results" }, "gx-error"), "Searching the food and beverage category and checking delivery", STORE_MS, setNote);
+  // The first result whose delivery check passed: a card the store's checkout quoted for the venue.
+  const first = await revealResult(() => document.querySelector<HTMLElement>('[data-testid="result"][data-delivery="quoted"]'), "Looking for the first result with a delivery quote", setNote);
+  await pickCard(first, 3, setNote);
+}
+
+async function request(ctx: ActionContext): Promise<void> {
+  if (ctx.gift) await selectGift(ctx.gift, ctx);
   click({ testId: "request-fields" });
   await waitFor(() => {
     if (find({ testId: "request-error" })) throw new Error(find({ testId: "request-error" })!.textContent || "The request failed");
     return document.querySelector('[data-testid="requested-field"][data-source="definition"]');
-  }, "Sending the request", PAGE_MS, setNote);
+  }, "Sending the request", PAGE_MS, ctx.setNote);
 }
 
-/** Loads the three replies through the RSVP route with the store's size choice and the star map answers. */
-async function answer(eventId: string, setNote: Note): Promise<void> {
-  const snap = (await (await fetch(`/api/events/${eventId}`, withDemoHeaders({ cache: "no-store" }))).json()) as Snapshot;
-  const def = (key: string) => snap.definitions.find((d) => d.key === key);
-  const size = def("variant_size");
-  const location = def("star_map_location");
-  const time = def("star_map_time");
-  if (!size || !location || !time) throw new Error("The requested questions are not on the event yet");
-  const sizeValue = (label: string) => size.constraints.options?.find((o) => o.label.toLowerCase() === label.toLowerCase())?.value ?? size.constraints.options?.[0]?.value;
-  const guests = DEMO_ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: { [size.id]: sizeValue(a.size), [location.id]: a.location, [time.id]: a.time } }));
+type Definition = Snapshot["definitions"][number];
+
+/** One attendee's answer to a question the requests created: the seeded value for the known keys, the first choice or the name otherwise. */
+function answerFor(def: Definition, attendee: (typeof DEMO_ATTENDEES)[number]): unknown {
+  const option = (label: string) => def.constraints.options?.find((o) => o.label.toLowerCase() === label.toLowerCase())?.value ?? def.constraints.options?.[0]?.value;
+  if (def.key === "variant_size") return option(attendee.size);
+  if (def.key === "star_map_location") return attendee.location;
+  if (def.key === "star_map_time") return attendee.time;
+  if (def.key === "photo" || def.value_type === "file") return attendee.photo;
+  if (def.value_type === "enum") return def.constraints.options?.[0]?.value;
+  if (def.value_type === "multi_enum") return def.constraints.options?.[0] ? [def.constraints.options[0].value] : [];
+  return attendee.display_name;
+}
+
+/** Loads the three replies through the RSVP route with an answer to every question the requests created. */
+async function answer({ eventId, setNote }: ActionContext): Promise<void> {
+  const fresh = (await (await fetch(`/api/events/${eventId}`, withDemoHeaders({ cache: "no-store" }))).json()) as Snapshot;
+  const asked = fresh.definitions.filter((d) => d.scope === "guest" && d.required_rule === "going" && d.creator === "organizer");
+  if (!asked.some((d) => d.key === "variant_size") || !asked.some((d) => d.key === "star_map_location")) throw new Error("The requested questions are not on the event yet");
+  const guests = DEMO_ATTENDEES.map((a) => ({ display_name: a.display_name, status: "going", answers: Object.fromEntries(asked.map((d) => [d.id, answerFor(d, a)])) }));
   const res = await fetch(`/api/events/${eventId}/rsvp`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guests }) }));
   if (!res.ok) throw new Error(await replyError(res));
   changed();
   await waitFor(() => document.querySelectorAll('[data-testid="attendee-row"]').length >= DEMO_ATTENDEES.length && document.querySelector('[data-state="missing"]') === null, "Filling the records grid", PAGE_MS, setNote);
 }
 
-async function approve(setNote: Note): Promise<void> {
-  click({ testId: "approve-send" });
-  await waitFor(orFailure({ testId: "specs-approved" }, "approve-error"), "Recording the approval", 30_000, setNote);
+/** Approves every gift in order, selecting each on the tab; a gift already approved is left as it is. */
+async function approve(ctx: ActionContext): Promise<void> {
+  for (const key of DEMO_GIFT_ORDER) {
+    await selectGift(key, ctx);
+    if (find({ testId: "specs-approved" })) continue;
+    click({ testId: "approve-send" });
+    await waitFor(orFailure({ testId: "specs-approved" }, "approve-error"), `Recording the approval of ${DEMO_GIFTS[key].label}`, 30_000, ctx.setNote);
+    changed();
+  }
+  if (ctx.gift) await selectGift(ctx.gift, ctx);
 }
 
-async function cart(setNote: Note): Promise<void> {
-  await waitFor(orFailure({ testId: "review-cart" }, "cart-failed"), "The store is filling the cart", STORE_MS, setNote);
+/** Waits for every gift's checkout link, selecting each gift in turn so the page shows the cart that is filling. */
+async function cart(ctx: ActionContext): Promise<void> {
+  for (const key of DEMO_GIFT_ORDER) {
+    await selectGift(key, ctx);
+    await waitFor(orFailure({ testId: "review-cart" }, "cart-failed"), `The store is filling the cart for ${DEMO_GIFTS[key].label}`, STORE_MS, ctx.setNote);
+  }
+  if (ctx.gift) await selectGift(ctx.gift, ctx);
 }
 
 /** Each action drives the page's own controls and settles when the page shows the result. */
-const ACTIONS: Record<TourAction, (eventId: string, setNote: Note) => Promise<void>> = {
-  search: (_, note) => search(note),
-  pick: (_, note) => pick(note),
-  request: (_, note) => request(note),
-  answer,
-  approve: (_, note) => approve(note),
-  cart: (_, note) => cart(note)
-};
+const ACTIONS: Record<TourAction, (ctx: ActionContext) => Promise<void>> = { search, pick, pick_mug: pickMug, pick_food: pickFood, request, answer, approve, cart };
 
 function currentTab(): string | null {
   return document.querySelector('.tabs button[aria-current="page"]')?.getAttribute("data-testid")?.replace("tab-", "") ?? null;
@@ -186,7 +261,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
   const [autoplay, setAutoplay] = useState(false);
   const [rect, setRect] = useState<Rect | null>(null);
   const [page, setPage] = useState<WirePage>(EMPTY_PAGE);
-  const [updates, setUpdates] = useState<WireUpdate[]>([]);
+  const [updates, setUpdates] = useState<Record<string, WireUpdate[]>>({});
   const [completed, setCompleted] = useState<Set<string>>(() => new Set());
   const [height, setHeight] = useState(0);
   // The viewport is read after mount so the server and the first client render agree on the callout's place.
@@ -199,6 +274,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
   const step = STEPS[index];
   const last = index === STEPS.length - 1;
   const isComplete = useCallback((s: TourStep) => !s.action || completed.has(s.id) || Boolean(s.done?.(snapRef.current)), [completed]);
+  const context = useCallback((): ActionContext => ({ eventId: snap.event.id, setNote, gift: step.target.gift, snap: () => snapRef.current }), [snap.event.id, step]);
 
   useEffect(() => {
     setAutoplay(new URLSearchParams(window.location.search).get("autoplay") === "1");
@@ -213,7 +289,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
     return () => window.removeEventListener("resize", read);
   }, []);
 
-  // Entering a step: switch to its tab, wait for its target, and bring the target into view.
+  // Entering a step: switch to its tab, select its gift, wait for its target, and bring the target into view.
   useEffect(() => {
     let stop = false;
     setPhase("entering");
@@ -223,6 +299,10 @@ export function Tour({ snap }: { snap: Snapshot }) {
       if (currentTab() !== step.tab) find<HTMLElement>({ testId: `tab-${step.tab}` })?.click();
       const timeout = step.target.testId === "review-cart" ? STORE_MS : PAGE_MS;
       try {
+        if (step.target.gift) {
+          await waitFor(() => (stop ? null : find({ testId: "requested-info" })), "Opening the page", PAGE_MS, setNote);
+          await selectGift(step.target.gift, context());
+        }
         const el = await waitFor(() => (stop ? null : find<HTMLElement>(step.target)), "Opening the page", timeout, setNote);
         el.scrollIntoView({ block: "center" });
         if (!stop) setPhase("ready");
@@ -268,18 +348,22 @@ export function Tour({ snap }: { snap: Snapshot }) {
     };
   }, [step, phase]);
 
-  // The gift's updates thread feeds the wire while a step that lists it runs; the cart job posts each step there.
-  const giftId = snap.gifts[0]?.id ?? null;
+  // The gifts' updates threads feed the wire while a step that lists them runs; each cart job posts its steps there.
+  const giftIds = snap.gifts.map((g) => g.id).join(",");
   useEffect(() => {
-    if (!step.readsThread || phase !== "running" || !giftId) return;
+    if (!step.readsThread || phase !== "running" || !giftIds) return;
     let stop = false;
     const read = async () => {
-      try {
-        const res = await fetch(`/api/events/${snap.event.id}/gifts/${giftId}/updates`, withDemoHeaders({ cache: "no-store" }));
-        if (res.ok && !stop) setUpdates(((await res.json()) as { updates: WireUpdate[] }).updates.map(({ text, reference }) => ({ text, reference })));
-      } catch {
-        // The next tick reads again.
+      const next: Record<string, WireUpdate[]> = {};
+      for (const id of giftIds.split(",")) {
+        try {
+          const res = await fetch(`/api/events/${snap.event.id}/gifts/${id}/updates`, withDemoHeaders({ cache: "no-store" }));
+          if (res.ok) next[id] = ((await res.json()) as { updates: WireUpdate[] }).updates.map(({ text, reference }) => ({ text, reference }));
+        } catch {
+          // The next tick reads again.
+        }
       }
+      if (!stop) setUpdates(next);
     };
     void read();
     const timer = setInterval(() => void read(), THREAD_MS);
@@ -287,7 +371,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
       stop = true;
       clearInterval(timer);
     };
-  }, [step.readsThread, phase, giftId, snap.event.id]);
+  }, [step.readsThread, phase, giftIds, snap.event.id]);
 
   /** Runs the step's action once, then moves on; a step already shown finished moves on at once. */
   const advance = useCallback(async () => {
@@ -297,7 +381,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
       setPhase("running");
       setError(null);
       try {
-        await ACTIONS[step.action!](snap.event.id, setNote);
+        await ACTIONS[step.action!](context());
         setCompleted((prev) => new Set(prev).add(step.id));
         changed();
         await new Promise((r) => setTimeout(r, READ_MS));
@@ -311,7 +395,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
     }
     if (!last) setIndex(index + 1);
     else setPhase("ready");
-  }, [step, index, last, isComplete, snap.event.id]);
+  }, [step, index, last, isComplete, context]);
 
   // Autoplay: once the callout is in place the step reads for a moment and then runs.
   useEffect(() => {
@@ -328,7 +412,8 @@ export function Tour({ snap }: { snap: Snapshot }) {
     return () => observer.disconnect();
   }, []);
 
-  const checkout = last ? (snap.gifts[0]?.checkout_url ?? null) : null;
+  const gifts = demoGifts(snap.gifts);
+  const checkouts = last ? DEMO_GIFT_ORDER.flatMap((key) => (gifts[key]?.checkout_url ? [{ key, url: gifts[key]!.checkout_url! }] : [])) : [];
   const box = viewport ? calloutPosition(rect, height, viewport) : { top: 0, left: 0, visibility: "hidden" as const };
   const closeIntro = useCallback(() => {
     setIntro(false);
@@ -339,7 +424,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
     }
   }, [introKey]);
 
-  const wire = markWorking(step.wire?.({ snap, gift: snap.gifts[0] ?? null, page, updates, phase }) ?? [], phase);
+  const wire = markWorking(step.wire?.({ snap, gifts, page, updates, phase }) ?? [], phase);
 
   return (
     <div className="tour" data-testid="tour" data-step={step.id} data-phase={phase} data-intro={intro ? "open" : "done"}>
@@ -358,8 +443,10 @@ export function Tour({ snap }: { snap: Snapshot }) {
         {error && <p className="error" role="alert" data-testid="tour-error">{error}</p>}
         <div className="tour-acts">
           <button type="button" className="btn ghost small" onClick={() => setIndex(index - 1)} disabled={index === 0 || phase === "running"} data-testid="tour-back">Back</button>
-          {checkout ? (
-            <a className="btn primary small" href={checkout} target="_blank" rel="noreferrer" data-testid="tour-checkout">Open the checkout</a>
+          {checkouts.length > 0 ? (
+            checkouts.map(({ key, url }) => (
+              <a key={key} className="btn primary small" href={url} target="_blank" rel="noreferrer" data-testid={key === "crewneck" ? "tour-checkout" : `tour-checkout-${key}`}>{CHECKOUT_LABEL[key]}</a>
+            ))
           ) : (
             <button type="button" className="btn primary small" onClick={() => void advance()} disabled={phase === "running" || (last && !isComplete(step))} data-testid="tour-next">{phase === "running" ? "Working" : last ? "Done" : "Next"}</button>
           )}

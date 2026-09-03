@@ -7,10 +7,14 @@ import { executeThroughApi } from "../../../webmcp/register";
 import { TOOLS } from "../../../webmcp/tools";
 import { DEMO_STORE } from "../../../demo/seed";
 import type { VendorUpdate } from "../../../domain/types";
+import { slugValue } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
 
 const STATUS_LABEL: Record<string, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
 type Definition = Snapshot["definitions"][number];
+type Gift = Snapshot["gifts"][number];
+
+const bareHost = (shop: string) => shop.replace(/^https?:\/\//, "");
 
 /** A guest question in plain words: the control it renders and, for a choice, the options it offers. */
 function questionKind(def: Definition): string {
@@ -19,6 +23,7 @@ function questionKind(def: Definition): string {
   if (def.value_type === "multi_enum") return opts.length ? `choose any of ${opts.join(", ")}` : "choose any";
   if (def.value_type === "date") return "a date";
   if (def.value_type === "number") return "a number";
+  if (def.value_type === "file") return "the address of a picture";
   if (def.constraints.max_length) return `text up to ${def.constraints.max_length} characters`;
   return "short text";
 }
@@ -43,6 +48,17 @@ function sourceLabel(r: Requirement, defs: Map<string, Definition>): string {
 }
 
 /**
+ * The grid's columns for one gift: the questions its store fields created and the variant choice its
+ * option axes ask for. With no gift chosen every guest question is a column.
+ */
+function giftColumns(gift: Gift | undefined, guestDefs: Definition[]): Definition[] {
+  if (!gift) return guestDefs;
+  const fieldKeys = new Set((gift.personalization?.fields ?? []).map((f) => f.key));
+  const variantKeys = new Set(gift.variants.flatMap((v) => (v.options ?? []).map((o) => `variant_${slugValue(o.name)}`)));
+  return guestDefs.filter((d) => (d.vendor_field?.key !== undefined && fieldKeys.has(d.vendor_field.key)) || variantKeys.has(d.key));
+}
+
+/**
  * Runs one organizer tool through the same path a browser agent takes on this page, so a click and a
  * tool call share one request. Returns the error text when the call failed.
  */
@@ -58,19 +74,26 @@ async function runTool(name: string, eventId: string, giftId: string): Promise<s
   }
 }
 
-/** The Attendees records grid, the organizer's request panel, the WebMCP routing that carries it, the approve gate, and the cart job's progress log. */
+/**
+ * The Attendees tab, one gift at a time: the gift switcher, the organizer's request panel, the records
+ * grid with that gift's columns, the WebMCP routing that carries it, the approve gate, and the cart job's
+ * progress log.
+ */
 export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () => void }) {
   // A choice question with no options cannot be answered, so it is neither a column nor a request.
   const answerable = (d: Definition) => !((d.value_type === "enum" || d.value_type === "multi_enum") && (d.constraints.options?.length ?? 0) === 0);
   const guestDefs = snap.definitions.filter((d) => d.scope === "guest" && answerable(d));
   const defsById = new Map(snap.definitions.map((d) => [d.id, d]));
   const attendees = snap.guests.filter((g) => g.status === "going");
-  const gift = snap.gifts[0];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const gift = snap.gifts.find((g) => g.id === selectedId) ?? snap.gifts[0];
+  const columns = giftColumns(gift, guestDefs);
+  const personalized = (gift?.personalization?.fields.length ?? 0) > 0;
   const approved = Boolean(gift?.approved_at);
   const fill = gift?.cart_fill ?? null;
   const filling = fill?.status === "running";
   const changed = attendees.filter((g) => g.changed_since_approval).length;
-  const store = gift?.shop_domain?.replace(/^https?:\/\//, "") || "the store";
+  const store = gift ? bareHost(gift.shop_domain) || "the store" : "the store";
   const requests = new Map(snap.requests.filter((r) => r.gift_id === gift?.id).map((r) => [r.guest_id, r]));
   const incomplete = [...requests.values()].filter((r) => !r.complete).length;
 
@@ -110,6 +133,12 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const blockedUnconfirmed = blockedIssues.some((i) => i.includes("not confirmed by the attendee"));
   const blockedUnrequested = blockedIssues.some((i) => i.includes("not been requested from attendees"));
 
+  function select(id: string) {
+    setSelectedId(id);
+    setError(null);
+    setApproveError(null);
+  }
+
   async function run(name: "request_from_attendees" | "follow_up", which: "request" | "follow_up") {
     if (!gift) return;
     setBusy(which);
@@ -134,7 +163,10 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
     const label = Array.isArray(value)
       ? (value as string[]).map((x) => def.constraints.options?.find((o) => o.value === x)?.label ?? x).join(" ")
       : value === undefined || value === "" ? "" : def.constraints.options?.find((o) => o.value === value)?.label ?? String(value);
-    if (label) return requests.get(guestId)?.definition_ids.includes(def.id) ? <span className="answered" data-state="answered">{label}</span> : label;
+    if (label) {
+      const shown = def.value_type === "file" ? <a href={label} target="_blank" rel="noreferrer">picture</a> : label;
+      return requests.get(guestId)?.definition_ids.includes(def.id) ? <span className="answered" data-state="answered">{shown}</span> : shown;
+    }
     const requested = requests.get(guestId)?.definition_ids.includes(def.id);
     const required = def.required_rule === "always" || (def.required_rule === "going" && going);
     return requested || required ? <span className="missing" data-state="missing">missing</span> : <span className="quiet">not given</span>;
@@ -142,7 +174,17 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
 
   return (
     <div className="wrap solo">
-      <section className="block" aria-labelledby="requested" data-testid="requested-info">
+      {snap.gifts.length > 1 && (
+        <div className="chips" style={{ marginBottom: 20 }} data-testid="gift-tabs" aria-label="The gift the tab shows">
+          {snap.gifts.map((g) => (
+            <button type="button" key={g.id} className={`chip${g.id === gift?.id ? " on" : ""}`} aria-current={g.id === gift?.id ? "true" : undefined} onClick={() => select(g.id)} data-testid="gift-tab" data-gift={g.id}>
+              {g.product_title} <span className="quiet">{bareHost(g.shop_domain)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <section className="block" aria-labelledby="requested" data-testid="requested-info" data-gift={gift?.id}>
         <div className="labelrow"><h2 id="requested">Information requested from attendees</h2>{gift && <span className="eyebrow">{gift.product_title}</span>}</div>
         {requirements.length > 0 ? (
           <div className="chips">
@@ -151,7 +193,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
             ))}
           </div>
         ) : (
-          <p className="hint" style={{ color: "var(--muted)" }}>No requirements yet</p>
+          <p className="hint" style={{ color: "var(--muted)" }}>{gift && !personalized ? "This product has no customization fields" : "No requirements yet"}</p>
         )}
         {gift && (
           <div className="sendrow" style={{ marginTop: 16 }}>
@@ -177,7 +219,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
         {error && <p className="error" role="alert" data-testid="request-error">{error}</p>}
       </section>
 
-      <section className="block" aria-labelledby="records" data-testid="attendees">
+      <section className="block" aria-labelledby="records" data-testid="attendees" data-gift={gift?.id}>
         <div className="labelrow"><h2 id="records">Attendees</h2><span className="eyebrow">{attendees.length} responses</span></div>
         {attendees.length === 0 ? (
           <p className="hint" style={{ color: "var(--muted)" }} data-testid="attendees-empty">No attendees yet</p>
@@ -188,7 +230,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                 <tr>
                   <th>Attendee</th>
                   <th>Status</th>
-                  {guestDefs.map((d) => <th key={d.id}>{d.label}</th>)}
+                  {columns.map((d) => <th key={d.id}>{d.label}</th>)}
                   {(requests.size > 0 || approved) && <th>Request</th>}
                 </tr>
               </thead>
@@ -199,7 +241,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
                     <tr key={g.id} data-testid="attendee-row" data-request={request ? (request.complete ? "complete" : "incomplete") : "none"} data-changed={g.changed_since_approval ? "true" : "false"}>
                       <td>{g.display_name}</td>
                       <td>{STATUS_LABEL[g.status]}</td>
-                      {guestDefs.map((d) => <td key={d.id}>{cell(g.id, g.values[d.id], d, g.status === "going")}</td>)}
+                      {columns.map((d) => <td key={d.id}>{cell(g.id, g.values[d.id], d, g.status === "going")}</td>)}
                       {(requests.size > 0 || approved) && (
                         <td>
                           {g.changed_since_approval ? (
@@ -221,21 +263,30 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
       </section>
 
       {gift && (
-        <section className="block" aria-labelledby="routing" data-testid="webmcp-routing">
+        <section className="block" aria-labelledby="routing" data-testid="webmcp-routing" data-gift={gift.id}>
           <div className="labelrow"><h2 id="routing">How this reaches the store</h2><span className="eyebrow">WebMCP</span></div>
           <div className="list">
             {store === DEMO_STORE.shop_domain && <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-demo-store"><span>The demo store built for this project</span><span className="type"><code>{store}</code> trading as {DEMO_STORE.shop_name}</span></div>}
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store UCP endpoint</span><span className="type"><code>https://{store}/api/ucp/mcp</code></span></div>
             <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Shopify page tools on the store's pages</span><span className="type"><code>search_catalog</code> <code>get_product</code> <code>get_cart</code> <code>update_cart</code> and the rest</span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Tokuchu page tool that requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
-            <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that fills the cart on approval</span><span className="type"><code>add_customized_to_cart</code></span></div>
+            {personalized ? (
+              <>
+                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that reads the product's fields</span><span className="type"><code>get_customization</code></span></div>
+                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Tokuchu page tool that requests the missing values</span><span className="type"><code>request_from_attendees</code></span></div>
+                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Store page tool that fills the cart on approval</span><span className="type"><code>add_customized_to_cart</code></span></div>
+              </>
+            ) : (
+              <>
+                <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Tokuchu page tool that records the approval</span><span className="type"><code>approve_specs</code></span></div>
+                <div className="row" style={{ gridTemplateColumns: "1fr auto" }} data-testid="routing-ucp-cart"><span>Store UCP tools that fill the cart on approval</span><span className="type"><code>create_cart</code> <code>update_cart</code> <code>create_checkout</code></span></div>
+              </>
+            )}
           </div>
         </section>
       )}
 
       {gift && (
-        <section className="block" aria-labelledby="approve" data-testid="approve-block">
+        <section className="block" aria-labelledby="approve" data-testid="approve-block" data-gift={gift.id}>
           <div className="labelrow"><h2 id="approve">Fill the cart</h2></div>
           <div className="sendrow">
             <div className="lead">{gift.product_title} for {attendees.length} attendees at {store}</div>
@@ -281,7 +332,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
       )}
 
       {gift && approved && (
-        <section className="block" aria-labelledby="progress" data-testid="cart-progress">
+        <section className="block" aria-labelledby="progress" data-testid="cart-progress" data-gift={gift.id}>
           <div className="labelrow"><h2 id="progress">Cart job progress</h2><span className="eyebrow">{updates.length} {updates.length === 1 ? "post" : "posts"}</span></div>
           {updates.length === 0 ? (
             <p className="hint" style={{ color: "var(--muted)" }}>No posts yet</p>

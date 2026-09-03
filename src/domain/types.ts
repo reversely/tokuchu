@@ -201,7 +201,7 @@ export type ChangeEntry = z.infer<typeof ChangeEntry>;
 /* ---- Personalization ---- */
 
 /** The field kinds a vendor's personalization schema may state; the list is data, so a new kind is a row here (#117). */
-export const PERSONALIZATION_KINDS = ["text", "name", "monogram", "date", "time", "location", "star_map", "color", "word_list"] as const;
+export const PERSONALIZATION_KINDS = ["text", "name", "monogram", "date", "time", "location", "star_map", "color", "word_list", "image"] as const;
 export const PersonalizationKind = z.enum(PERSONALIZATION_KINDS);
 export type PersonalizationKind = z.infer<typeof PersonalizationKind>;
 
