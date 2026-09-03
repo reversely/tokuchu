@@ -59,7 +59,7 @@ async function caption(text: string) {
     if (!el) {
       el = document.createElement("div");
       el.id = "demo-caption";
-      el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:9999;padding:8px 16px;border-radius:8px;background:#0B3D6E;color:#fff;font:500 15px/1.4 Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.2);pointer-events:none;max-width:64vw;text-align:center";
+      el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:9999;padding:10px 18px;border-radius:8px;background:#0B3D6E;color:#fff;font:500 17px/1.4 Inter,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.2);pointer-events:none;max-width:56vw;text-align:center";
       document.body.appendChild(el);
     }
     el.textContent = t;
@@ -89,22 +89,31 @@ async function typeInto(locator: Locator, text: string) {
   await page.keyboard.type(text, { delay: KEY_DELAY_MS });
 }
 
-/** A translucent overlay that names the WebMCP calls behind a step, so the video shows the wire, not just the screen. */
+/** A sidebar on the right that names the WebMCP calls behind a step, so the video shows the wire beside the screen. The page shifts left to make room; earlier calls stay below the latest, dimmed. */
 async function webmcpOverlay(title: string, lines: string[], holdMs = 6000) {
   await page.evaluate(({ title, lines }) => {
+    const WIDTH = 400;
     let el = document.getElementById("demo-webmcp");
     if (!el) {
-      el = document.createElement("div");
+      el = document.createElement("aside");
       el.id = "demo-webmcp";
-      el.style.cssText = "position:fixed;top:88px;right:30px;z-index:9998;width:520px;max-width:42vw;padding:16px 18px 18px;border-radius:12px;background:rgba(11,16,32,.74);color:#EAF3FC;font:12.5px/1.75 ui-monospace,Menlo,monospace;box-shadow:0 16px 44px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);pointer-events:none";
+      el.style.cssText = `position:fixed;top:0;right:0;bottom:0;z-index:9998;width:${WIDTH}px;padding:22px 22px 90px;box-sizing:border-box;overflow:hidden;background:#0B1020;color:#EAF3FC;font:14px/1.7 ui-monospace,Menlo,monospace;border-left:1px solid #22304a;pointer-events:none`;
+      el.innerHTML = `<div style="font:700 12px/1 Inter,system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#8FD0FF;margin-bottom:18px">WebMCP calls</div><div id="demo-webmcp-list"></div>`;
       document.body.appendChild(el);
+      document.body.style.marginRight = `${WIDTH}px`;
     }
-    el.innerHTML = `<div style="font:600 11px/1 Inter,system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#8FD0FF;margin-bottom:10px">${title}</div>` + lines.map((l) => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l}</div>`).join("");
+    const list = el.querySelector("#demo-webmcp-list")!;
+    for (const old of Array.from(list.children)) (old as HTMLElement).style.opacity = "0.45";
+    const block = document.createElement("div");
+    block.style.cssText = "margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid #22304a";
+    block.innerHTML = `<div style="font:600 12px/1.3 Inter,system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8FD0FF;margin-bottom:10px;word-break:break-all">${title}</div>` + lines.map((l) => `<div style="white-space:normal;word-break:break-word">${l}</div>`).join("");
+    list.prepend(block);
   }, { title, lines }).catch(() => undefined);
   await page.waitForTimeout(holdMs);
 }
+/** The sidebar stays for the whole recording; a step that is done only dims its block, which the next call does. */
 async function clearWebmcpOverlay() {
-  await page.evaluate(() => document.getElementById("demo-webmcp")?.remove()).catch(() => undefined);
+  return;
 }
 
 async function allGifts(): Promise<Gift[]> {
