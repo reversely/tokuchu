@@ -22,14 +22,15 @@ async function sendLink(formData: FormData): Promise<void> {
     await signIn("resend", { email: String(formData.get("email") ?? ""), redirectTo: returnPath(formData.get("next")) });
   } catch (error) {
     if (!(error instanceof AuthError)) throw error;
-    redirect(`/sign-in?error=${error.type}`);
+    // A denied address is a 404 with the demo link; a link the mail provider refused to send is a message here, since the address may be fine.
+    redirect(`/sign-in?error=${error.type === "AccessDenied" ? "AccessDenied" : "send"}`);
   }
 }
 
 /** One field and one button: the address gets a magic link and the confirmation says where it went; a first sign-in creates the account. A denied address, or a production server with no mail key, shows the not-found page and its demo link instead of a message. */
 export default async function Page({ searchParams }: Props) {
   const { sent, error, next } = await searchParams;
-  if (error || (sent && !delivers)) notFound();
+  if (error === "AccessDenied" || (sent && !delivers)) notFound();
   return (
     <>
       <header className="band">
@@ -46,6 +47,7 @@ export default async function Page({ searchParams }: Props) {
                 <p className="lead" data-testid="sign-in-lead">Enter your email to get a sign-in link. A first sign-in creates your account.</p>
                 <p className="lead"><a href="/demo" data-testid="sign-in-demo">Try the demo</a> without an account</p>
                 <input type="hidden" name="next" value={returnPath(next)} />
+                {error === "send" && <p className="error" role="alert" data-testid="sign-in-send-error">The sign-in email could not be sent to that address. The demo needs no account.</p>}
                 <div className="field">
                   <label htmlFor="email">Email</label>
                   <input id="email" name="email" type="email" autoComplete="email" required data-testid="sign-in-email" />

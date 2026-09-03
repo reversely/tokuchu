@@ -9,7 +9,7 @@ export default function NotFound() {
         <div className="wrap" style={{ gridTemplateColumns: "minmax(0, 640px)", justifyContent: "center" }}>
           <div>
             <h1 className="title" data-testid="not-found-title">Page not found</h1>
-            <p className="lead">This link points to no page you can open</p>
+            <p className="lead">Apologies. This page could not be found.</p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <a className="btn primary" href="/demo" data-testid="not-found-demo">Try the demo</a>
               <a className="btn ghost" href="/" data-testid="not-found-home">Back to Tokuchu</a>
