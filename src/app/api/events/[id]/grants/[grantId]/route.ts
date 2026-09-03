@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "../../../../../../server/api";
-import { getGrant, revokeGrant } from "../../../../../../server/grants";
+import { getGrant, grantView, revokeGrant } from "../../../../../../server/grants";
 import { withOwnedEvent } from "../../../../../../server/ownership";
 
 type Params = { params: Promise<{ id: string; grantId: string }> };
@@ -8,7 +8,7 @@ type Params = { params: Promise<{ id: string; grantId: string }> };
 export async function GET(_: Request, { params }: Params) {
   try {
     const { id, grantId } = await params;
-    return await withOwnedEvent(id, async () => NextResponse.json(getGrant(id, grantId)));
+    return await withOwnedEvent(id, async () => NextResponse.json(grantView(getGrant(id, grantId))));
   } catch (e) {
     return errorResponse(e);
   }
@@ -18,7 +18,7 @@ export async function GET(_: Request, { params }: Params) {
 export async function DELETE(_: Request, { params }: Params) {
   try {
     const { id, grantId } = await params;
-    return await withOwnedEvent(id, async () => NextResponse.json(revokeGrant(id, grantId)));
+    return await withOwnedEvent(id, async () => NextResponse.json(grantView(revokeGrant(id, grantId))));
   } catch (e) {
     return errorResponse(e);
   }

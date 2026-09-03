@@ -6,7 +6,8 @@ import { withDemoHeaders } from "../../../demo/token";
 import { executeThroughApi } from "../../../webmcp/register";
 import { TOOLS } from "../../../webmcp/tools";
 import { DEMO_STORE } from "../../../demo/seed";
-import type { VendorUpdate } from "../../../domain/types";
+import type { GrantView } from "../../../server/grants";
+import type { GrantPermission, VendorUpdate } from "../../../domain/types";
 import { slugValue } from "../../../domain/values";
 import { dateTime } from "../../../lib/format";
 
@@ -74,10 +75,145 @@ async function runTool(name: string, eventId: string, giftId: string): Promise<s
   }
 }
 
+/** The four kinds of access the Share block offers and the permissions each carries. */
+type AccessKey = "personalization" | "manifest" | "changes" | "updates";
+const ACCESS: { key: AccessKey; label: string; permissions: GrantPermission[] }[] = [
+  { key: "personalization", label: "Required attendee personalization", permissions: ["requirements:read"] },
+  { key: "manifest", label: "Fulfilment manifest", permissions: ["manifest:read"] },
+  { key: "changes", label: "Manifest changes", permissions: ["changes:read"] },
+  { key: "updates", label: "Submit fulfilment updates", permissions: ["updates:read", "updates:write"] }
+];
+const EXPIRY: { value: string; label: string }[] = [
+  { value: "fulfilment", label: "After fulfilment" },
+  { value: "7", label: "In 7 days" },
+  { value: "30", label: "In 30 days" }
+];
+const GRANT_STATUS: Record<GrantView["status"], string> = { active: "Active", revoked: "Revoked", expired: "Expired" };
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * Share fulfilment data: the organizer names the store, picks the access the grant carries and when
+ * it ends, and creates the store access. Each grant shows its status and what it reaches with a copy
+ * of the signed link and a revoke action. The token behind a grant never reaches the page.
+ */
+function ShareBlock({ eventId, gift, requirements }: { eventId: string; gift: Gift; requirements: Requirement[] }) {
+  const [store, setStore] = useState(bareHost(gift.shop_domain));
+  const [access, setAccess] = useState<Record<AccessKey, boolean>>({ personalization: true, manifest: true, changes: true, updates: true });
+  const [expiry, setExpiry] = useState("fulfilment");
+  const [grants, setGrants] = useState<GrantView[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setStore(bareHost(gift.shop_domain)), [gift.shop_domain]);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/grants?procurement=${encodeURIComponent(gift.id)}`, withDemoHeaders({ cache: "no-store" }));
+      setGrants(res.ok ? ((await res.json()) as { grants: GrantView[] }).grants : []);
+    } catch {
+      setGrants([]);
+    }
+  }, [eventId, gift.id]);
+  useEffect(() => { void load(); }, [load]);
+
+  const chosen = ACCESS.filter((a) => access[a.key]);
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    // The personalization access names the definitions the gift's requirements map; without it the holder reads no attendee field.
+    const mapped = requirements.flatMap((r) => (r.definition_id ? [r.definition_id] : []));
+    const body = {
+      procurement_id: gift.id,
+      grantee_type: "vendor",
+      grantee_id: store.trim(),
+      permissions: chosen.flatMap((a) => a.permissions),
+      allowed_attribute_ids: access.personalization ? mapped : [],
+      expires_at: expiry === "fulfilment" ? null : new Date(Date.now() + Number(expiry) * 24 * 60 * 60 * 1000).toISOString()
+    };
+    const res = await fetch(`/api/events/${eventId}/grants`, withDemoHeaders({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+    if (!res.ok) setError(((await res.json()) as { error?: string }).error ?? "The access was not created");
+    else await load();
+    setBusy(false);
+  }
+
+  async function revoke(grantId: string) {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/events/${eventId}/grants/${grantId}`, withDemoHeaders({ method: "DELETE" }));
+    if (!res.ok) setError(((await res.json()) as { error?: string }).error ?? "The access was not revoked");
+    else await load();
+    setBusy(false);
+  }
+
+  function copy(grant: GrantView) {
+    if (!grant.link) return;
+    void navigator.clipboard?.writeText(`${window.location.origin}${grant.link}`);
+    setCopied(grant.id);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <section className="block" aria-labelledby="share" data-testid="share-block" data-gift={gift.id}>
+      <div className="labelrow"><h2 id="share">Share fulfilment data</h2><span className="eyebrow">{gift.product_title}</span></div>
+      <div className="grid2">
+        <div className="field">
+          <label htmlFor="share-store">Store</label>
+          <input id="share-store" data-testid="share-store" value={store} onChange={(e) => setStore(e.target.value)} placeholder="The store that fills the order" />
+        </div>
+        <div className="field">
+          <label htmlFor="share-expiry">Access ends</label>
+          <select id="share-expiry" data-testid="share-expiry" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
+            {EXPIRY.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="chips" data-testid="share-access" aria-label="The access the store gets">
+        {ACCESS.map((a) => (
+          <label className={`chip${access[a.key] ? " on" : ""}`} key={a.key} style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" style={{ width: "auto", margin: 0 }} checked={access[a.key]} onChange={(e) => setAccess({ ...access, [a.key]: e.target.checked })} data-testid={`share-access-${a.key}`} />
+            {a.label}
+          </label>
+        ))}
+      </div>
+      <div className="acts" style={{ marginTop: 16 }}>
+        <button type="button" className="btn primary" onClick={create} disabled={busy || !store.trim() || chosen.length === 0} data-testid="share-create">{busy ? "Working" : "Create store access"}</button>
+        {error && <p className="error" role="alert" style={{ margin: 0 }} data-testid="share-error">{error}</p>}
+      </div>
+      {grants.length > 0 && (
+        <div className="list" style={{ marginTop: 16 }} data-testid="share-grants">
+          {grants.map((g) => (
+            <div className="row" key={g.id} style={{ gridTemplateColumns: "1fr auto auto" }} data-testid="share-grant" data-grant={g.id} data-status={g.status}>
+              <div>
+                <div><strong data-testid="share-grant-store">{g.grantee_id}</strong> <span className={`pill${g.status === "active" ? " live" : ""}`} data-testid="share-grant-status">{GRANT_STATUS[g.status]}</span></div>
+                <div className="chips" style={{ marginTop: 8 }} data-testid="share-grant-access">
+                  <span className="tag quiet">{plural(g.access.fields, "field", "fields")}</span>
+                  <span className="tag quiet">{plural(g.access.records, "fulfilment record", "fulfilment records")}</span>
+                  <span className="tag quiet">the gift</span>
+                </div>
+              </div>
+              {g.status === "active" && g.link && (
+                <button type="button" className="btn ghost small" onClick={() => copy(g)} data-testid="share-copy" data-link={g.link}>{copied === g.id ? "Copied" : "Copy access link"}</button>
+              )}
+              {g.status === "active" && (
+                <button type="button" className="btn ghost small" onClick={() => revoke(g.id)} disabled={busy} data-testid="share-revoke">Revoke</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
  * The Attendees tab, one gift at a time: the gift switcher, the organizer's request panel, the records
- * grid with that gift's columns, the WebMCP routing that carries it, the approve gate, and the cart job's
- * progress log.
+ * grid with that gift's columns, the WebMCP routing that carries it, the approve gate, the share block,
+ * and the cart job's progress log.
  */
 export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () => void }) {
   // A choice question with no options cannot be answered, so it is neither a column nor a request.
@@ -342,6 +478,8 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
           {approveError && <p className="error" role="alert" data-testid="approve-error">{approveError}</p>}
         </section>
       )}
+
+      {gift && <ShareBlock eventId={snap.event.id} gift={gift} requirements={requirements} />}
 
       {gift && approved && (
         <section className="block" aria-labelledby="progress" data-testid="cart-progress" data-gift={gift.id}>

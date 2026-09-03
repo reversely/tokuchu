@@ -7,10 +7,12 @@
  * cuts access at once. Fulfilment completion expires every grant on the procurement.
  */
 import { z } from "zod";
+import { manifest } from "../domain/gifts";
 import { requirementKeys } from "../domain/procurement";
 import { definitionsFor, newId, state } from "../domain/store";
 import { GranteeType, GrantPermission, type AccessGrant, type CallerToken } from "../domain/types";
 import { BadRequestError, NotFoundError, requireEvent, requireGift } from "./api";
+import { storeLinkPath } from "./store-session";
 import { TOOLS } from "../webmcp/tools";
 
 export const GrantBody = z.object({
@@ -92,6 +94,19 @@ export function expireGrantsFor(eventId: string, procurementId: string, at: stri
     expired.push(row);
   }
   return expired;
+}
+
+/**
+ * A grant as the organizer's page and the grant routes show it: its status, what its holder may
+ * reach (the readable fields and the fulfilment records on the procurement), and the signed link
+ * while it is active. The token id stays out of the view.
+ */
+export type GrantView = AccessGrant & { status: GrantStatus; access: { fields: number; records: number }; link: string | null };
+
+export function grantView(grant: AccessGrant): GrantView {
+  const status = grantStatus(grant);
+  const records = manifest(requireGift(grant.event_id, grant.procurement_id)).filter((row) => row.unit_status !== "excluded").length;
+  return { ...grant, status, access: { fields: readableDefinitionIds(grant).length, records }, link: status === "active" ? storeLinkPath(grant) : null };
 }
 
 /** The tools the grant's permissions allow, in the order TOOLS lists them. */

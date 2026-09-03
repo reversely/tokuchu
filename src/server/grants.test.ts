@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { deserializeState, publishEvent, resetState, serializeState, state } from "../domain/store";
 import type { PersonalizationField } from "../domain/types";
 import { createEventFromBody, createGiftFromBody, requestFromAttendees, snapshot, submitRsvp } from "./api";
-import { callableTools, createGrant, expireGrantsFor, grantStatus, grantsFor, revokeGrant, tokenForGrant } from "./grants";
+import { callableTools, createGrant, expireGrantsFor, grantStatus, grantView, grantsFor, revokeGrant, tokenForGrant } from "./grants";
 import { setMailer } from "./mail";
 import { handleRpc } from "./mcp";
 import { postProcurementUpdate } from "./procurement";
@@ -66,6 +66,21 @@ describe("an access grant", () => {
     expect(grantsFor(event.id, gift.id)).toEqual([grant]);
     expect(() => createGrant(event.id, { procurement_id: "gift_none", grantee_type: "vendor", grantee_id: "x", permissions: ["manifest:read"] })).toThrow(/No gift/);
     expect(() => createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "x", permissions: ["manifest:read"], allowed_attribute_ids: ["def_none"] })).toThrow(/Unknown definitions/);
+  });
+
+  it("views a grant with its status, the fields and records it reaches, and a link only while active", async () => {
+    const { event, gift, size } = await seed();
+    const every = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["manifest:read"] });
+    expect(grantView(every)).toMatchObject({ id: every.id, status: "active", access: { fields: 2, records: 1 } });
+    expect(grantView(every).link).toMatch(/^\/s\/[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
+    expect(JSON.stringify(grantView(every))).not.toContain("tok_");
+    const one = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read"], allowed_attribute_ids: [size.id] });
+    expect(grantView(one).access).toEqual({ fields: 1, records: 1 });
+    const none = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read"], allowed_attribute_ids: [] });
+    expect(grantView(none).access.fields).toBe(0);
+    expect(grantView(revokeGrant(event.id, one.id))).toMatchObject({ status: "revoked", link: null });
+    const past = createGrant(event.id, { procurement_id: gift.id, grantee_type: "vendor", grantee_id: "store", permissions: ["manifest:read"], expires_at: "2020-01-01T00:00:00Z" });
+    expect(grantView(past)).toMatchObject({ status: "expired", link: null });
   });
 
   it("shows a holder only the requirements the grant allows, over the endpoint", async () => {
