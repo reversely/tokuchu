@@ -317,7 +317,7 @@ export function Tour({ snap }: { snap: Snapshot }) {
     if (!autoplay || intro || phase !== "ready" || last) return;
     const timer = setTimeout(() => void advance(), READ_MS);
     return () => clearTimeout(timer);
-  }, [autoplay, phase, last, advance]);
+  }, [autoplay, intro, phase, last, advance]);
 
   useEffect(() => {
     const el = calloutRef.current;
