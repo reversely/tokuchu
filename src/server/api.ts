@@ -47,7 +47,7 @@ import { Constraints, EventSettings, FilterSchema, GiftOverride, GiftRule, Guest
 import { matches } from "../domain/filter";
 import { createGift, getGift, giftsFor, manifest, quantities, removeGift, setGiftOverride, unservable, updateGift, type GiftInput } from "../domain/gifts";
 import { CLOCK_TIME, fieldConstraints, validateMappings } from "../domain/personalization";
-import { changesAfter, recordProcurementChange } from "../domain/procurement";
+import { changesAfter, exceptionsFor, recordProcurementChange, resolveExceptionsByAnswer } from "../domain/procurement";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "./errors";
 import { messagesFor } from "./chat";
 import { llmEnabled } from "./flags";
@@ -188,7 +188,7 @@ export function snapshot(eventId: string) {
   const counts = { going: 0, maybe: 0, cant_go: 0, no_reply: 0 };
   for (const g of guests) counts[g.status] += 1;
   tickAfterRead(eventId);
-  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
+  return { event, definitions: definitionsFor(eventId), guests, counts, follow_ups: followUps(eventId), gifts, requests: requestViews(eventId), exceptions: exceptionsFor(eventId), messages: messagesFor(eventId), library: library().questions, seq: currentSeq(), llm_enabled: llmEnabled(), demo: event.demo };
 }
 
 /* ---- Gifts ---- */
@@ -610,7 +610,10 @@ function writeAnswer(eventId: string, guest: Guest, definitionId: string, raw: u
   if (!def) throw new BadRequestError(`No question ${definitionId} on this event.`);
   const subject = def.scope === "party" ? (["party", guest.party_id] as const) : def.scope === "event" ? (["event", eventId] as const) : (["guest", guest.id] as const);
   try {
-    return writeValue(subject[0], subject[1], definitionId, raw, source);
+    const row = writeValue(subject[0], subject[1], definitionId, raw, source);
+    // A store's exception on this attendee's requirement closes with the new answer.
+    resolveExceptionsByAnswer(guest.id, definitionId, source);
+    return row;
   } catch (e) {
     if (e instanceof InvalidValueError) throw new BadRequestError(e.message);
     throw e;

@@ -4,9 +4,9 @@
  * reader lists the changes after a revision in the shape get_changes returns. The store's
  * requirement key (a vendor field key or the variant question's key) names each requirement.
  */
-import type { Batch, ChangeEntry, ProcurementChangeType } from "./types";
+import type { ActorType, Batch, ChangeEntry, ProcurementChangeType, ProcurementException } from "./types";
 import { getGift } from "./gifts";
-import { actorOf, appendChange, definitionsFor, getGuest, state } from "./store";
+import { actorOf, appendChange, definitionsFor, getGuest, newId, state } from "./store";
 
 /** One change as get_changes returns it. */
 export type ChangeView = { revision: number; timestamp: string; actor_type: NonNullable<ChangeEntry["actor_type"]>; actor_id?: string; type: string; attendee_ref?: string; requirement_id?: string; summary: string };
@@ -96,4 +96,72 @@ export function changesAfter(giftId: string, after: number, readable?: string[])
   const keys = requirementKeys(getGift(giftId));
   const entries = procurementChanges(giftId, 0, readable);
   return { procurement_id: giftId, gift_id: giftId, from_revision: after, current_revision: entries.at(-1)?.seq ?? 0, changes: entries.filter((c) => c.seq > after).map((c) => changeView(c, keys)) };
+}
+
+/* ---- Exceptions ---- */
+
+export type ExceptionInput = { attendee_ref?: string | null; requirement_id?: string | null; type: ProcurementException["type"]; message?: string | null; unavailable_value?: string | null; allowed_values?: string[] | null };
+
+const EXCEPTION_SOURCE: Record<ActorType, ProcurementException["source"]> = { attendee: "system", organizer: "organizer", vendor: "vendor", agent: "vendor", system: "system" };
+
+/** Opens an exception on a gift and records the change; the exception's created_revision is that entry's seq. */
+export function openException(giftId: string, input: ExceptionInput, source: string): ProcurementException {
+  const gift = getGift(giftId);
+  const id = newId("exc");
+  const context = { ...(input.attendee_ref ? { attendee_ref: input.attendee_ref } : {}), ...(input.requirement_id ? { requirement_id: input.requirement_id } : {}) };
+  const entry = recordProcurementChange(giftId, "exception_opened", source, `${input.type.replace(/_/g, " ")}${input.requirement_id ? ` on ${input.requirement_id}` : ""}${input.message ? `: ${input.message}` : ""}`, context);
+  const row: ProcurementException = {
+    id,
+    event_id: gift.event_id,
+    procurement_id: giftId,
+    attendee_ref: input.attendee_ref ?? null,
+    requirement_id: input.requirement_id ?? null,
+    source: EXCEPTION_SOURCE[actorOf(source).actor_type],
+    type: input.type,
+    message: input.message ?? null,
+    unavailable_value: input.unavailable_value ?? null,
+    allowed_values: input.allowed_values ?? null,
+    status: "open",
+    created_at: entry.at,
+    resolved_at: null,
+    created_revision: entry.seq,
+    resolved_revision: null
+  };
+  state().exceptions.set(id, row);
+  return row;
+}
+
+export function exceptionsFor(eventId: string, giftId?: string): ProcurementException[] {
+  return [...state().exceptions.values()].filter((e) => e.event_id === eventId && (giftId === undefined || e.procurement_id === giftId)).sort((a, b) => a.created_revision - b.created_revision);
+}
+
+export function openExceptionsFor(giftId: string): ProcurementException[] {
+  return exceptionsFor(getGift(giftId).event_id, giftId).filter((e) => e.status === "open");
+}
+
+function closeException(row: ProcurementException, status: "resolved" | "dismissed", source: string, summary: string): ProcurementException {
+  const context = { ...(row.attendee_ref ? { attendee_ref: row.attendee_ref } : {}), ...(row.requirement_id ? { requirement_id: row.requirement_id } : {}) };
+  const entry = recordProcurementChange(row.procurement_id, status === "resolved" ? "exception_resolved" : "exception_dismissed", source, summary, context);
+  const closed: ProcurementException = { ...row, status, resolved_at: entry.at, resolved_revision: entry.seq };
+  state().exceptions.set(row.id, closed);
+  return closed;
+}
+
+/** An attendee's answer on a definition resolves every open exception on that attendee's requirement the definition fills, on every gift. */
+export function resolveExceptionsByAnswer(guestId: string, definitionId: string, source: string): ProcurementException[] {
+  const resolved: ProcurementException[] = [];
+  for (const row of state().exceptions.values()) {
+    if (row.status !== "open" || row.attendee_ref !== guestId || !row.requirement_id) continue;
+    if (requirementKeys(getGift(row.procurement_id)).byKey.get(row.requirement_id) !== definitionId) continue;
+    resolved.push(closeException(row, "resolved", source, `${row.requirement_id} answered again`));
+  }
+  return resolved;
+}
+
+/** The organizer closes an exception without an answer. */
+export function dismissException(id: string, source: string): ProcurementException {
+  const row = state().exceptions.get(id);
+  if (!row) throw new Error(`No exception ${id}.`);
+  if (row.status !== "open") return row;
+  return closeException(row, "dismissed", source, `${row.type.replace(/_/g, " ")} dismissed`);
 }

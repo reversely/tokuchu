@@ -225,6 +225,29 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/updates", body: (a) => ({ kind: a.kind, text: a.text, expected_date: a.expected_date ?? null, reference: a.reference ?? null, guest_id: a.guest_id ?? null }) }
   },
   {
+    name: "post_procurement_update",
+    description: "Posts a store's structured update on a procurement. accepted, production_started, and fulfilled move the order's status. needs_information (attendee_ref?, requirement_id?, message), invalid_value (attendee_ref, requirement_id, message), option_unavailable (attendee_ref?, requirement_id, unavailable_value?, allowed_values?, message?), and exception (attendee_ref?, message) open an exception the organizer sees; one on an attendee's requirement asks that attendee again by email with the message quoted, and the attendee's next answer resolves it. The gift is the procurement until a Procurement record exists, so procurement_id and gift_id name the same record. Each update also appears in the progress log.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procurement_id: { type: "string", description: "The procurement's id; the gift's id until a Procurement record exists" },
+        gift_id: { type: "string", description: "The gift's id; the same record as procurement_id" },
+        type: { type: "string", description: "What the update is", enum: ["accepted", "production_started", "fulfilled", "needs_information", "invalid_value", "option_unavailable", "exception"] },
+        attendee_ref: { type: "string", description: "The attendee the update concerns; the attendee_ref the manifest shows" },
+        requirement_id: { type: "string", description: "The requirement the update concerns; the key the manifest's values use" },
+        message: { type: "string", description: "The store's words; an attendee reads them quoted in the correction email" },
+        unavailable_value: { type: "string", description: "The value the store cannot take" },
+        allowed_values: { type: "array", description: "The values the store can take instead", items: { type: "string" } },
+        expected_date: { type: "string", description: "An ISO date the store expects, if any" },
+        reference: { type: "string", description: "A tracking or order reference, if any" }
+      },
+      required: ["type"],
+      additionalProperties: false
+    },
+    scopes: ["organizer", "vendor"],
+    route: { method: "POST", path: "/api/events/:eventId/gifts/{gift_id}/procurement-updates", body: (a) => ({ type: a.type, attendee_ref: a.attendee_ref ?? null, requirement_id: a.requirement_id ?? null, message: a.message ?? null, unavailable_value: a.unavailable_value ?? null, allowed_values: a.allowed_values ?? null, expected_date: a.expected_date ?? null, reference: a.reference ?? null }) }
+  },
+  {
     name: "get_updates",
     description: "Returns a gift's progress log: every post by the cart job and the store, in order.",
     inputSchema: { type: "object", properties: { gift_id: { type: "string", description: "The gift's id" }, since_seq: { type: "integer", description: "Only posts after this sequence number; 0 for all" } }, required: ["gift_id"], additionalProperties: false },

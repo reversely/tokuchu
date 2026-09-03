@@ -233,6 +233,10 @@ export type PersonalizationMapping = z.infer<typeof PersonalizationMapping>;
 
 /* ---- Gifts ---- */
 
+/** Where a store's structured update moved the gift: accepted, in production, or fulfilled. */
+export const VendorProcurementStatus = z.enum(["accepted", "in_production", "fulfilled"]);
+export type VendorProcurementStatus = z.infer<typeof VendorProcurementStatus>;
+
 /** One clause of the filter grammar (filter.ts) as a schema, so a stored rule validates on write. */
 export const FilterClauseSchema = z.object({ field: z.string(), op: z.enum(OPS), value: z.unknown().optional() });
 export const FilterSchema = z.array(FilterClauseSchema);
@@ -332,9 +336,45 @@ export const Batch = z.object({
   /** Set by the cart job: the guests whose item the store refused, with the store's reasons. */
   cart_blocked: z.array(CartBlocked).nullable().optional(),
   /** Set by each poll of a store with a change feed: the last sequence number read from it. */
-  vendor_seq: z.number().int().nullable().optional()
+  vendor_seq: z.number().int().nullable().optional(),
+  /** Set by a store's structured update: where the store says the order stands. */
+  procurement_status: VendorProcurementStatus.nullable().optional()
 });
 export type Batch = z.infer<typeof Batch>;
+
+/* ---- Procurement exceptions ---- */
+
+export const ExceptionSource = z.enum(["vendor", "organizer", "system"]);
+export type ExceptionSource = z.infer<typeof ExceptionSource>;
+
+export const ExceptionType = z.enum(["missing_information", "invalid_value", "option_unavailable", "mapping_problem", "other"]);
+export type ExceptionType = z.infer<typeof ExceptionType>;
+
+export const ExceptionStatus = z.enum(["open", "resolved", "dismissed"]);
+export type ExceptionStatus = z.infer<typeof ExceptionStatus>;
+
+/** A problem a store or the organizer raised on a procurement: for one attendee's requirement, one attendee, or the gift as a whole. It stays open until an answer resolves it or the organizer dismisses it. */
+export const ProcurementException = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  /** The gift's id until a Procurement record exists. */
+  procurement_id: z.string(),
+  attendee_ref: z.string().nullable(),
+  /** The store's requirement key the exception concerns. */
+  requirement_id: z.string().nullable(),
+  source: ExceptionSource,
+  type: ExceptionType,
+  message: z.string().nullable(),
+  /** The value the store cannot take and the values it can, when it said so. */
+  unavailable_value: z.string().nullable().default(null),
+  allowed_values: z.array(z.string()).nullable().default(null),
+  status: ExceptionStatus,
+  created_at: z.string(),
+  resolved_at: z.string().nullable(),
+  created_revision: z.number().int(),
+  resolved_revision: z.number().int().nullable()
+});
+export type ProcurementException = z.infer<typeof ProcurementException>;
 
 /* ---- The event's chat and schedule ---- */
 

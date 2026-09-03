@@ -11,7 +11,7 @@ import { changeReader, changes, counts, followUp, giftRequirements, guestList, g
 import { newId, state } from "../domain/store";
 import type { CallerToken } from "../domain/types";
 import { TOOLS, type ToolArgs, type ToolDefinition } from "../webmcp/tools";
-import { fulfillmentManifest } from "./procurement";
+import { fulfillmentManifest, postProcurementUpdate } from "./procurement";
 import { cartOperations } from "./registry";
 
 export type McpResult = { content: [{ type: "text"; text: string }]; isError?: true };
@@ -153,6 +153,12 @@ async function dispatch(eventId: string, token: CallerToken, tool: ToolDefinitio
       const giftId = String(args.gift_id);
       if (!organizer) requireGiftScope(token, giftId);
       return postUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, { kind: args.kind, text: args.text ?? "", expected_date: args.expected_date ?? null, reference: args.reference ?? null, guest_id: args.guest_id ?? null });
+    }
+    case "post_procurement_update": {
+      const giftId = strArg("gift_id") ?? strArg("procurement_id") ?? "";
+      if (!organizer) requireGiftScope(token, giftId);
+      const { gift_id: _gift, procurement_id: _procurement, meta: _meta, ...body } = args;
+      return postProcurementUpdate(eventId, giftId, organizer ? "organizer" : `token:${token.id}`, body);
     }
     case "get_updates": {
       const giftId = String(args.gift_id);

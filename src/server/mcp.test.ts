@@ -31,7 +31,7 @@ function seed() {
     order_id: null
   } as never);
   const organizer = createToken(event.id, { holder: "organizer", callable_tools: TOOLS.map((t) => t.name) });
-  const vendor = createToken(event.id, { holder: "shop.myshopify.com", gift_ids: [gift.id], readable_definition_ids: [choice.id], callable_tools: ["get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "get_updates", "count_by", "get_summary"] });
+  const vendor = createToken(event.id, { holder: "shop.myshopify.com", gift_ids: [gift.id], readable_definition_ids: [choice.id], callable_tools: ["get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "post_procurement_update", "get_updates", "count_by", "get_summary"] });
   return { event, name, choice, gift, organizer, vendor, guestIds: reply.guest_ids };
 }
 const call = (eventId: string, token: ReturnType<typeof createToken> | null, name: string, args: Record<string, unknown> = {}) => handleRpc(eventId, token, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
@@ -55,7 +55,7 @@ describe("the MCP endpoint", () => {
     const all = await handleRpc(event.id, organizer, { method: "tools/list", id: 1 });
     expect((all.result as { tools: { name: string }[] }).tools.map((t) => t.name).sort()).toEqual(TOOLS.map((t) => t.name).sort());
     const some = await handleRpc(event.id, vendor, { method: "tools/list", id: 2 });
-    expect((some.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(["count_by", "get_summary", "get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "get_updates"]);
+    expect((some.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(["count_by", "get_summary", "get_manifest", "get_fulfillment_manifest", "get_changes", "post_update", "post_procurement_update", "get_updates"]);
     const none = await handleRpc(event.id, null, { method: "tools/list", id: 3 });
     expect(isError(none)).toBe(true);
     expect((await call("evt_none", organizer, "get_summary")).error).toMatchObject({ code: -32004 });

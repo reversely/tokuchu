@@ -1,15 +1,16 @@
 /**
  * The email behind a request: the questions asked and the attendee's own link. Each send records how
  * it left on the request row, so the organizer's grid shows an attendee with no address or a
- * rejected message and the request stays on record either way.
+ * rejected message and the request stays on record either way. A correction carries the store's
+ * words as quoted lines the attendee reads as the store's and not as the organizer's.
  */
 import { getDefinition, getEvent, setRequestDelivery, state } from "../domain/store";
 import type { Event, Guest } from "../domain/types";
 import { mailer } from "./mail";
 import { afterCommit, withPersistedEvent } from "./persistence";
 
-/** One email to make: the attendee, the gift's request, and the questions it still asks. */
-export type Outgoing = { guest: Guest; gift_id: string; definition_ids: string[]; kind: "request" | "follow_up" };
+/** One email to make: the attendee, the gift's request, the questions it still asks, and for a correction the store's message. */
+export type Outgoing = { guest: Guest; gift_id: string; definition_ids: string[]; kind: "request" | "follow_up" | "correction"; message?: string | null };
 
 /** The public origin the links point at. */
 export function appUrl(): string {
@@ -21,8 +22,17 @@ export function attendeeLink(event: Event, guest: Guest): string {
   return event.invite_code ? `${appUrl()}/i/${event.invite_code}?guest=${guest.id}` : `(unpublished event) guest ${guest.id}`;
 }
 
-/** The subject and text of a request or a reminder. */
-export function requestEmail(event: Event, guest: Guest, labels: string[], link: string, kind: Outgoing["kind"]): { subject: string; text: string } {
+/** The store's message as quoted lines, cut to a length an email can carry; it is the store's text and arrives untrusted. */
+function quoted(message: string): string[] {
+  return message.slice(0, 500).split(/\r?\n/).filter((line) => line.trim() !== "").map((line) => `> ${line}`);
+}
+
+/** The subject and text of a request, a reminder, or a correction. */
+export function requestEmail(event: Event, guest: Guest, labels: string[], link: string, kind: Outgoing["kind"], message: string | null = null): { subject: string; text: string } {
+  if (kind === "correction") {
+    const lines = [`Hello ${guest.display_name}`, "", `The store making your gift for ${event.title} could not use one of your answers.`, ...(message ? ["The store wrote:", ...quoted(message)] : []), "", "Please give these details again:", ...labels.map((label) => `- ${label}`), "", "Reply through your own link:", link];
+    return { subject: `A correction for your details for ${event.title}`, text: lines.join("\n") };
+  }
   const reminder = kind === "follow_up";
   const opening = reminder ? `This is a reminder. The organizer of ${event.title} still needs these details from you:` : `The organizer of ${event.title} needs these details from you:`;
   const lines = [`Hello ${guest.display_name}`, "", opening, ...labels.map((label) => `- ${label}`), "", "Reply through your own link:", link];
@@ -39,7 +49,7 @@ async function deliver(event: Event, outgoing: Outgoing): Promise<void> {
   }
   const labels = outgoing.definition_ids.map((id) => getDefinition(id).label);
   try {
-    const delivery = await mailer().send({ to, ...requestEmail(event, guest, labels, attendeeLink(event, guest), outgoing.kind) });
+    const delivery = await mailer().send({ to, ...requestEmail(event, guest, labels, attendeeLink(event, guest), outgoing.kind, outgoing.message ?? null) });
     setRequestDelivery(guest.id, gift_id, delivery);
   } catch (e) {
     setRequestDelivery(guest.id, gift_id, "failed", (e as Error).message);

@@ -1,17 +1,19 @@
 /**
- * The procurement projection a store's agent reads (get_fulfillment_manifest): one row per
- * attendee the gift serves, with the values keyed by the store's requirement key and the issues
- * per requirement, cut to what the caller's token may read. The gift is the procurement until a
- * Procurement record exists.
+ * The procurement surface a store's agent works with: the projection it reads
+ * (get_fulfillment_manifest), cut to what its token may see, and the structured update it posts
+ * (post_procurement_update), which becomes state. The gift is the procurement until a Procurement
+ * record exists.
  */
-import { manifest, type ManifestRow } from "../domain/gifts";
+import { z } from "zod";
+import { manifest, updateGift, type GiftInput, type ManifestRow } from "../domain/gifts";
 import type { PersonalizationIssue } from "../domain/personalization";
-import { requirementKeys } from "../domain/procurement";
-import type { Batch } from "../domain/types";
-import { requireGift } from "./api";
-import { currentRevision } from "../domain/procurement";
+import { currentRevision, openException, openExceptionsFor, recordProcurementChange, requirementKeys } from "../domain/procurement";
+import { definitionsFor, getGuest, state, transactionally, upsertRequest } from "../domain/store";
+import type { AttributeDefinition, Batch, ExceptionType, ProcurementException, VendorProcurementStatus, VendorUpdate } from "../domain/types";
+import { BadRequestError, postUpdate, requireEvent, requireGift, requireGuest } from "./api";
+import { deliverAll, type Outgoing } from "./request-mail";
 
-export type ProcurementStatus = "draft" | "collecting" | "approved" | "filling_cart" | "cart_ready" | "locked" | "ordered";
+export type ProcurementStatus = "draft" | "collecting" | "approved" | "filling_cart" | "cart_ready" | "locked" | "ordered" | VendorProcurementStatus;
 export type AttendeeStatus = "ready" | "incomplete" | "invalid" | "exception";
 export type IssueStatus = "incomplete" | "invalid" | "vendor_rejected" | "exception";
 export type FulfillmentIssue = { requirement_id: string; status: IssueStatus; message: string };
@@ -27,8 +29,9 @@ export type FulfillmentManifest = {
   attendees: FulfillmentAttendee[];
 };
 
-/** Where the gift stands, read from the fields each step writes. */
+/** Where the gift stands: the store's own status once it posted one, and otherwise the fields each step writes. */
 export function procurementStatus(gift: Batch): ProcurementStatus {
+  if (gift.procurement_status) return gift.procurement_status;
   if (gift.order_id) return "ordered";
   if (gift.locked_at) return "locked";
   if (gift.cart_fill?.status === "running") return "filling_cart";
@@ -39,14 +42,22 @@ export function procurementStatus(gift: Batch): ProcurementStatus {
 }
 
 const ISSUE_STATUS: Record<PersonalizationIssue["code"], IssueStatus> = { missing_source: "incomplete", missing_value: "incomplete", invalid_type: "invalid", too_long: "invalid", unsupported_value: "invalid" };
+const EXCEPTION_ISSUE: Record<ExceptionType, IssueStatus> = { missing_information: "incomplete", invalid_value: "vendor_rejected", option_unavailable: "vendor_rejected", mapping_problem: "exception", other: "exception" };
 
-const worst = (issues: FulfillmentIssue[]): AttendeeStatus => (issues.some((i) => i.status === "exception" || i.status === "vendor_rejected") ? "exception" : issues.some((i) => i.status === "invalid") ? "invalid" : issues.length ? "incomplete" : "ready");
+const worst = (issues: FulfillmentIssue[], open: boolean): AttendeeStatus => (open ? "exception" : issues.some((i) => i.status === "invalid") ? "invalid" : issues.length ? "incomplete" : "ready");
+
+function exceptionMessage(row: ProcurementException): string {
+  if (row.message) return row.message;
+  if (row.type === "option_unavailable") return `${row.unavailable_value ?? "the value"} is unavailable${row.allowed_values?.length ? `; the store offers ${row.allowed_values.join(", ")}` : ""}`;
+  return row.type.replace(/_/g, " ");
+}
 
 /**
  * One attendee row cut to the caller: a personalization value whose source definition the caller
- * may not read leaves with its issues, and the variant question's value follows the same rule.
+ * may not read leaves with its issues and its exceptions, and the variant question's value follows
+ * the same rule. An open exception on the attendee grades the row `exception`.
  */
-function attendeeRow(gift: Batch, row: ManifestRow, variantDefinitionId: string | undefined, variantKey: string | undefined, readable?: string[]): FulfillmentAttendee {
+function attendeeRow(row: ManifestRow, exceptions: ProcurementException[], variantDefinitionId: string | undefined, variantKey: string | undefined, byKey: Map<string, string>, readable?: string[]): FulfillmentAttendee {
   const canRead = (definitionId: string) => !readable || readable.includes(definitionId);
   const hidden = new Set<string>();
   const values: Record<string, unknown> = {};
@@ -54,11 +65,16 @@ function attendeeRow(gift: Batch, row: ManifestRow, variantDefinitionId: string 
     if (field.source.type === "definition" && !canRead(field.source.definition_id)) hidden.add(key);
     else values[key] = field.value;
   }
-  if (variantKey && variantDefinitionId && canRead(variantDefinitionId) && row.values[variantDefinitionId] !== undefined) values[variantKey] = row.values[variantDefinitionId];
+  if (variantKey && variantDefinitionId) {
+    if (canRead(variantDefinitionId)) values[variantKey] = row.values[variantDefinitionId];
+    else hidden.add(variantKey);
+  }
   const issues: FulfillmentIssue[] = (row.personalization_issues ?? []).filter((i) => !hidden.has(i.vendor_field_key)).map((i) => ({ requirement_id: i.vendor_field_key, status: ISSUE_STATUS[i.code], message: i.message }));
   if (row.unit_status === "unservable") issues.push({ requirement_id: variantKey ?? "variant", status: "invalid", message: row.reason ?? "No variant resolves for the row" });
   else if (row.unit_status === "held") issues.push({ requirement_id: variantKey ?? "variant", status: "incomplete", message: row.reason ?? "The unit waits for a value" });
-  return { attendee_ref: row.guest_id, status: worst(issues), variant_id: row.variant_id, values, issues };
+  const open = exceptions.filter((e) => e.attendee_ref === row.guest_id && !(e.requirement_id && (hidden.has(e.requirement_id) || (byKey.has(e.requirement_id) && !canRead(byKey.get(e.requirement_id)!)))));
+  for (const e of open) issues.push({ requirement_id: e.requirement_id ?? "procurement", status: EXCEPTION_ISSUE[e.type], message: exceptionMessage(e) });
+  return { attendee_ref: row.guest_id, status: worst(issues, open.length > 0), variant_id: row.variant_id, values, issues };
 }
 
 /** The manifest for a gift as the caller may see it; `readable` absent is the organizer's view. */
@@ -67,9 +83,10 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
   const keys = requirementKeys(gift);
   const variantDefinitionId = gift.mapping[0]?.definition_id;
   const variantKey = variantDefinitionId ? keys.byDefinition.get(variantDefinitionId) : undefined;
+  const exceptions = openExceptionsFor(giftId);
   const attendees = manifest(gift)
     .filter((row) => row.unit_status !== "excluded")
-    .map((row) => attendeeRow(gift, row, variantDefinitionId, variantKey, readable));
+    .map((row) => attendeeRow(row, exceptions, variantDefinitionId, variantKey, keys.byKey, readable));
   return {
     procurement_id: giftId,
     gift_id: giftId,
@@ -79,4 +96,74 @@ export function fulfillmentManifest(eventId: string, giftId: string, readable?: 
     status: procurementStatus(gift),
     attendees
   };
+}
+
+/* ---- Structured updates (post_procurement_update) ---- */
+
+const UpdateType = z.enum(["accepted", "production_started", "fulfilled", "needs_information", "invalid_value", "option_unavailable", "exception"]);
+export type ProcurementUpdateType = z.infer<typeof UpdateType>;
+
+export const ProcurementUpdateBody = z.object({
+  type: UpdateType,
+  attendee_ref: z.string().nullable().default(null),
+  requirement_id: z.string().nullable().default(null),
+  message: z.string().nullable().default(null),
+  unavailable_value: z.string().nullable().default(null),
+  allowed_values: z.array(z.string()).nullable().default(null),
+  expected_date: z.string().nullable().default(null),
+  reference: z.string().nullable().default(null)
+});
+
+/** The progress-log kind each structured update also posts, so get_updates keeps showing every post. */
+const UPDATE_KIND: Record<ProcurementUpdateType, VendorUpdate["kind"]> = { accepted: "confirmed", production_started: "in_production", fulfilled: "delivered", needs_information: "question", invalid_value: "issue", option_unavailable: "issue", exception: "issue" };
+const STATUS_MOVE: Partial<Record<ProcurementUpdateType, VendorProcurementStatus>> = { accepted: "accepted", production_started: "in_production", fulfilled: "fulfilled" };
+const EXCEPTION_TYPE: Partial<Record<ProcurementUpdateType, ExceptionType>> = { needs_information: "missing_information", invalid_value: "invalid_value", option_unavailable: "option_unavailable", exception: "other" };
+
+/** The definition an attendee is asked again for a requirement: a guest-scope definition the gift's mappings name under that key. */
+function correctionDefinition(gift: Batch, requirementId: string): AttributeDefinition | undefined {
+  const definitionId = requirementKeys(gift).byKey.get(requirementId);
+  const def = definitionId ? definitionsFor(gift.event_id).find((d) => d.id === definitionId) : undefined;
+  return def?.scope === "guest" ? def : undefined;
+}
+
+type Posted = { update: VendorUpdate; exception: ProcurementException | null; outgoing: Outgoing[] };
+
+/**
+ * Records a store's structured update: the post in the progress log, the change-log entry, and
+ * what the type means for state. accepted, production_started, and fulfilled move the gift's
+ * procurement_status. needs_information, invalid_value, option_unavailable, and exception open a
+ * ProcurementException; one on an attendee's requirement the event asks that attendee for records
+ * a request and emails the attendee a correction with the store's message quoted.
+ *
+ * Raises:
+ *   BadRequestError: when the body is not a typed update, or invalid_value names no attendee or requirement.
+ *   NotFoundError: when the attendee is not on the event.
+ */
+export async function postProcurementUpdate(eventId: string, giftId: string, caller: string, body: unknown) {
+  const event = requireEvent(eventId);
+  const gift = requireGift(eventId, giftId);
+  const parsed = ProcurementUpdateBody.safeParse(body);
+  if (!parsed.success) throw new BadRequestError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+  const data = parsed.data;
+  if (data.type === "invalid_value" && (!data.attendee_ref || !data.requirement_id)) throw new BadRequestError("invalid_value names the attendee and the requirement.");
+  if (data.attendee_ref) requireGuest(eventId, data.attendee_ref);
+  const text = data.message ?? (data.unavailable_value ? `${data.requirement_id ?? "a value"} ${data.unavailable_value} is unavailable${data.allowed_values?.length ? `; the store offers ${data.allowed_values.join(", ")}` : ""}` : data.type.replace(/_/g, " "));
+  const posted = transactionally((): Posted => {
+    const update = postUpdate(eventId, giftId, caller, { kind: UPDATE_KIND[data.type], text, expected_date: data.expected_date, reference: data.reference, guest_id: data.attendee_ref });
+    const move = STATUS_MOVE[data.type];
+    if (move) {
+      updateGift(giftId, { procurement_status: move } as Partial<GiftInput>);
+      recordProcurementChange(giftId, "status_changed", caller, `The store moved the order to ${move.replace(/_/g, " ")}`);
+      return { update, exception: null, outgoing: [] };
+    }
+    const exception = openException(giftId, { attendee_ref: data.attendee_ref, requirement_id: data.requirement_id, type: EXCEPTION_TYPE[data.type]!, message: data.message, unavailable_value: data.unavailable_value, allowed_values: data.allowed_values }, caller);
+    const def = data.attendee_ref && data.requirement_id ? correctionDefinition(gift, data.requirement_id) : undefined;
+    if (!def || !data.attendee_ref) return { update, exception, outgoing: [] };
+    const guest = getGuest(data.attendee_ref);
+    const asked = state().requests.get(`${guest.id}|${giftId}`)?.definition_ids ?? [];
+    upsertRequest(eventId, guest.id, giftId, [...new Set([...asked, def.id])]);
+    return { update, exception, outgoing: [{ guest, gift_id: giftId, definition_ids: [def.id], kind: "correction", message: data.message }] };
+  });
+  await deliverAll(event, posted.outgoing);
+  return { update: posted.update, exception: posted.exception, procurement_status: requireGift(eventId, giftId).procurement_status ?? null, current_revision: currentRevision(giftId) };
 }
