@@ -355,7 +355,7 @@ test("5: the organizer creates store access and the store's agent reads a manife
   await expect(storePage.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
   await captionOn(storePage, "The store's agent opens the signed link; the page registers the grant's tools over WebMCP");
   const tools = await storePage.evaluate(async () => (await document.modelContext!.getTools()).map((t) => t.name).sort());
-  expect(tools).toEqual(["get_changes", "get_fulfillment_manifest", "get_manifest", "get_procurement", "get_requirements", "get_updates", "post_procurement_update", "post_update"]);
+  expect(tools).toEqual(["acknowledge_changes", "get_changes", "get_fulfillment_manifest", "get_manifest", "get_procurement", "get_requirements", "get_updates", "post_procurement_update", "post_update"]);
 
   const read = await storeTool<Manifest>("get_fulfillment_manifest", { procurement_id: giftId });
   expect(read.approved_revision).toBe(approvedAt);
