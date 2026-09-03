@@ -275,7 +275,8 @@ table.records .quiet { color: var(--muted); }
 .home .scale .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: grid; gap: 6px; }
 .home .scale strong { font-family: var(--font-display), "Zilla Slab", serif; font-size: 24px; line-height: 1.2; color: var(--ink); }
 .home .scale p { font-size: 15px; color: var(--ink-2); }
-.home .contract { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 0.9fr); gap: 18px; align-items: stretch; margin-top: 36px; }
+/* Each column sizes to its own rows so a shorter list ends at its last row instead of stretching to the tallest column. */
+.home .contract { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 0.9fr); gap: 18px; align-items: start; margin-top: 36px; }
 .home .contract-col { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; display: grid; gap: 12px; align-content: start; }
 .home .contract-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .home .contract-col li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; font-size: 15.5px; color: var(--ink); border-bottom: 1px solid var(--line-2); padding-bottom: 8px; }

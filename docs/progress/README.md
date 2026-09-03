@@ -16,3 +16,5 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-02-home-problem.png`: the problem section with the scale cards, three attendees in the demo against 1,500 values at a real event.
 - `2026-09-02-home-parties.png`: the three-parties section: Shopify WebMCP with its ten page tools, Customworks with the store screenshot and its two tools, Tokuchu with the Attendees tab and its page tools.
 - `2026-09-02-tour-intro-desktop.png` and `2026-09-02-tour-intro-mobile.png`: the tour's opening story, Jack beside a telescope in ASCII with the first beat typed out.
+- `2026-09-02-issue-27-contract-before.png`: the contract section before issue 27 with the first two columns stretched to the form mock and a blank block under their last rows.
+- `2026-09-02-issue-27-contract-after.png`: the contract section after issue 27 with each column ending at its last row and the three tops still aligned.
