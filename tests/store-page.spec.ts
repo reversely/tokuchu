@@ -8,7 +8,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 const EVENT = { title: "Astronomy Symposium", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" } };
 const GIFT = {
   product_id: "gid://shopify/Product/1",
-  shop_domain: "springbuilt.myshopify.com",
+  shop_domain: "example-store.myshopify.com",
   product_title: "Customized Crewneck",
   variants: [
     { id: "v-m", title: "M", price_cents: 5000, currency: "CAD", available: true, options: [{ name: "Size", label: "M" }] },
@@ -35,7 +35,7 @@ async function seed(request: APIRequestContext) {
 
 test("the signed link opens the grant's page with only the granted fields; a revoked grant lands on not-found", async ({ page, request }) => {
   const { id, giftId, size, guestId } = await seed(request);
-  const created = await request.post(`/api/events/${id}/grants`, { data: { procurement_id: giftId, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["manifest:read", "updates:read", "updates:write"], allowed_attribute_ids: [size.id] } });
+  const created = await request.post(`/api/events/${id}/grants`, { data: { procurement_id: giftId, grantee_type: "vendor", grantee_id: "example-store.myshopify.com", permissions: ["manifest:read", "updates:read", "updates:write"], allowed_attribute_ids: [size.id] } });
   expect(created.status()).toBe(201);
   const grant = (await created.json()) as { id: string; link: string };
   expect(grant.link).toMatch(/^\/s\/[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
@@ -46,9 +46,9 @@ test("the signed link opens the grant's page with only the granted fields; a rev
   expect(cookie).toMatchObject({ httpOnly: true, sameSite: "Lax" });
 
   await expect(page.getByTestId("store-product")).toHaveText("Customized Crewneck");
-  await expect(page.getByTestId("store-grantee")).toHaveText("springbuilt.myshopify.com");
+  await expect(page.getByTestId("store-grantee")).toHaveText("example-store.myshopify.com");
   await expect(page.getByTestId("store-status")).toHaveText("collecting");
-  await expect(page.getByTestId("store-schema")).toHaveText("springbuilt.myshopify.com/gid://shopify/Product/1");
+  await expect(page.getByTestId("store-schema")).toHaveText("example-store.myshopify.com/gid://shopify/Product/1");
   await expect(page.getByTestId("store-procurement-id")).toHaveText(giftId);
   await expect(page.getByTestId("store-manifest-row")).toHaveCount(1);
   await expect(page.getByTestId("store-manifest-row")).toHaveAttribute("data-attendee", guestId);

@@ -23,7 +23,7 @@ const toolNames = (page: Page) => page.evaluate(async () => (await document.mode
 const EVENT = { title: "Astronomy Symposium", host: "Host", starts_at: "2030-01-10T19:00:00Z", venue: { name: "Venue", line1: "1 Street", city: "City", region: "RG", postal_code: "00000", country: "CA" } };
 const GIFT = {
   product_id: "gid://shopify/Product/1",
-  shop_domain: "springbuilt.myshopify.com",
+  shop_domain: "example-store.myshopify.com",
   product_title: "Customized Crewneck",
   variants: [
     { id: "v-m", title: "M", price_cents: 5000, currency: "CAD", available: true, options: [{ name: "Size", label: "M" }] },
@@ -81,7 +81,7 @@ test("the store page registers the grant's tools and each call runs under the gr
 
 test("a read-only grant registers no post tool and never an organizer tool", async ({ page, request }) => {
   const { id, giftId } = await seed(request);
-  await open(page, request, id, { procurement_id: giftId, grantee_type: "vendor", grantee_id: "springbuilt.myshopify.com", permissions: ["manifest:read", "updates:read"] });
+  await open(page, request, id, { procurement_id: giftId, grantee_type: "vendor", grantee_id: "example-store.myshopify.com", permissions: ["manifest:read", "updates:read"] });
   const names = await toolNames(page);
   expect(names).toEqual(["get_fulfillment_manifest", "get_manifest", "get_procurement", "get_updates"]);
   for (const organizerOnly of ["approve_specs", "request_from_attendees", "list_guests", "set_gift_plan", "search_gifts"]) expect(names).not.toContain(organizerOnly);
