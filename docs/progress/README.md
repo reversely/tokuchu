@@ -20,3 +20,5 @@ One entry per capture, newest last. Each file is named `<date>-<ticket>-<screen>
 - `2026-09-02-issue-27-contract-after.png`: the contract section after issue 27 with each column ending at its last row and the three tops still aligned.
 - `2026-09-02-issue-28-header-before.png`: the signed-in home header at 1440 and 1280 wide with the anchors breaking inside their labels and Sign out and Create an event on two lines.
 - `2026-09-02-issue-28-header-after.png`: the same header after the fix: every label on one line and the address pill truncated with an ellipsis.
+- `2026-09-03-issue-31-chat-desktop.png`: the event page at 1440 wide after #31 with the assistant panel as a column beside the Overview: one organizer line and the reply from a real turn with the two tools it called listed under it. The reply still carries markdown markers; the instruction to write plain text went in after this capture.
+- `2026-09-03-issue-31-chat-mobile.png`: the same thread at 390 wide as the drawer the Assistant button opens over the page.

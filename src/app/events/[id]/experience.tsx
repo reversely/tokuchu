@@ -180,7 +180,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
   }
 
 
-  /** Answers from the stage outputs (PRD Section 10, assistant behaviour): why a product is missing, what checks out first, who is missing a value. */
+  /** Answers from the stage outputs (PRD Section 10, assistant behaviour) on a server without the assistant: why a product is missing, what checks out first, who is missing a value. With the assistant on, the chat panel (#31) takes the question. */
   function ask() {
     const q = question.toLowerCase();
     if (!q.trim()) return;
@@ -497,12 +497,14 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
             </div>
             <div className="acts">
               <button type="button" className="btn ghost" onClick={() => setStep("pick")} data-testid="add-gift">Add another gift</button>
-              <div className="ask" style={{ flex: 1 }}>
-                <input aria-label="Ask about the gifts" placeholder="Ask about the gifts" value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid="ask" />
-                <button type="button" className="btn primary small" onClick={ask}>Ask</button>
-              </div>
+              {!snap.llm_enabled && (
+                <div className="ask" style={{ flex: 1 }}>
+                  <input aria-label="Ask about the gifts" placeholder="Ask about the gifts" value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} data-testid="ask" />
+                  <button type="button" className="btn primary small" onClick={ask}>Ask</button>
+                </div>
+              )}
             </div>
-            {answer && <p className="lead" style={{ marginTop: 16 }} data-testid="answer">{answer}</p>}
+            {!snap.llm_enabled && answer && <p className="lead" style={{ marginTop: 16 }} data-testid="answer">{answer}</p>}
             {curateBlock}
           </section>
         )}

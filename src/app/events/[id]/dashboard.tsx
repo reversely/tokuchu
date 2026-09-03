@@ -4,6 +4,7 @@ import type { snapshot } from "../../../server/api";
 import { Overview } from "./overview";
 import { Experience, type SearchReply } from "./experience";
 import { Attendees } from "./attendees";
+import { Chat } from "./chat";
 import { WebMcpProvider } from "../../webmcp-provider";
 import { Tour } from "../../demo/tour";
 import { withDemoHeaders } from "../../../demo/token";
@@ -11,7 +12,7 @@ import { withDemoHeaders } from "../../../demo/token";
 export type Snapshot = ReturnType<typeof snapshot>;
 type Tab = "overview" | "experience" | "attendees";
 
-/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills. The snapshot polls every four seconds. The tour mounts only on the seeded demo event. */
+/** The published event's page (PRD Section 5): the band with the tabs, the status, the sign-in state, and the invite link; the sheet the tab fills, with the chat panel beside it on every tab where the server's assistant is on (#31). The snapshot polls every four seconds and carries the thread. The tour mounts only on the seeded demo event. */
 export function Dashboard({ initial, account }: { initial: Snapshot; account: ReactNode }) {
   const [snap, setSnap] = useState(initial);
   const [tab, setTab] = useState<Tab>("overview");
@@ -62,14 +63,17 @@ export function Dashboard({ initial, account }: { initial: Snapshot; account: Re
           {account}
         </div>
       </header>
-      <main className="sheet">
-        {tab === "overview" ? (
-          <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} onOpenExperience={() => setTab("experience")} />
-        ) : tab === "attendees" ? (
-          <Attendees snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
-        ) : (
-          <Experience snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} lastSearch={lastSearch} setLastSearch={setLastSearch} />
-        )}
+      <main className={`sheet${snap.llm_enabled ? " with-chat" : ""}`}>
+        <div className="sheet-main">
+          {tab === "overview" ? (
+            <Overview snap={snap} invite={invite} onChanged={() => window.dispatchEvent(new Event("event:changed"))} onOpenExperience={() => setTab("experience")} />
+          ) : tab === "attendees" ? (
+            <Attendees snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />
+          ) : (
+            <Experience snap={snap} onChanged={() => window.dispatchEvent(new Event("event:changed"))} lastSearch={lastSearch} setLastSearch={setLastSearch} />
+          )}
+        </div>
+        {snap.llm_enabled && <Chat eventId={event.id} messages={snap.messages} onChanged={() => window.dispatchEvent(new Event("event:changed"))} />}
       </main>
       {snap.demo && <Tour snap={snap} />}
     </>
