@@ -129,7 +129,7 @@ async function gift(id: string): Promise<Gift> {
 /** The real per-source rows of the search funnel and the first titles shown, read off the page for the overlay. */
 async function funnelData() {
   return page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll('[data-testid="funnel"] .row')).map((r) => (r.textContent || "").replace(/\s+/g, " ").trim());
+    const rows = Array.from(document.querySelectorAll('[data-testid="funnel"] .row')).map((r) => Array.from(r.children).map((c) => (c.textContent || "").replace(/\s+/g, " ").trim()).filter(Boolean).join(": "));
     const names = Array.from(document.querySelectorAll('[data-testid="result"] .name')).slice(0, 5).map((n) => (n.textContent || "").trim());
     return { rows, names };
   });
