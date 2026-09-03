@@ -4,6 +4,28 @@ This guide walks an organizer through Tokuchu from sign-in to a filled store car
 
 The app runs in two ways. In normal mode, the mode this guide shows, the organizer clicks through the screens and the server does the store work itself: it searches the catalog and opens the store's product page in a headless browser to call `get_customization` and `add_customized_to_cart`. In static mode (`TOKUCHU_STATIC=1`) the server makes no search and opens no store page; every capability is a WebMCP tool on a page, and an agent in the browser or in a terminal with a browser tool moves between Tokuchu's pages and the store's page itself. `docs/agent-playbook.md` is the prompt and the order of operations for that agent, and `scripts/agent-playbook.mjs` plays it without a model.
 
+Both modes run the same thirteen arrows between the agent, the Tokuchu tab, and the Customworks tab; in normal mode the server and the organizer's buttons stand in for the agent. Each section below that corresponds to an arrow names it by number, and the store's side (sections 12 to 15) follows the second sequence in `docs/diagrams/store-sequence.mmd`. The source is `docs/diagrams/agent-sequence.mmd`.
+
+```mermaid
+sequenceDiagram
+    participant A as Browser agent
+    participant T as Tokuchu tab
+    participant C as Customworks tab
+    A->>T: modelContext.getTools()
+    A->>T: list_guests { filter: "status:eq:going" }
+    A->>C: open the product page and getTools()
+    A->>C: get_customization { product_id }
+    A->>A: compare the fields with the guests
+    A->>T: set_gift_plan { rules, shop_domain, product_title, product_url }
+    A->>T: set_gift_customization { gift_id, fields, variants }
+    A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
+    A->>T: list_missing { definition_id } until every row answers
+    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: approve_specs { gift_id }
+    A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
+    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+```
+
 | Who exposes it | Tool | What Tokuchu does with it |
 |---|---|---|
 | Shopify, on every storefront and at the Global Catalog endpoint | `search_catalog`, `get_product`, `get_cart`, `update_cart` and the rest of the catalog and cart set | Finds products across stores and reads their variants and delivery terms |
@@ -56,7 +78,7 @@ The event page has three tabs. Overview shows the counts, the invite link, the g
 
 - **Copy invite link** copies the link every attendee replies through.
 - **Guests** takes one name per line, or `Name <email>`, or a bare email. A listed guest who replies updates their own row instead of adding one.
-- **Agent tools ready** in the band means the page has registered Tokuchu's organizer tools over WebMCP. An agent in the browser can call them; the Attendees tab lists them.
+- **Agent tools ready** in the band means the page has registered Tokuchu's organizer tools over WebMCP. An agent in the browser lists them with `getTools` (arrow 1) and reads the guest list with `list_guests` (arrow 2); the Attendees tab lists them.
 - **Gifts** links to Guest Experience while none is chosen.
 
 ## 5. What an attendee sees
@@ -65,7 +87,7 @@ The invite link opens the event with a reply form. The attendee gives a name, an
 
 ![The invite as an attendee sees it](media/guide/05-invite.png)
 
-The same form registers as the WebMCP tool `submit_rsvp` on this page. Its input schema lists one property per question with the store's limits, so an attendee's browser agent can answer without touching the form. The link keeps the reply: opening it again shows the saved answers and lets the attendee change them or cancel.
+The same form registers as the WebMCP tool `submit_rsvp` on this page. Its input schema lists one property per question with the store's limits, so an attendee's browser agent can answer without touching the form. Each answer is one of the replies arrow 9 waits for. The link keeps the reply: opening it again shows the saved answers and lets the attendee change them or cancel.
 
 ## 6. Search the catalog over WebMCP
 
@@ -89,7 +111,7 @@ The step after maps a choice question to the product's variants and sets a defau
 
 ![The variants step](media/guide/09-variants.png)
 
-Add this gift is where the store's own WebMCP tool comes in. For the demo store, Tokuchu opens the product page on the server and calls `get_customization`. The store answers with the fields the product needs, each with its kind and limits, and with the variants it sells. Those land on the gift. Tokuchu holds no field list of its own for any product; the store's answer is the only source.
+Add this gift is where the store's own WebMCP tool comes in. For the demo store, Tokuchu opens the product page on the server, lists its tools (arrow 3), and calls `get_customization` (arrow 4). The store answers with the fields the product needs, each with its kind and limits, and with the variants it sells. Those land on the gift through the same path an agent takes with `set_gift_plan` (arrow 6) and `set_gift_customization` (arrow 7). Tokuchu holds no field list of its own for any product; the store's answer is the only source.
 
 ![The gift with the store's fields and variants](media/guide/10-gift-with-customization.png)
 
@@ -99,21 +121,21 @@ For a product from any other store the catalog's variants stand in, and there is
 
 ## 8. Request the missing details from attendees
 
-The Attendees tab shows one gift at a time; with more than one gift a row of buttons at the top switches between them. For the gift shown it compares the store's fields with what the RSVP list already holds. A field that matches an existing answer, such as the printed name, is resolved from the list. The rest are shown as questions to ask.
+The Attendees tab shows one gift at a time; with more than one gift a row of buttons at the top switches between them. For the gift shown it compares the store's fields with what the RSVP list already holds (arrow 5). A field that matches an existing answer, such as the printed name, is resolved from the list. The rest are shown as questions to ask; `get_requirements` returns the same list with the source of each (the first half of arrow 8).
 
 ![The fields the product needs](media/guide/11-requested-fields.png)
 
-Request from attendees turns each open field into a question with the store's limit or choices, and emails every going attendee who lacks an answer a link to their own reply form. The band's tool list names this step `request_from_attendees`, and an agent can run it the same way.
+Request from attendees turns each open field into a question with the store's limit or choices, and emails every going attendee who lacks an answer a link to their own reply form. The band's tool list names this step `request_from_attendees` (the second half of arrow 8), and an agent can run it the same way.
 
 ![The request sent](media/guide/12-request-sent.png)
 
-Send follow-up emails everyone whose request still has an unanswered question. An attendee with no email address is listed as such; they add one by opening their reply link again.
+Send follow-up emails everyone whose request still has an unanswered question; an agent reads the same set through `list_missing` (arrow 9) until it names no one. An attendee with no email address is listed as such; they add one by opening their reply link again.
 
 The mug's image field becomes a file question: the form takes the address of a picture, and the store's cart tool takes an https address or an image data URL. The food gift has no fields, so its panel reads that there is nothing to ask.
 
 ## 9. The records grid and the routing
 
-Each reply fills a row: one column per requirement of the gift shown, with the attendee's answer or a marker for what is still missing. Switching the gift switches the columns. An answer changed after approval is marked so you can re-approve.
+Each reply fills a row: one column per requirement of the gift shown, with the attendee's answer or a marker for what is still missing. The grid is `get_fulfillment_manifest` drawn as a table (arrow 10), and approval opens when every row reads ready. Switching the gift switches the columns. An answer changed after approval is marked so you can re-approve.
 
 ![The records grid](media/guide/13-records-grid.png)
 
@@ -123,7 +145,7 @@ Under the grid, How this reaches the store lists every WebMCP hop for this gift:
 
 ## 10. Approve and fill the carts
 
-Approve and fill the cart records the approval of the gift shown and starts its cart job; each gift is approved on its own. For the crewneck and the mug Tokuchu opens the store's product page on the server and calls `add_customized_to_cart` once, with one item per attendee: the variant their size resolved to and their values for every field. The store adds the lines to a cart and returns its checkout link, which appears under the approval. For the food gift Tokuchu calls the store's UCP endpoint instead: `create_cart` with one unit per attendee going, then `create_checkout`, and the checkout link appears in the same place.
+Approve and fill the cart records the approval of the gift shown (`approve_specs`, arrow 11) and starts its cart job; each gift is approved on its own. For the crewneck and the mug Tokuchu opens the store's product page on the server and calls `add_customized_to_cart` once (arrow 12), with one item per attendee: the variant their size resolved to and their values for every field. The store adds the lines to a cart and returns its checkout link, which appears under the approval and in the gift's progress log (`post_update`, arrow 13). For the food gift Tokuchu calls the store's UCP endpoint instead: `create_cart` with one unit per attendee going, then `create_checkout`, and the checkout link appears in the same place.
 
 ![The approval and the cart link](media/guide/15-approved-cart-link.png)
 
@@ -141,19 +163,19 @@ The store that fills a personalized order needs the manifest, and its agent may 
 
 ![The Share fulfilment data block with the grant just created](media/guide/17-store-access.png)
 
-Create store access records the grant and lists it as Active with what it reaches: the fields, the fulfilment records, and the gift. Copy access link copies a signed link. The link is the store's only credential; there is no store account. Revoke ends it at once, and a store page open at that moment gets the revocation on its next call.
+Create store access records the grant and lists it as Active with what it reaches: the fields, the fulfilment records, and the gift. Copy access link copies a signed link, the first arrow of the store's sequence. The link is the store's only credential; there is no store account. Revoke ends it at once, and a store page open at that moment gets the revocation on its next call.
 
 ## 13. What the store's agent sees
 
-The signed link opens Tokuchu's store-facing page for the grant: the Procurement with its status and its current and approved revisions, the requirement schema, the requirements, the fulfilment manifest, the open exceptions, the updates, and a form to post an update. The page registers the grant's tools over WebMCP, so a store's agent calls them through `document.modelContext` the way the organizer's agent calls the event page's.
+The signed link opens Tokuchu's store-facing page for the grant: the Procurement with its status and its current and approved revisions, the requirement schema, the requirements, the fulfilment manifest, the open exceptions, the updates, and a form to post an update. The page registers the grant's tools over WebMCP, so a store's agent lists them with `getTools` (store arrow 2) and calls them through `document.modelContext` the way the organizer's agent calls the event page's.
 
 ![The store-facing page with the manifest](media/guide/18-store-manifest.png)
 
-`get_fulfillment_manifest` returns one row per attendee with the attendee reference, the row's status, the variant, and the values keyed by the store's own requirement keys: for the crewneck the size, the star map location and time, and the printed name. Nothing else about the person leaves Tokuchu; the manifest carries no email address and no answer the grant does not name. The rows read at the revision the organizer approved, and the manifest states both revisions.
+`get_fulfillment_manifest` (store arrow 3) returns one row per attendee with the attendee reference, the row's status, the variant, and the values keyed by the store's own requirement keys: for the crewneck the size, the star map location and time, and the printed name. Nothing else about the person leaves Tokuchu; the manifest carries no email address and no answer the grant does not name. The rows read at the revision the organizer approved, and the manifest states both revisions.
 
 ## 14. The store raises an exception
 
-When a value cannot be used, the store's agent posts a typed update through `post_procurement_update`: `needs_information` names the attendee and the requirement with a question, `invalid_value` sends a value back, and `option_unavailable` names the value the store cannot supply and what it offers. In the demo one attendee gave "Cambridge" for the star map location, and the store's agent asks which one.
+When a value cannot be used, the store's agent posts a typed update through `post_procurement_update` (store arrow 4): `needs_information` names the attendee and the requirement with a question, `invalid_value` sends a value back, and `option_unavailable` names the value the store cannot supply and what it offers. In the demo one attendee gave "Cambridge" for the star map location, and the store's agent asks which one.
 
 ![The grid with the exception and the correction request](media/guide/19-exception.png)
 
@@ -161,7 +183,7 @@ The post opens an exception on the Procurement and moves its revision on. On the
 
 ## 15. The correction and the new revision
 
-The attendee opens the reply link and saves the full place name. The answer resolves the exception, the correction reads answered, and the cell reads changed after approval, because the organizer's approval stands at the earlier revision. The store's agent reads what changed through `get_changes` with the revision it approved at: the exception, the attendee's answer, and the resolution, each with its revision.
+The attendee opens the reply link and saves the full place name. The answer resolves the exception, the correction reads answered, and the cell reads changed after approval, because the organizer's approval stands at the earlier revision. The store's agent reads what changed through `get_changes` (store arrow 5) with the revision it approved at: the exception, the attendee's answer, and the resolution, each with its revision.
 
 ![The corrected value with the exception answered](media/guide/20-corrected.png)
 

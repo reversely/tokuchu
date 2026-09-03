@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant O as Organizer
+    participant S as Store agent
+    participant P as Tokuchu store page
+    O->>S: the signed link /s/{token}
+    S->>P: open the link and getTools()
+    S->>P: get_fulfillment_manifest { procurement_id }
+    S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
+    S->>P: get_changes { procurement_id, after_revision }

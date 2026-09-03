@@ -4,6 +4,58 @@ Tokuchu is an event procurement system that uses attendee information and WebMCP
 
 The specification is `docs/prd.md`, the hop-by-hop routing is `docs/webmcp-routing.md`, the screen-by-screen guide for an organizer is `docs/guide.md`, and the prompt and steps for an agent that drives both pages is `docs/agent-playbook.md`.
 
+## How it works
+
+One browser agent holds two tabs: Tokuchu's event page and the Customworks product page. Each arrow below is one WebMCP call, and every document in `docs/` follows the same thirteen arrows in the same order. The source is `docs/diagrams/agent-sequence.mmd` and the rendered image is `public/media/agent-sequence.webp`.
+
+```mermaid
+sequenceDiagram
+    participant A as Browser agent
+    participant T as Tokuchu tab
+    participant C as Customworks tab
+    A->>T: modelContext.getTools()
+    A->>T: list_guests { filter: "status:eq:going" }
+    A->>C: open the product page and getTools()
+    A->>C: get_customization { product_id }
+    A->>A: compare the fields with the guests
+    A->>T: set_gift_plan { rules, shop_domain, product_title, product_url }
+    A->>T: set_gift_customization { gift_id, fields, variants }
+    A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
+    A->>T: list_missing { definition_id } until every row answers
+    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: approve_specs { gift_id }
+    A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
+    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+```
+
+1. `getTools` on the Tokuchu tab: the event page's tool list, one entry per record operation.
+2. `list_guests` with `{ filter: "status:eq:going" }`: every attendee who replied going, with the answers the RSVP list holds.
+3. Open the Customworks product page and `getTools`: Shopify's storefront tools and the store's `get_customization` and `add_customized_to_cart`.
+4. `get_customization` with `{ product_id }`: the product's fields with their kinds and limits and the variants with their ids.
+5. The agent compares the fields with the guests: which fields the RSVP list already fills and which the attendees must answer.
+6. `set_gift_plan` with `{ rules, shop_domain, product_title, product_url }`: the gift for the product and its `id`.
+7. `set_gift_customization` with `{ gift_id, fields, variants }`: the store's payload recorded as the gift's requirement schema.
+8. `get_requirements` then `request_from_attendees`, both with `{ gift_id }`: the source that fills each requirement, then a request to every going attendee who lacks an answer.
+9. `list_missing` with `{ definition_id }`, repeated until every row answers: the attendees who still owe a value for one question.
+10. `get_fulfillment_manifest` with `{ gift_id }`, repeated until every row reads ready: one graded row per attendee and the `cart_items` for the store.
+11. `approve_specs` with `{ gift_id }`: the approval and the change-log revision it records.
+12. `add_customized_to_cart` on the Customworks tab with `{ items: cart_items, idempotency_key }`: one cart line per attendee and the `checkout_url`.
+13. `post_update` with `{ gift_id, kind: "in_production", reference: checkout_url }`: the checkout link on the gift's progress log.
+
+The store's own side runs as a second sequence after the thirteenth arrow (`docs/diagrams/store-sequence.mmd`): the organizer sends the store a signed link, the store's agent opens it and lists the page's tools, reads `get_fulfillment_manifest`, posts `post_procurement_update`, and reads `get_changes`.
+
+```mermaid
+sequenceDiagram
+    participant O as Organizer
+    participant S as Store agent
+    participant P as Tokuchu store page
+    O->>S: the signed link /s/{token}
+    S->>P: open the link and getTools()
+    S->>P: get_fulfillment_manifest { procurement_id }
+    S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
+    S->>P: get_changes { procurement_id, after_revision }
+```
+
 ## Who exposes what
 
 | Capability | Exposed by | Page or endpoint | Purpose |

@@ -48,36 +48,54 @@ The order uses WebMCP in four connected parts of the same workflow.
 3. **Tokuchu's records as tools.** Tokuchu's event page registers the RSVP list and the order's records as tools. The agent hands the store's payload to `set_gift_customization`, reads the source of each requirement through `get_requirements`, runs `request_from_attendees`, reads `get_fulfillment_manifest`, and approves through `approve_specs`. The invite page registers `submit_rsvp` for an attendee's agent, and the store-facing page registers the grant's tools for the store's agent (Sections 8 and 11).
 4. **Customized cart creation.** After the required customization data has been collected, the store's `add_customized_to_cart` tool creates the configured cart items through Shopify's cart endpoint. The agent calls it on the store's page with the `cart_items` the manifest returns; in normal mode Tokuchu's server calls it from a headless page (Section 10). The merchant tool wraps Shopify's cart endpoint because Shopify's own cart tools carry a variant and a quantity per line and no text (Section 5).
 
-The full flow:
+**The sequence.** The order runs as thirteen arrows between a browser agent, a Tokuchu tab, and a Customworks tab; each arrow is one WebMCP call, and `README.md`, `docs/agent-playbook.md`, and `docs/guide.md` number them the same way. The source is `docs/diagrams/agent-sequence.mmd`.
 
+1. The agent calls `getTools` on the Tokuchu tab and receives the event page's tool list.
+2. The agent calls `list_guests` with `{ filter: "status:eq:going" }` and receives every attendee who replied going with the answers the RSVP list holds.
+3. The agent opens the Customworks product page and calls `getTools`, which lists Shopify's storefront tools and the store's `get_customization` and `add_customized_to_cart`.
+4. The agent calls `get_customization` with `{ product_id }` and receives the product's fields with their kinds and limits and the variants with their ids.
+5. The agent compares the fields with the guests to see which fields the RSVP list already fills and which the attendees must answer.
+6. The agent calls `set_gift_plan` with `{ rules, shop_domain, product_title, product_url }` and receives the gift with its `id`.
+7. The agent calls `set_gift_customization` with `{ gift_id, fields, variants }`, and Tokuchu records the store's payload as the gift's requirement schema (Section 9).
+8. The agent calls `get_requirements` with `{ gift_id }`, which names the source that fills each requirement, then `request_from_attendees` with `{ gift_id }`, which sends every going attendee who lacks an answer a request for those values by email.
+9. The agent calls `list_missing` with `{ definition_id }` until every row answers; each reply names the attendees who still owe a value for one question.
+10. The agent calls `get_fulfillment_manifest` with `{ gift_id }` until every row reads ready; the reply carries one graded row per attendee and the `cart_items` for the store (Section 10).
+11. The agent calls `approve_specs` with `{ gift_id }`, and the approval records the change-log revision it stands at (Section 11).
+12. The agent calls `add_customized_to_cart` on the Customworks tab with `{ items: cart_items, idempotency_key }`, and the store adds one cart line per attendee and returns the `checkout_url`.
+13. The agent calls `post_update` with `{ gift_id, kind: "in_production", reference: checkout_url }`, and the gift's progress log carries the checkout link for the organizer to review and pay.
+
+```mermaid
+sequenceDiagram
+    participant A as Browser agent
+    participant T as Tokuchu tab
+    participant C as Customworks tab
+    A->>T: modelContext.getTools()
+    A->>T: list_guests { filter: "status:eq:going" }
+    A->>C: open the product page and getTools()
+    A->>C: get_customization { product_id }
+    A->>A: compare the fields with the guests
+    A->>T: set_gift_plan { rules, shop_domain, product_title, product_url }
+    A->>T: set_gift_customization { gift_id, fields, variants }
+    A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
+    A->>T: list_missing { definition_id } until every row answers
+    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: approve_specs { gift_id }
+    A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
+    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
 ```
-RSVP list
-    ↓
-The agent reads get_customization on the store's product page
-    ↓
-The agent hands the payload to Tokuchu through set_gift_plan and set_gift_customization
-    ↓
-Tokuchu compares the requirements with existing attendee data
-    ↓
-Missing attendee-specific values are identified
-    ↓
-Tokuchu sends attendees forms requesting the missing information
-    ↓
-Attendee responses return to Tokuchu
-    ↓
-Tokuchu tracks completion and follows up where necessary
-    ↓
-The manifest grades every row ready and the agent approves at a revision
-    ↓
-The agent takes cart_items to the store's page and calls add_customized_to_cart
-    ↓
-The store returns the checkout link and the organizer reviews and checks out
-    ↓
-The organizer shares the fulfilment data through a signed link
-    ↓
-The store's agent reads the manifest and posts its updates and exceptions
-    ↓
-A correction routes to the attendee and the store reads it through get_changes
+
+**The store's sequence.** After the thirteenth arrow the store's own side runs as a second sequence (`docs/diagrams/store-sequence.mmd`, Section 11). The organizer sends the store a signed link. The store's agent opens the link, which lands on the store-facing page, and calls `getTools` for the tools the grant allows. The store's agent calls `get_fulfillment_manifest` with `{ procurement_id }` and receives one row per attendee at the approved revision. The store's agent calls `post_procurement_update` with `{ procurement_id, type, attendee_ref, requirement_id, message }` to move the order on or to open an exception on a value it cannot use, and an exception routes a correction request to the attendee. The store's agent calls `get_changes` with `{ procurement_id, after_revision }` and reads the correction and every other change since the revision it last read.
+
+```mermaid
+sequenceDiagram
+    participant O as Organizer
+    participant S as Store agent
+    participant P as Tokuchu store page
+    O->>S: the signed link /s/{token}
+    S->>P: open the link and getTools()
+    S->>P: get_fulfillment_manifest { procurement_id }
+    S->>P: post_procurement_update { procurement_id, type, attendee_ref, requirement_id, message }
+    S->>P: get_changes { procurement_id, after_revision }
 ```
 
 ## 4. The organizer and the loop
