@@ -397,7 +397,7 @@ export function Experience({ snap, onChanged, lastSearch, setLastSearch }: { sna
                 {reply.funnel && (
                   <div className="list" style={{ marginBottom: 24 }} data-testid="funnel">
                     {reply.funnel.searches.map((s, i) => (
-                      <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span>"{s.query}"{s.categories?.length ? ` in ${s.categories.join(" and ")}` : ""}{s.price_max ? ` under ${money(s.price_max)}` : " at any price"}</span><span className="type">{s.returned} of {s.total ?? "?"} in the catalog</span></div>
+                      <div className="row" key={i} style={{ gridTemplateColumns: "1fr auto" }}><span>"{s.query}"{s.categories?.length ? ` in ${s.categories.join(" and ")}` : ""}{s.price_max === undefined ? "" : s.price_max ? ` under ${money(s.price_max)}` : " at any price"}</span><span className="type">{s.returned} of {s.total ?? "?"} in the catalog</span></div>
                     ))}
                     <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Distinct products</span><span className="type">{reply.funnel.merged}</span></div>
                     <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>Checked for delivery to the venue</span><span className="type">{reply.funnel.probed}</span></div>
