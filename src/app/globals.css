@@ -513,8 +513,7 @@ table.records .cellwhy { font-size: 12px; }
 .runtime-configs > article { padding: 24px; border: 1px solid var(--doc-line); border-radius: 8px; background: var(--doc-card); }
 .runtime-configs h3 { margin: 9px 0 10px; font-size: 28px; }
 .runtime-configs p { min-height: 82px; margin: 0; color: var(--doc-muted); line-height: 1.6; }
-.runtime-path { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 7px; align-items: center; margin-top: 20px; text-align: center; }
-.runtime-path i { color: var(--doc-accent); font-size: 20px; font-style: normal; }
+.runtime-diagram { display: block; width: 100%; margin-top: 20px; border: 1px solid var(--doc-line); border-radius: 6px; background: #fbfbfd; }
 .arch-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr) 30px) minmax(0, 1fr); align-items: stretch; margin-top: 32px; }
 .arch-node { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 18px; border: 1px solid var(--doc-line); border-radius: 7px; background: var(--doc-card); }
 .arch-node { opacity: .54; transition: opacity .2s ease, border-color .2s ease, box-shadow .2s ease; }
@@ -556,7 +555,7 @@ table.records .cellwhy { font-size: 12px; }
 .legal-copy h2 { margin: 38px 0 9px; padding-top: 28px; border-top: 1px solid var(--doc-line); font-size: 27px; }
 .legal-copy p { margin: 0; color: var(--doc-muted); font-size: 16px; line-height: 1.75; }
 @media (max-width: 980px) { .arch-flow, .tab-architecture, .control-cards { grid-template-columns: 1fr; gap: 9px; } .arch-flow-part { display: grid; grid-template-columns: 1fr; gap: 9px; } .arch-flow-part > i { height: 24px; transform: rotate(90deg); } }
-@media (max-width: 760px) { .runtime-configs { grid-template-columns: 1fr; } .runtime-configs p { min-height: 0; } .runtime-path { grid-template-columns: 1fr; } .runtime-path i { transform: rotate(90deg); } }
+@media (max-width: 760px) { .runtime-configs { grid-template-columns: 1fr; } .runtime-configs p { min-height: 0; } }
 @media (max-width: 640px) { .docs-hero { padding: 52px 0 40px; } .docs-section { padding: 42px 0; } .boundary-grid, .stage-situation { grid-template-columns: 1fr; } .stage-situation > .eyebrow { grid-row: auto; } .prompt-stack { grid-column: 1; } }
 
 /* Phone widths: the app band stacks its controls without wrapping labels, the tabs shrink, and the homepage hero stops overlapping. */

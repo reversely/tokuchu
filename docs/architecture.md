@@ -2,8 +2,6 @@
 
 Tokuchu has one data model and two ways to coordinate the same procurement workflow. The runtime mode changes who crosses into Shopify. It does not change who owns the records.
 
-![Tokuchu managed mode and agent mode architecture](diagrams/runtime-architecture.svg)
-
 ## The two configurations
 
 | | Managed mode | Agent mode |
@@ -18,6 +16,8 @@ Tokuchu has one data model and two ways to coordinate the same procurement workf
 “Static mode” in environment variables and source comments means **agent mode**. Only outbound store automation is disabled. Tokuchu's pages, API routes, event records, validation, and WebMCP tools remain live.
 
 ## Managed mode
+
+![Managed mode architecture](../public/media/managed-mode-architecture.svg)
 
 The organizer works in Tokuchu's UI. With `LLM_ENABLED=1`, the Assistant panel sends the organizer's message to an OpenAI Agents SDK agent. The agent can read and update the event through deterministic server functions, but it cannot approve an order or check out. The dashboard remains usable without the agent.
 
@@ -36,6 +36,8 @@ The principal external tools are:
 - In-app assistant functions: event, guest, requirement, mapping, manifest, request, and scheduling operations. These wrap Tokuchu's deterministic domain functions rather than browser page tools.
 
 ## Agent mode
+
+![Agent mode architecture](../public/media/agent-mode-architecture.svg)
 
 A browser agent owns the cross-site workflow. Tokuchu does not search Shopify, open merchant pages, or fill a cart. It serves the records and the operations that are valid for the current page.
 
@@ -74,4 +76,4 @@ WebMCP, MCP JSON-RPC, and Shopify UCP are transports. They do not determine whic
 | Shopify UCP | `catalog.shopify.com/api/ucp/mcp` and `{shop}/api/ucp/mcp` | Search products and operate standard Shopify carts through JSON-RPC |
 | Tokuchu HTTP API | `/api/events/...` | Back the UI and the page tools with the same server operations |
 
-For the exact operation-to-route mapping, see [WebMCP routing](webmcp-routing.md). For the browser-agent sequence, see [Agent playbook](agent-playbook.md).
+For setup and launch instructions, see [Run Tokuchu in agent mode](agent-mode.md). For the exact operation-to-route mapping, see [WebMCP routing](webmcp-routing.md). For the exhaustive browser-agent sequence, see [Agent playbook](agent-playbook.md).

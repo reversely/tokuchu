@@ -55,13 +55,11 @@ export default function ArchitecturePage() {
         <div className="runtime-configs">
           <article>
             <span className="eyebrow">Default</span><h3>Managed mode</h3><p>The organizer uses the Tokuchu dashboard. The optional OpenAI assistant calls safe server functions. Tokuchu searches Shopify through UCP and opens merchant pages for WebMCP customization and cart tools.</p>
-            <div className="runtime-path" aria-label="Managed mode path"><code>Organizer UI</code><i>→</i><code>Tokuchu server</code><i>→</i><code>Shopify UCP + merchant WebMCP</code></div>
-            <div className="mini-tools"><code>search_catalog</code><code>get_product</code><code>get_customization</code><code>add_customized_to_cart</code></div>
+            <img className="runtime-diagram" src="/media/managed-mode-architecture.svg" alt="Managed mode architecture with the organizer UI and OpenAI assistant connected to the Tokuchu server which calls Shopify UCP and merchant WebMCP tools" />
           </article>
           <article>
             <span className="eyebrow">TOKUCHU_STATIC=1</span><h3>Agent mode</h3><p>An OpenAI browser agent operates the Tokuchu and store tabs through Stagehand. Tokuchu acts as the live record database and WebMCP tool surface. It makes no outbound store calls.</p>
-            <div className="runtime-path" aria-label="Agent mode path"><code>Tokuchu WebMCP</code><i>↔</i><code>Browser agent</code><i>↔</i><code>Store WebMCP</code></div>
-            <div className="mini-tools"><code>list_guests</code><code>get_fulfillment_manifest</code><code>get_customization</code><code>add_customized_to_cart</code></div>
+            <img className="runtime-diagram" src="/media/agent-mode-architecture.svg" alt="Agent mode architecture with a Stagehand OpenAI agent between the Tokuchu records tab and Shopify store tab using WebMCP" />
           </article>
         </div>
       </section>
@@ -78,6 +76,11 @@ export default function ArchitecturePage() {
             </div>
           </article>)}
         </div>
+      </section>
+
+      <section className="docs-section">
+        <div className="docs-heading"><span className="eyebrow">Run agent mode</span><h2>Start the records app before launching the agent.</h2><p>The agent-mode runbook covers prerequisites, launch commands, the expected cross-site sequence, verification, and common failures.</p></div>
+        <p><a href="https://github.com/reversely/tokuchu/blob/main/docs/agent-mode.md">Open the agent-mode runbook →</a></p>
       </section>
 
       <section className="docs-section">

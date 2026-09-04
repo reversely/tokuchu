@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Tokuchu managed mode architecture</title>
+  <desc id="desc">The organizer uses the Tokuchu UI. An optional OpenAI assistant and UI actions invoke deterministic server operations. Tokuchu persists records and crosses into Shopify through UCP and merchant WebMCP tools.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#42527d"/></marker>
+    <marker id="storeArrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#ae6a27"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,sans-serif;fill:#26345f}.title{font-size:62px;font-weight:650}.sub{font-size:22px;fill:#667394}.group{fill:#fff;stroke:#40507d;stroke-width:3}.ui{fill:#e7ebf7;stroke:#bbc5e2;stroke-width:2}.core{fill:#dcefe9;stroke:#348676;stroke-width:2}.store{fill:#f7ead8;stroke:#b87938;stroke-width:2}.name{font-size:26px;font-weight:650}.body{font-size:17px;fill:#53617f}.tool{font:16px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#53617f}.edge{font-size:16px;font-weight:650;fill:#42527d}.edgeStore{font-size:16px;font-weight:650;fill:#9c5d20}.line{fill:none;stroke:#42527d;stroke-width:4;marker-end:url(#arrow)}.storeLine{fill:none;stroke:#ae6a27;stroke-width:4;marker-end:url(#storeArrow)}</style>
+  </defs>
+  <rect width="1600" height="900" fill="#fbfbfd"/>
+  <text x="70" y="86" class="title">Managed mode</text>
+  <text x="70" y="126" class="sub">Tokuchu owns the application flow and the store boundary</text>
+  <rect x="70" y="175" width="940" height="650" rx="28" class="group"/>
+  <text x="110" y="220" class="body">TOKUCHU APPLICATION</text>
+  <rect x="120" y="270" width="340" height="150" rx="20" class="ui"/>
+  <text x="290" y="314" text-anchor="middle" class="name">Organizer UI</text>
+  <text x="290" y="348" text-anchor="middle" class="body">Dashboard actions</text>
+  <text x="290" y="382" text-anchor="middle" class="tool">HTTP /api/events/...</text>
+  <rect x="620" y="270" width="340" height="150" rx="20" class="ui"/>
+  <text x="790" y="314" text-anchor="middle" class="name">OpenAI assistant</text>
+  <text x="790" y="348" text-anchor="middle" class="body">Optional intent layer</text>
+  <text x="790" y="382" text-anchor="middle" class="tool">LLM_ENABLED=1</text>
+  <path d="M460 345H617" class="line"/><text x="538" y="329" text-anchor="middle" class="edge">chat</text>
+  <rect x="290" y="525" width="500" height="205" rx="22" class="core"/>
+  <text x="540" y="572" text-anchor="middle" class="name">Tokuchu server</text>
+  <text x="540" y="607" text-anchor="middle" class="body">Deterministic domain rules · API routes · cart jobs</text>
+  <text x="540" y="644" text-anchor="middle" class="tool">events · guests · mappings · manifests · revisions</text>
+  <text x="540" y="681" text-anchor="middle" class="tool">PostgreSQL / development memory</text>
+  <path d="M290 420V522" class="line"/><text x="308" y="480" class="edge">UI operations</text>
+  <path d="M790 420L660 522" class="line"/><text x="758" y="478" class="edge">function tools</text>
+  <rect x="1080" y="245" width="450" height="220" rx="22" class="store"/>
+  <text x="1305" y="291" text-anchor="middle" class="name">Shopify UCP</text>
+  <text x="1305" y="327" text-anchor="middle" class="body">Global Catalog + storefront endpoints</text>
+  <text x="1305" y="369" text-anchor="middle" class="tool">search_catalog · lookup_catalog · get_product</text>
+  <text x="1305" y="402" text-anchor="middle" class="tool">create_cart · create_checkout · get_order</text>
+  <rect x="1080" y="555" width="450" height="220" rx="22" class="store"/>
+  <text x="1305" y="601" text-anchor="middle" class="name">Merchant product page</text>
+  <text x="1305" y="637" text-anchor="middle" class="body">Headless browser with registered WebMCP tools</text>
+  <text x="1305" y="679" text-anchor="middle" class="tool">get_customization</text>
+  <text x="1305" y="712" text-anchor="middle" class="tool">add_customized_to_cart</text>
+  <text x="1305" y="745" text-anchor="middle" class="tool">get_order_updates</text>
+  <path d="M790 585C930 520 970 355 1077 355" class="storeLine"/><text x="943" y="439" class="edgeStore">JSON-RPC</text>
+  <path d="M790 665H1077" class="storeLine"/><text x="934" y="649" text-anchor="middle" class="edgeStore">headless WebMCP</text>
+  <text x="70" y="867" class="sub">The model may interpret intent. Tokuchu validates every write and remains the system of record.</text>
+</svg>

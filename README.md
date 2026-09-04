@@ -31,9 +31,15 @@ Tokuchu discovers products through Shopify's UCP endpoints (MCP over HTTP) and c
 
 Tokuchu supports two configurations. In managed mode its UI and optional OpenAI assistant drive server operations, and Tokuchu performs the Shopify work. In agent mode a browser agent moves between Tokuchu and Customworks, while Tokuchu acts as the live record database and WebMCP tool surface.
 
-![Managed mode keeps store orchestration inside Tokuchu. Agent mode makes a browser agent the bridge between Tokuchu records and store tools.](docs/diagrams/runtime-architecture.svg)
+### Managed mode architecture
 
-[Read the architecture guide](docs/architecture.md) for the component boundaries, tools, and transports. The deployed [architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture) remains available as an interactive view.
+![Managed mode routes the organizer UI and optional OpenAI assistant through Tokuchu's deterministic server operations. Tokuchu calls Shopify UCP and merchant WebMCP tools.](public/media/managed-mode-architecture.svg)
+
+### Agent mode architecture
+
+![Agent mode places an OpenAI Stagehand agent between the Tokuchu and store tabs. The agent discovers and calls WebMCP tools while Tokuchu acts as the record database.](public/media/agent-mode-architecture.svg)
+
+[Read the architecture guide](docs/architecture.md) for the component boundaries, tools, and transports. Follow [the agent-mode runbook](docs/agent-mode.md) to launch and verify the non-managed configuration. The deployed [architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture) remains available as an interactive view.
 
 ### From attendee records to configured checkout
 

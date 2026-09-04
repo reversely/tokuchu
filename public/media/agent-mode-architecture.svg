@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Tokuchu agent mode architecture</title>
+  <desc id="desc">An OpenAI agent uses Stagehand to discover and call WebMCP tools in a Tokuchu tab and a store tab. Tokuchu supplies live records and validation but makes no outbound store calls.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#42527d"/></marker>
+    <marker id="arrowBack" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto"><path d="M10 0L0 5L10 10Z" fill="#42527d"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,sans-serif;fill:#26345f}.title{font-size:62px;font-weight:650}.sub{font-size:22px;fill:#667394}.group{fill:#fff;stroke:#40507d;stroke-width:3}.agent{fill:#e7ebf7;stroke:#bbc5e2;stroke-width:2}.core{fill:#dcefe9;stroke:#348676;stroke-width:2}.store{fill:#f7ead8;stroke:#b87938;stroke-width:2}.name{font-size:26px;font-weight:650}.body{font-size:17px;fill:#53617f}.tool{font:16px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#53617f}.edge{font-size:16px;font-weight:650;fill:#42527d}.line{fill:none;stroke:#42527d;stroke-width:4;marker-start:url(#arrowBack);marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1600" height="900" fill="#fbfbfd"/>
+  <text x="70" y="86" class="title">Agent mode</text>
+  <text x="70" y="126" class="sub">The browser agent owns the cross-site flow · TOKUCHU_STATIC=1</text>
+  <rect x="60" y="190" width="440" height="610" rx="28" class="group"/>
+  <text x="95" y="232" class="body">TOKUCHU TAB</text>
+  <rect x="105" y="275" width="350" height="420" rx="22" class="core"/>
+  <text x="280" y="321" text-anchor="middle" class="name">Tokuchu records</text>
+  <text x="280" y="357" text-anchor="middle" class="body">Live UI · API · validation · database</text>
+  <text x="280" y="405" text-anchor="middle" class="tool">list_guests</text>
+  <text x="280" y="438" text-anchor="middle" class="tool">set_gift_plan</text>
+  <text x="280" y="471" text-anchor="middle" class="tool">set_gift_customization</text>
+  <text x="280" y="504" text-anchor="middle" class="tool">get_requirements</text>
+  <text x="280" y="537" text-anchor="middle" class="tool">request_from_attendees</text>
+  <text x="280" y="570" text-anchor="middle" class="tool">get_fulfillment_manifest</text>
+  <text x="280" y="603" text-anchor="middle" class="tool">approve_specs</text>
+  <text x="280" y="636" text-anchor="middle" class="tool">post_update</text>
+  <text x="280" y="673" text-anchor="middle" class="body">No outbound Shopify automation</text>
+  <rect x="580" y="250" width="440" height="500" rx="28" class="group"/>
+  <text x="615" y="292" class="body">AGENT RUNTIME</text>
+  <rect x="625" y="335" width="350" height="310" rx="22" class="agent"/>
+  <text x="800" y="381" text-anchor="middle" class="name">OpenAI agent</text>
+  <text x="800" y="417" text-anchor="middle" class="body">Agents SDK + Stagehand browser</text>
+  <text x="800" y="465" text-anchor="middle" class="tool">open_page</text>
+  <text x="800" y="498" text-anchor="middle" class="tool">list_webmcp_tools</text>
+  <text x="800" y="531" text-anchor="middle" class="tool">call_webmcp_tool</text>
+  <text x="800" y="564" text-anchor="middle" class="tool">switch_tab</text>
+  <text x="800" y="597" text-anchor="middle" class="tool">record_checkout</text>
+  <rect x="1100" y="190" width="440" height="610" rx="28" class="group"/>
+  <text x="1135" y="232" class="body">STORE TAB</text>
+  <rect x="1145" y="275" width="350" height="420" rx="22" class="store"/>
+  <text x="1320" y="321" text-anchor="middle" class="name">Shopify + merchant</text>
+  <text x="1320" y="357" text-anchor="middle" class="body">Product truth · cart · checkout · order</text>
+  <text x="1320" y="421" text-anchor="middle" class="tool">search_catalog</text>
+  <text x="1320" y="466" text-anchor="middle" class="tool">get_customization</text>
+  <text x="1320" y="511" text-anchor="middle" class="tool">add_customized_to_cart</text>
+  <text x="1320" y="556" text-anchor="middle" class="tool">get_order_updates</text>
+  <text x="1320" y="622" text-anchor="middle" class="body">Tools register on</text>
+  <text x="1320" y="652" text-anchor="middle" class="tool">document.modelContext</text>
+  <path d="M500 490H577" class="line"/><text x="539" y="472" text-anchor="middle" class="edge">WebMCP</text><text x="539" y="512" text-anchor="middle" font-size="34">↔</text>
+  <path d="M1023 490H1097" class="line"/><text x="1060" y="472" text-anchor="middle" class="edge">WebMCP</text><text x="1060" y="512" text-anchor="middle" font-size="34">↔</text>
+  <text x="800" y="832" text-anchor="middle" class="sub">product contract → Tokuchu · cart_items → store · checkout reference → Tokuchu</text>
+  <text x="70" y="867" class="sub">The agent discovers live page tools before calling them. It never invents IDs or bypasses a matching WebMCP tool.</text>
+</svg>
