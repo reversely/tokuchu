@@ -48,7 +48,7 @@ The order uses WebMCP in four connected parts of the same workflow.
 3. **Tokuchu's records as tools.** Tokuchu's event page registers the RSVP list and the order's records as tools. The agent hands the store's payload to `set_gift_customization`, reads the source of each requirement through `get_requirements`, runs `request_from_attendees`, reads `get_fulfillment_manifest`, and approves through `approve_specs`. The invite page registers `submit_rsvp` for an attendee's agent, and the store-facing page registers the grant's tools for the store's agent (Sections 8 and 11).
 4. **Customized cart creation.** After the required customization data has been collected, the store's `add_customized_to_cart` tool creates the configured cart items through Shopify's cart endpoint. The agent calls it on the store's page with the `cart_items` the manifest returns; in normal mode Tokuchu's server calls it from a headless page (Section 10). The merchant tool wraps Shopify's cart endpoint because Shopify's own cart tools carry a variant and a quantity per line and no text (Section 5).
 
-**The sequence.** The order runs as fourteen arrows between a browser agent, a Tokuchu tab, and a Customworks tab; each arrow is one WebMCP call, and `README.md`, `docs/agent-playbook.md`, and `docs/guide.md` number them the same way. The source is `docs/diagrams/agent-sequence.mmd`.
+**The sequence.** The order runs as a series of WebMCP calls between a browser agent, a Tokuchu tab, and a Customworks tab. `README.md`, `docs/agent-playbook.md`, and `docs/guide.md` number them the same way. The source is `docs/diagrams/agent-sequence.mmd`.
 
 1. The agent calls `getTools` on the Tokuchu tab and receives the event page's tool list.
 2. The agent calls `list_guests` with `{ filter: "status:eq:going" }` and receives every attendee who replied going with the answers the RSVP list holds.
@@ -59,7 +59,7 @@ The order uses WebMCP in four connected parts of the same workflow.
 7. The agent calls `set_gift_customization` with `{ gift_id, fields, variants }`, and Tokuchu records the store's payload as the gift's requirement schema (Section 9).
 8. The agent calls `get_requirements` with `{ gift_id }`, which names the source that fills each requirement, then `request_from_attendees` with `{ gift_id }`, which sends every going attendee who lacks an answer a request for those values by email.
 9. The agent calls `list_missing` with `{ definition_id }` until every row answers; each reply names the attendees who still owe a value for one question.
-10. The agent calls `get_fulfillment_manifest` with `{ gift_id }` until every row reads ready; the reply carries one graded row per attendee and the `cart_items` for the store (Section 10).
+10. The agent calls `get_fulfillment_manifest` with `{ gift_id }` ; the reply carries one graded row per attendee with a readiness status and the `cart_items` for the store (Section 10).
 11. The agent calls `approve_specs` with `{ gift_id }`, and the approval records the change-log revision it stands at (Section 11).
 12. The agent calls `add_customized_to_cart` on the Customworks tab with `{ items: cart_items, idempotency_key }`, and the store adds one cart line per attendee and returns the `checkout_url`.
 13. The agent calls `post_update` with `{ gift_id, kind: "confirmed", reference: checkout_url }`, and the gift's progress log carries the checkout link for the organizer to review and pay.
@@ -78,13 +78,13 @@ sequenceDiagram
     A->>T: set_gift_customization { gift_id, fields, variants }
     A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
     A->>T: list_missing { definition_id } until every row answers
-    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: get_fulfillment_manifest { gift_id }
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
 ```
 
-**The store's sequence.** After the fourteenth arrow the store's own side runs as a second sequence (`docs/diagrams/store-sequence.mmd`, Section 11). The organizer sends the store a signed link. The store's agent opens the link, which lands on the store-facing page, and calls `getTools` for the tools the grant allows. The store's agent calls `get_fulfillment_manifest` with `{ procurement_id }` and receives one row per attendee at the approved revision. The store's agent calls `post_procurement_update` with `{ procurement_id, type, attendee_ref, requirement_id, message }` to move the order on or to open an exception on a value it cannot use, and an exception routes a correction request to the attendee. The store's agent calls `get_changes` with `{ procurement_id, after_revision }` and reads the correction and every other change since the revision it last read.
+**The store's sequence.** After checkout preparation the store's own side runs as a second sequence (`docs/diagrams/store-sequence.mmd`, Section 11). The organizer sends the store a signed link. The store's agent opens the link, which lands on the store-facing page, and calls `getTools` for the tools the grant allows. The store's agent calls `get_fulfillment_manifest` with `{ procurement_id }` and receives one row per attendee at the approved revision. The store's agent calls `post_procurement_update` with `{ procurement_id, type, attendee_ref, requirement_id, message }` to move the order on or to open an exception on a value it cannot use, and an exception routes a correction request to the attendee. The store's agent calls `get_changes` with `{ procurement_id, after_revision }` and reads the correction and every other change since the revision it last read.
 
 ```mermaid
 sequenceDiagram
@@ -105,7 +105,7 @@ The organizer runs a recurring event, such as an annual symposium, and orders on
 The loop the organizer runs:
 
 1. **Sign in and create the event.** The organizer sets the title, the date, the venue, the spots, the RSVP deadline, and the delivery target, then publishes. Publishing creates the link attendees reply through.
-2. **Find the product.** The organizer types a sentence such as "personalized star map crewnecks with each attendee's name", and the catalog search shows ranked products with the store each came from. In static mode the agent finds the product on the store's page instead.
+2. **Find the product.** The organizer asks ChatGPT to browse the named Customworks store and find a suitable personalized product. In managed mode, the organizer types a search sentence and the server queries Shopify's Global Catalog and store UCP endpoints to rank results. In agent mode, the browser agent opens the store's page and discovers the product through the store's WebMCP tools.
 3. **Select the vendor and product.** The organizer picks one, or the agent creates the gift from the product with `set_gift_plan`. The store's `get_customization` answers with the requirements the product carries, and Tokuchu records them on the gift as a requirement schema with an id and a version.
 4. **Review what will be asked.** Tokuchu shows each requirement with its source: a value the RSVP already holds, a value the organizer maps to an event field, a new question the store's field creates, or a match the organizer confirms between two candidates. The organizer confirms.
 5. **Attendees answer.** Each attendee with a missing value receives an email carrying their own link to a form with the fields the selected product requires. The organizer watches the records grid fill, one row per attendee and one column per requirement, and Tokuchu follows up with whoever has not answered.
@@ -150,7 +150,7 @@ The interaction between the two runs over WebMCP page tools and Shopify's UCP en
 
 ## 7. Screens
 
-**Landing.** The root route `/` shows the two sister websites, the four procurement utilities with the WebMCP tools each side exposes, the Stagehand browser-agent runtime architecture, and the result. The managed-mode strip notes that discovery uses Shopify's UCP endpoints and the store's page tools carry the customization and cart work. Its button opens `/events/new` for a signed-in organizer and the sign-in page for a visitor without an account and for a guest.
+**Landing.** The root route `/` leads with three ChatGPT prompt stages (event creation, product recommendation, checkout preparation) as the primary way to use Tokuchu. Below it shows the two sister websites, the four procurement utilities with the WebMCP tools each side exposes, the browser-agent architecture, and the result. The hero identifies Tokuchu as a WebMCP-native event workspace that ChatGPT's browser can use. "Try with ChatGPT" scrolls to the prompt stages; "Try the demo" opens `/demo`; "Sign in" opens `/events/new` for a signed-in organizer and the sign-in page for a visitor.
 
 **Sign-in.** The organizer enters an email address and receives a magic link; the page says that a first sign-in creates the account and offers the demo. Following the link opens the page the organizer came from, or `/events`, the list of the events the account owns. An attendee's invite link opens without a session.
 
@@ -249,7 +249,7 @@ location: Vancouver
 time: 10:30 PM
 ```
 
-**Completion.** The fulfilment manifest resolves every requirement per attendee from its source and grades each requirement with a status: `resolved`, `missing`, `mapping_unresolved`, `needs_confirmation`, `invalid` (outside the store's constraint), `vendor_rejected` (the store posted an exception on it), `changed_after_approval`, or `exception`. The row's status follows its worst requirement: `ready`, `incomplete`, `invalid`, or `exception`. The readiness grid shows each cell's status with the reason under it and a legend, and approval is available when every row reads ready.
+**Completion.** The fulfilment manifest resolves every requirement per attendee from its source and grades each requirement with a status: `resolved`, `missing`, `mapping_unresolved`, `needs_confirmation`, `invalid` (outside the store's constraint), `vendor_rejected` (the store posted an exception on it), `changed_after_approval`, or `exception`. The row's status follows its worst requirement: `ready`, `incomplete`, `invalid`, or `exception`. The readiness grid shows each cell's status with the reason under it and a legend, and approval prepares items for complete attendees and leaves incomplete attendees pending.
 
 **Approval.** Approval records its time and the revision it stands at, and Tokuchu fills the cart (Section 10). An attendee can still edit from the invite link afterwards; the edit moves the revision on, the grid marks that cell as changed after approval, the approve block states the approved revision and the current one, and the organizer approves again to fill a fresh cart.
 
@@ -291,7 +291,7 @@ The organizer opens the link, reviews one line per attendee with the values as l
 
 The event page shows a handoff card per gift with the store's product page URL, the product handle, the product id, the gift id, the next tool on this page, the next tool on the store's page, and after approval the count of cart items the manifest holds. Every page carries an Agent notes block and a `tokuchu-agent-task` meta tag with the page's task and its numbered steps, so an agent that reads the DOM and one that reads the head both find the order of operations.
 
-The order of operations on the event page: `list_guests`, then `get_customization` on the store's page, then `set_gift_plan` and `set_gift_customization`, `get_requirements` and `set_personalization_mapping`, `request_from_attendees` and `list_missing`, `get_fulfillment_manifest` until every row reads ready, `approve_specs`, `add_customized_to_cart` on the store's page with the manifest's `cart_items`, and `post_update` with the checkout link. `docs/agent-playbook.md` spells out each call's arguments, the store's side through a grant's signed link, the meaning of each error text, and a prompt for a terminal agent. `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model against a static server on port 3114 and records a video per page, and `tests/static-agent.spec.ts` asserts the run.
+The order of operations on the event page: `list_guests`, then `get_customization` on the store's page, then `set_gift_plan` and `set_gift_customization`, `get_requirements` and `set_personalization_mapping`, `request_from_attendees` and `list_missing`, `get_fulfillment_manifest`, `approve_specs` for complete attendees (incomplete attendees stay pending), `add_customized_to_cart` on the store's page with the manifest's `cart_items`, and `post_update` with the checkout link. `docs/agent-playbook.md` spells out each call's arguments, the store's side through a grant's signed link, the meaning of each error text, and a prompt for a terminal agent. `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model against a static server on port 3114 and records a video per page, and `tests/static-agent.spec.ts` asserts the run.
 
 ## 13. Product discovery and ranking
 
@@ -337,10 +337,12 @@ The static-mode run (`tests/static-agent.spec.ts`) plays the agent across Tokuch
 
 Tokuchu is a submission to The WebMCP Challenge (webmcp.devpost.com), due 2026-09-03 at 1:00 pm PDT. The submission requirements and how the project meets each:
 
-- **A working live URL** that judges open in ChatGPT's in-app browser or in Google Chrome with WebMCP enabled. The Render deployment (Section 14) serves the dashboard, where the event's records register as tools on the page's model context, and the demo store serves the merchant tools. A judge with a browser or terminal agent runs the order from the playbook (Section 12).
+- **A working live URL** that judges open in ChatGPT's in-app browser or in Google Chrome with WebMCP enabled. The Render deployment (Section 14) serves the site at `https://tokuchu.onrender.com/`. The homepage provides three ChatGPT prompts that walk through event creation, product recommendation, and checkout preparation. The event's records register as tools on the page's model context, and the demo store serves the merchant tools.
 - **Actual tool registration** with functional schemas and execute functions. Tokuchu's tools are defined as data with JSON Schema inputs (`src/webmcp/tools.ts`) and registered with `registerTool` on the event page, the invite page, and the store-facing page; the store's three merchant tools register the same way in the theme.
 - **A text description** of why WebMCP fits the use case, how it improves the experience, what people and agents accomplish together, and the implementation. Sections 1, 3, and 6 of this document carry that content.
 - **A public video under three minutes** with audio, showing the build and the WebMCP use. Section 15 gives the recording order.
 - **A public repository** with the source, the assets, the instructions, and an open-source license file.
+
+The primary interaction is through ChatGPT's browser: the user sends prompts, and ChatGPT's browser agent discovers and calls WebMCP tools on Tokuchu and Customworks. The click-through demo at `/demo` provides a secondary interface walkthrough. The local Stagehand runner (`docs/agent-mode.md`) is a developer-level alternative.
 
 The judging criteria are WebMCP leverage, execution, potential impact, and creativity and ambition. The project answers the first with tools on both pages and an agent bridging them, and the second with a flow that runs end to end on the live store.

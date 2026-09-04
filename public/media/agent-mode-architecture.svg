@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">Tokuchu agent mode architecture</title>
-  <desc id="desc">An OpenAI agent uses Stagehand to discover and call WebMCP tools in a Tokuchu tab and a store tab. Tokuchu supplies live records and validation but makes no outbound store calls.</desc>
+  <desc id="desc">A ChatGPT browser agent discovers and calls WebMCP tools in a Tokuchu tab and a store tab. Tokuchu supplies live records and validation but makes no outbound store calls.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#42527d"/></marker>
     <marker id="arrowBack" markerWidth="10" markerHeight="10" refX="1" refY="5" orient="auto"><path d="M10 0L0 5L10 10Z" fill="#42527d"/></marker>
@@ -26,8 +26,8 @@
   <rect x="580" y="250" width="440" height="500" rx="28" class="group"/>
   <text x="615" y="292" class="body">AGENT RUNTIME</text>
   <rect x="625" y="335" width="350" height="310" rx="22" class="agent"/>
-  <text x="800" y="381" text-anchor="middle" class="name">OpenAI agent</text>
-  <text x="800" y="417" text-anchor="middle" class="body">Agents SDK + Stagehand browser</text>
+  <text x="800" y="381" text-anchor="middle" class="name">ChatGPT browser agent</text>
+  <text x="800" y="417" text-anchor="middle" class="body">Discovers and calls WebMCP tools</text>
   <text x="800" y="465" text-anchor="middle" class="tool">open_page</text>
   <text x="800" y="498" text-anchor="middle" class="tool">list_webmcp_tools</text>
   <text x="800" y="531" text-anchor="middle" class="tool">call_webmcp_tool</text>

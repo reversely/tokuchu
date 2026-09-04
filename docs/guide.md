@@ -1,10 +1,14 @@
-# Using Tokuchu
+# Using Tokuchu's interface
 
-This guide walks an organizer through Tokuchu from sign-in to a filled store cart and through the store's side of the order, and names the WebMCP tool each screen calls. WebMCP is the browser standard that lets a page register tools an agent can call through `document.modelContext`. The storefront's pages carry Shopify's commerce tools and the store's own `get_customization` and `add_customized_to_cart`; Tokuchu's pages carry the RSVP records, the invite's reply tool, and the store-facing tools a grant allows. Every call the server makes or answers lands in the Agent trace (section 16).
+This guide walks through Tokuchu's interface from sign-in to a filled store cart and through the store's side of the order. It covers the managed-mode experience, where the organizer clicks through the screens and the server handles store interactions.
 
-The app runs in two ways. In managed mode, the mode this guide shows, the organizer clicks through the screens and the server does the store work itself: it searches the catalog and opens the store's product page in a headless browser to call `get_customization` and `add_customized_to_cart`. In agent mode (`TOKUCHU_STATIC=1`) the server makes no search and opens no store page; every capability is a WebMCP tool on a page, and an agent in the browser or in a terminal with a browser tool moves between Tokuchu's pages and the store's page itself. `docs/agent-playbook.md` is the prompt and the order of operations for that agent, and `scripts/agent-playbook.mjs` plays it without a model.
+The primary way to use Tokuchu is through ChatGPT's browser — see the [homepage](https://tokuchu.onrender.com/) for three prompts that walk ChatGPT through event creation, product recommendation, and checkout preparation. This guide documents the interface walkthrough: a second way to work with Tokuchu's event and procurement records. Browser agents can also interact with and manipulate this interface, including its in-app chatbox where available.
 
-Both modes run the same fourteen arrows between the agent, the Tokuchu tab, and the Customworks tab; in managed mode the server and the organizer's buttons stand in for the agent. Each section below that corresponds to an arrow names it by number, and the store's side (sections 12 to 15) follows the second sequence in `docs/diagrams/store-sequence.mmd`. The source is `docs/diagrams/agent-sequence.mmd`.
+WebMCP is the browser standard that lets a page register tools an agent can call through `document.modelContext`. The storefront's pages carry Shopify's commerce tools and the store's own `get_customization` and `add_customized_to_cart`; Tokuchu's pages carry the RSVP records, the invite's reply tool, and the store-facing tools a grant allows. Every call the server makes or answers lands in the Agent trace (section 16).
+
+In managed mode, the mode this guide shows, the organizer clicks through the screens and the server does the store work itself: it searches the catalog and opens the store's product page in a headless browser to call `get_customization` and `add_customized_to_cart`. In agent mode (`TOKUCHU_STATIC=1`) the server makes no search and opens no store page; see [the agent-mode guide](agent-mode.md) for that configuration.
+
+Both modes run the same sequence of WebMCP calls between the agent, the Tokuchu tab, and the Customworks tab; in managed mode the server and the organizer's buttons stand in for the agent. Each section below corresponds to a call in the sequence, and the store's side (sections 12 to 15) follows the second sequence in `docs/diagrams/store-sequence.mmd`. The source is `docs/diagrams/agent-sequence.mmd`.
 
 ```mermaid
 sequenceDiagram
@@ -20,7 +24,7 @@ sequenceDiagram
     A->>T: set_gift_customization { gift_id, fields, variants }
     A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
     A->>T: list_missing { definition_id } until every row answers
-    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: get_fulfillment_manifest { gift_id }
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
@@ -135,7 +139,7 @@ The mug's image field becomes a file question: the form takes the address of a p
 
 ## 9. The records grid and the routing
 
-Each reply fills a row: one column per requirement of the gift shown, with the attendee's answer or a marker for what is still missing. The grid is `get_fulfillment_manifest` drawn as a table (arrow 10), and approval opens when every row reads ready. Switching the gift switches the columns. An answer changed after approval is marked so you can re-approve.
+Each reply fills a row: one column per requirement of the gift shown, with the attendee's answer or a marker for what is still missing. The grid is `get_fulfillment_manifest` drawn as a table (arrow 10), and approval prepares items for complete attendees and leaves incomplete attendees pending. Switching the gift switches the columns. An answer changed after approval is marked so you can re-approve.
 
 ![The records grid](media/guide/13-records-grid.png)
 

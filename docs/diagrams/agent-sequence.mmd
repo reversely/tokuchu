@@ -11,7 +11,7 @@ sequenceDiagram
     A->>T: set_gift_customization { gift_id, fields, variants }
     A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
     A->>T: list_missing { definition_id } until every row answers
-    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: get_fulfillment_manifest { gift_id }
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }

@@ -4,50 +4,72 @@ Event organizers often request customizations, from dietary restrictions to name
 
 Agents can coordinate this information when there is an intermediate source of truth that can both consume requirements from an e-commerce site and expose the resulting fulfilment data back to authorized agents through WebMCP.
 
+## Using Tokuchu with a WebMCP browser agent
+
+The primary way to use Tokuchu is through a WebMCP browser agent, like ChatGPT Browser. Send these prompts to the agent one at a time, reviewing each response before sending the next.
+
+**Stage 1 — Create the event:**
+
+> Use the chat browser and Tokuchu's WebMCP tools to create the Eastern Canada Astronomy Symposium at tokuchu.onrender.com for March 18, 2027, at noon Toronto time, at the Ontario Science Centre. Add Tokuchu's ten sample attendees.
+
+**Stage 2 — Review a recommendation:**
+
+> Then, open Customworks at springbuilt.myshopify.com in the chat browser and use its WebMCP tools to find a personalized apparel gift for our attendees. Show me the best option and total before creating a plan.
+
+**Stage 3 — Prepare the checkout:**
+
+> Use that option for everyone marked going, with each person's name on their gift. Reuse their saved details and company wide states. Prepare one item per complete attendee, leave incomplete attendees pending, and save the checkout in Tokuchu. Tell me who's included, who's pending, and the total.
+
+No account is needed. Guest events expire after 24 hours. Emails are logged, not sent.
+
+The browser agent discovers the WebMCP tools registered on Tokuchu's pages and on the store's pages, then coordinates the event, the attendee data, and the checkout across both sites.
+
 ## Two sister websites
 
-Tokuchu explores that model through a pair of websites. Both expose custom WebMCP functions, allowing agents on either side of a purchase to work against the same evolving order state.
+Tokuchu explores this model through a pair of websites. Both expose custom WebMCP functions, allowing agents on either side of a purchase to work against the same evolving order state.
 
-| Tokuchu: RSVP Application with Attendee States | Customworks: Shopify Store with WebMCP-enabled Customization |
+| Tokuchu | Customworks |
 | --- | --- |
 | ![Tokuchu — personalize gifts for your attendee list using WebMCP agents](public/media/tokuchu-banner.webp) | ![Customworks — a Shopify storefront for the WebMCP Challenge](public/media/customworks-banner.webp) |
-| Tokuchu owns the event, RSVP data, missing-information workflow, approval revision, and scoped fulfilment record. | Customworks owns products, personalization constraints, variants, configured cart lines, checkout, and order status. |
+| Maintains attendee information, requirements, readiness, approvals, and procurement records. | Supplies product requirements, variants, prices, and configured cart creation. |
 
-Tokuchu can consume WebMCP requirements from a storefront, reconcile them against attendee information it already holds, request only what is missing, and expose a permission-limited fulfilment view back to the vendor. Customworks uses WebMCP to describe what each product needs, accept configured items, and return updates about the resulting order.
+## Three ways to interact
 
-## A product procurement in practice
-
-An organizer uses Shopify's Global Catalog to find a suitable customized product and arrives at Customworks. The product's `get_customization` function tells the agent which recipient values it requires and the constraints each value must satisfy.
-
-Tokuchu compares that product contract against the event's RSVP data. Requirements already present in attendee or event records are mapped directly. Requirements that are not present become new attendee fields, and Tokuchu requests them only from the relevant participants through `submit_rsvp`.
-
-When the responses return, Tokuchu validates them and assembles a fulfilment manifest containing only the information this procurement needs. The organizer reviews and approves that exact revision. An agent can then pass the ready cart items to Customworks through `add_customized_to_cart` and continue through Shopify checkout.
-
-The store can also receive scoped access to the procurement. Its agent reads the approved manifest through `get_fulfillment_manifest` without seeing unrelated RSVP information. If a submitted value cannot be fulfilled, it sends a structured clarification through `post_procurement_update`. Tokuchu records the exception, routes it back to the affected attendee, and exposes the corrected value in the next revision through `get_changes`.
-
-Tokuchu discovers products through Shopify's UCP endpoints (MCP over HTTP) and consumes the store's WebMCP page tools for customization and cart. It exposes its own records as WebMCP to authorized agents. The result is a shared source of truth: vendor requirements are reconciled against known attendee data, missing values are collected only when necessary, and each party sees only what it needs to move the order forward.
-
-## The flow
-
-Tokuchu supports two configurations. In managed mode its UI and optional OpenAI assistant drive server operations, and Tokuchu performs the Shopify work. In agent mode a browser agent moves between Tokuchu and Customworks, while Tokuchu acts as the live record database and WebMCP tool surface.
-
-### Managed mode architecture
-
-![Managed mode routes the organizer UI and optional OpenAI assistant through Tokuchu's deterministic server operations. Tokuchu calls Shopify UCP and merchant WebMCP tools.](public/media/managed-mode-architecture.svg)
-
-### Agent mode architecture
-
-![Agent mode places an OpenAI Stagehand agent between the Tokuchu and store tabs. The agent discovers and calls WebMCP tools while Tokuchu acts as the record database.](public/media/agent-mode-architecture.svg)
-
-[Read the architecture guide](docs/architecture.md) for the component boundaries, tools, and transports. Follow [the agent-mode runbook](docs/agent-mode.md) to launch and verify the non-managed configuration. The deployed [architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture) remains available as an interactive view.
-
-### From attendee records to configured checkout
-
-| Tokuchu — attendee and procurement records | Customworks — product and checkout |
+| Method | Description |
 | --- | --- |
-| ![Tokuchu attendee records and requested product fields](docs/media/guide/13-records-grid.png) | ![Customworks checkout with one personalized line per attendee](docs/media/guide/16-store-cart.png) |
+| **WebMCP browser agent** | The primary experience. Send the prompts above to a WebMCP-capable browser agent, like ChatGPT Browser. The agent discovers WebMCP tools on Tokuchu and Customworks and coordinates the procurement across both sites. |
+| **Tokuchu interface and click-through demo** | Explore Tokuchu's interface directly. The `/demo` route runs a guided walkthrough on a seeded event. Browser agents can also interact with and manipulate this interface, including its in-app chatbox where available. |
+| **Local Stagehand runner** | A separately configured local runtime that operates across the websites. See [the agent-mode guide](docs/agent-mode.md) for installation and runtime requirements. |
 
-The attendee records on the left become configured cart lines on the right. Tokuchu never owns product truth or payment; Customworks never owns the RSVP list or approval history.
+These interaction methods are distinct from backend runtime modes. The interface walkthrough and in-app chatbox belong to the managed experience; the Stagehand runner is a particular implementation of an external browser agent.
+
+### The click-through demo
+
+The `/demo` route opens a click-through version of the Tokuchu interface that agents can also interact with and manipulate. It runs a guided walkthrough of the procurement flow on a seeded event with three gifts: the store's crewneck, the store's mug, and a food item from the Shopify catalog.
+
+A signed-in organizer gets the seeded event created under their account. A visitor without a session becomes a guest. Guest events expire after 24 hours. Creating an account from the band keeps the event.
+
+### The in-app chatbox
+
+Tokuchu's interface includes an in-app chatbox (`LLM_ENABLED=1`). It uses the OpenAI Agents SDK and deterministic server function tools. The chatbox can read and manage event state and curate a gift. It cannot approve an order, send a cart, or check out.
+
+A browser agent operating Tokuchu's interface can enter text into the chatbox; the chatbox and server then execute the resulting workflow. This is distinct from a browser agent directly discovering and calling page WebMCP tools.
+
+## The procurement flow
+
+The order runs as WebMCP calls between the agent, the Tokuchu tab, and the Customworks tab.
+
+1. **Create the event.** The agent opens Tokuchu's home page, calls `create_event` with the event details, and `load_sample_attendees` to add attendees. The event page carries the session that owns the event.
+2. **Browse the store.** The agent opens the Customworks product page and calls `get_customization` to read the product's fields, kinds, constraints, and variants.
+3. **Record the plan.** The agent returns to Tokuchu and calls `set_gift_plan` with the product and store details, then `set_gift_customization` with the store's payload.
+4. **Map and request.** `get_requirements` shows which requirements are already resolved from attendee data and which need answers. `request_from_attendees` sends each attendee with a missing value a request by email.
+5. **Prepare the checkout.** `get_fulfillment_manifest` returns one row per attendee with their status. `approve_specs` records the approval at the current revision. `add_customized_to_cart` on the store's page builds one cart line per complete attendee. The checkout link is recorded on the gift through `post_update`.
+
+Items are prepared for complete attendees. Incomplete attendees stay pending until they answer the request Tokuchu sent them. The checkout ends at the recorded link and a report of who is included and who is pending. The organizer reviews the cart and pays at the store's checkout.
+
+### After checkout
+
+Payment-dependent updates and vendor-grant collaboration are subsequent workflows. The organizer creates store access from the Share block, and the store's agent reads the manifest, posts the order's progress, and raises structured exceptions through the signed link.
 
 ## The utility hierarchy
 
@@ -55,98 +77,30 @@ The many WebMCP calls serve four larger utilities. These are the stable product 
 
 ### 1. Plan a suitable gift — for the organizer
 
-Tokuchu helps the organizer find a product that fits the event, budget, recipient rules, and delivery destination. Customworks then describes exactly how that product may be configured. The result is a gift plan with a versioned product requirement contract.
-
-This utility includes catalog search, product lookup, delivery checks, recipient assignment rules, variant discovery, and customization-field discovery.
+Tokuchu helps the organizer find a product that fits the event. The store describes exactly how that product may be configured through `get_customization`. The result is a gift plan with a versioned product requirement contract.
 
 ### 2. Make every recipient ready — for the organizer and attendees
 
-Tokuchu compares the product contract with information already present in the event and RSVP records. It maps reusable values such as attendee name or event location automatically, creates questions only for unresolved requirements, and asks only the affected attendees. Each attendee gets one RSVP utility for answering or correcting their own values.
-
-This utility includes RSVP submission, requirement mapping, missing-answer detection, request and follow-up email, constraint validation, and reconciliation into one readiness row per recipient.
+Tokuchu compares the product contract with information already present in the event and RSVP records. It maps reusable values automatically, creates questions only for unresolved requirements, and asks only the affected attendees.
 
 ### 3. Approve and prepare the order — for the organizer
 
-When every required row is ready, Tokuchu freezes the organizer's decision at a revision and produces a fulfilment manifest. Customworks validates that batch against the product contract, creates one personalized cart line per recipient, and returns the Shopify checkout. Tokuchu records the checkout without becoming the payment system.
-
-This utility includes manifest generation, revision-aware approval, cart preparation, rejected-line reporting, checkout creation, and order-status retrieval.
+When the fulfillment manifest's ready rows form a sufficient batch, the organizer approves. The store's `add_customized_to_cart` creates one personalized cart line per complete recipient and returns the checkout link. Incomplete attendees join a later revision when they answer.
 
 ### 4. Collaborate on fulfilment — for the store and affected attendees
 
-After approval, the organizer gives the store a signed, permission-limited Tokuchu link. The store can read only the approved procurement data it needs, acknowledge revisions, report production or fulfilment, and raise a structured exception. An exception tied to a recipient requirement reopens that question for the attendee; their correction returns through Tokuchu's change log to the store.
+After approval, the organizer gives the store a signed, permission-limited Tokuchu link. The store can read only the approved procurement data it needs, acknowledge revisions, report production or fulfilment, and raise a structured exception.
 
-This utility includes scoped data sharing, progress updates, exceptions, attendee correction, revision history, and acknowledgement.
+## Runtime modes
 
-## How the utilities run
-
-The four utilities above are the product. The runtime mode only decides who performs the cross-site handoffs.
+The four utilities above are the product. The runtime mode decides who performs the cross-site handoffs.
 
 | Mode | Experience | Boundary crossing |
 | --- | --- | --- |
 | **Managed mode** (default) | The organizer works in Tokuchu as a conventional application | Tokuchu's server searches Shopify, reads supported product pages, and prepares the store cart after approval |
 | **Agent mode** (`TOKUCHU_STATIC=1`) | An agent works across an event tab and a product tab | The agent carries the product contract, approved cart items, and checkout reference between the two sites |
 
-In both modes, attendees still answer through Tokuchu and the store still collaborates through a scoped Tokuchu grant. “Static” is the environment flag's historical name. It means only that Tokuchu avoids outbound store automation; its UI, records, APIs, and WebMCP tools remain live and mutable.
-
-### Managed mode
-
-Tokuchu runs all four utilities behind the organizer interface. During planning it searches Shopify, loads product detail, checks delivery, and reads supported customization contracts. During order preparation it builds the approved recipient batch, opens the merchant page or Shopify UCP cart, and records the resulting checkout. Cart preparation runs asynchronously so the dashboard can show progress and blocked rows.
-
-### Agent mode
-
-The same four utilities remain intact, but a browser or terminal agent performs the two store crossings:
-
-| Product phase | What the agent accomplishes | Data handed across |
-| --- | --- | --- |
-| Plan a suitable gift | Reads the store's product contract and establishes the gift in Tokuchu | Fields, constraints, variants, product identity |
-| Make every recipient ready | Works inside Tokuchu while attendees supply missing values | No store handoff |
-| Approve and prepare | Takes Tokuchu's approved recipient batch to the store and records the result | Cart items → store; checkout URL → Tokuchu |
-| Collaborate on fulfilment | Opens the store's scoped Tokuchu view | Approved manifest, changes, updates, exceptions |
-
-The detailed calls are discoverable from each page's WebMCP schemas. The event, invite, and store handoff pages also include Agent notes and a `tokuchu-agent-task` meta tag that state the next purpose-level action.
-
-### Running the demo
-
-`npm run agent-run -- "<goal>"` is the primary way to run this mode. With `AGENT_START=landing` the run begins on the home page, which registers `create_event` and `add_guests`, so the agent creates the event and its guest list before it touches a store. `scripts/agent-run.mjs` launches local Chrome through Stagehand, creates Stagehand around that browser, and gives its shared browser context to the OpenAI Agents SDK runtime in `src/agent/agent-run.ts`. The model receives five generic controls: `open_page`, `list_webmcp_tools`, `call_webmcp_tool`, `switch_tab`, and `record_checkout`. It does not receive a hard-coded list of product operations.
-
-For each tab, `list_webmcp_tools` calls Stagehand's `Page.tools()` and returns the native WebMCP registrations on `document.modelContext`, including name, description, input schema, and frame ID. `call_webmcp_tool` resolves the selected registration, invokes it with structured input, waits for the result, and normalizes WebMCP content and errors. The runtime captures a returned checkout URL without exposing it to the model; `record_checkout` uses that captured value to call Tokuchu's `post_update`. Every model decision, browser call, result, and final outcome is written to `tests/videos/agent-run-*.json`.
-
-With `TOKUCHU_STATIC=1`, Tokuchu omits server-side store actions, so this Stagehand-controlled browser is the bridge between Tokuchu and Customworks. `docs/agent-runtime.md` supplies the operating rules and purpose-level sequence. `npm run agent-playbook` is the deterministic fallback: Playwright follows a fixed sequence through the WebMCP polyfill and needs no model. Both paths need a static server on port 3114 and network access to the demo store; the Stagehand run also needs `OPENAI_API_KEY`.
-
-## Store handoff flow
-
-The store handoff belongs to the fourth utility, **Collaborate on fulfilment**. It is a separate phase after cart preparation—not the Customworks product page used to describe or configure the gift.
-
-The organizer creates an access grant and sends its signed `/s/{token}` link to the store. The link opens `/store/{grantId}`, where Tokuchu registers only the tools permitted by that grant.
-
-![The store-facing Tokuchu page showing the approved fulfilment manifest and its revision](docs/media/guide/18-store-manifest.png)
-
-The store uses that single workspace to understand the approved order, report where production stands, and resolve anything it cannot fulfil. Read access, change tracking, and write access are separate permissions:
-
-| Permission | Tools |
-| --- | --- |
-| `manifest:read` | `get_procurement`, `get_manifest`, `get_fulfillment_manifest` |
-| `requirements:read` | `get_requirements` |
-| `changes:read` | `get_changes`, `acknowledge_changes` |
-| `updates:read` | `get_updates` |
-| `updates:write` | `post_update`, `post_procurement_update` |
-
-The MCP endpoint reads the grant again on every call. Revocation or expiry therefore takes effect immediately. Gift access and readable attendee attributes are filtered server-side, not only hidden in the page.
-
-## Capability map and underlying tools
-
-Most readers can stop at the four utilities. This table maps those concepts to the operations beneath them for implementers and agent authors: WebMCP page tools on Tokuchu's and the store's pages, and Shopify's UCP endpoint methods, which are MCP over HTTP and not WebMCP.
-
-| Utility | Primary user | Tokuchu capabilities | Store capabilities |
-| --- | --- | --- | --- |
-| **Plan a suitable gift** | Organizer | Understand the audience, search, define recipient rules, and store the product contract (`get_guest`, `list_guests`, `count_by`, `get_summary`, `search_gifts`, `set_gift_plan`, `set_gift_customization`) | Discover products and declare configuration rules (`search_catalog`, `lookup_catalog`, `get_product`, `get_customization`) |
-| **Make every recipient ready** | Organizer + attendee | Map existing data, identify gaps, ask, validate, and reconcile (`set_personalization_mapping`, `get_requirements`, `request_from_attendees`, `follow_up`, `list_missing`, `submit_rsvp`, `get_manifest`) | Supply the field constraints Tokuchu enforces (`get_customization`) |
-| **Approve and prepare the order** | Organizer | Build the fulfilment view, approve a revision, and record progress (`get_fulfillment_manifest`, `approve_specs`, `send_to_vendor`, `approve`, `post_update`) | Validate configured items, prepare checkout, and report the resulting order (`add_customized_to_cart`, `create_cart`, `update_cart`, `get_cart`, `create_checkout`, `get_order`, `get_order_updates`) |
-| **Collaborate on fulfilment** | Store + organizer + affected attendee | Share a scoped procurement, track revisions, and route exceptions (`get_procurement`, `get_fulfillment_manifest`, `get_updates`, `post_procurement_update`, `get_changes`, `acknowledge_changes`, `submit_rsvp`) | Report acceptance, production, fulfilment, or a recipient-specific problem through the Tokuchu grant |
-
-The invite page exposes only `submit_rsvp`, with a schema generated from the questions relevant to that attendee. The store handoff page exposes only the tools its grant permits. The organizer event page exposes the broader planning and coordination surface.
-
-The Customworks adapter lives under `integrations/customily/`; the typed Shopify JSON-RPC client lives under `packages/shopify-ucp/`. Every Shopify call includes the public UCP agent profile in `arguments.meta["ucp-agent"].profile` and requires no private API key.
+In managed mode, product discovery runs through Shopify's Global Catalog and store UCP endpoints. The server ranks results, checks delivery eligibility, and handles the store page's WebMCP tools in a headless browser. The [interface guide](docs/guide.md) walks through the managed experience.
 
 ## Application structure
 
@@ -195,11 +149,12 @@ LIVE_CUSTOMILY=1 npx playwright test tests/acceptance.spec.ts
 ## Documentation map
 
 - `docs/prd.md` — product requirements and domain behavior
+- `docs/guide.md` — organizer-facing interface walkthrough
 - `docs/webmcp-routing.md` — tool-to-route mapping and hop-by-hop transport details
-- `docs/guide.md` — organizer-facing walkthrough
+- `docs/agent-mode.md` — installing and running the local Stagehand implementation
+- `docs/agent-runtime.md` — operating rules for the browser agent runtime
 - `docs/agent-playbook.md` — instructions and error handling for an agent driving both pages
-- `docs/diagrams/agent-sequence.mmd` — agent handoff sequence source
-- `docs/diagrams/store-sequence.mmd` — store grant sequence source
+- `docs/architecture.md` — component boundaries, tools, and transports
 
 ## Deployment
 

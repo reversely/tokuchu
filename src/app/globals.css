@@ -365,9 +365,22 @@ table.records .cellwhy { font-size: 12px; }
 .home .prompt-panel { max-width: 720px; margin: 0 auto; }
 .home .prompt-panel h2 { font-size: 22px; font-weight: 600; margin: 0 0 12px; }
 .home .prompt-panel > p { font-size: 16px; line-height: 1.55; color: var(--ink-2); margin: 0 0 20px; }
-.home .prompt-box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; overflow-x: auto; }
-.home .prompt-box pre { margin: 0; font-family: var(--mono); font-size: 13.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; color: var(--ink); }
 .home .prompt-note { font-size: 14px; color: var(--ink-3); margin: 14px 0 0; }
+.home .demo-intro { padding: 0 0 64px; }
+.home .demo-panel { max-width: 720px; margin: 0 auto; padding: 28px 32px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.home .demo-panel h2 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
+.home .demo-panel > p { font-size: 15.5px; line-height: 1.55; color: var(--ink-2); margin: 0 0 8px; }
+.home .demo-note { font-size: 14px; color: var(--ink-3); }
+.home .demo-panel .btn { margin-top: 16px; }
+.home .stage-bubbles { display: grid; gap: 16px; }
+.home .stage-bubble { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.home .stage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.home .stage-number { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--sky-dark); color: #fff; font: 700 13px/1 var(--mono); flex: none; }
+.home .stage-label { font-weight: 600; font-size: 15px; flex: 1; }
+.home .stage-message { margin: 0; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.home .copy-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink-3); cursor: pointer; flex: none; transition: background 0.15s, color 0.15s; }
+.home .copy-btn:hover { background: var(--soft); color: var(--ink); }
+.home .copy-btn.copied { background: var(--sky-dark); color: #fff; border-color: var(--sky-dark); }
 .home .cta { margin-top: 32px; display: flex; gap: 14px; flex-wrap: wrap; }
 .home .window { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); overflow: hidden; }
 .home .window .chrome { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line-2); background: color-mix(in srgb, var(--pale) 60%, var(--card)); }
@@ -590,16 +603,11 @@ table.records .cellwhy { font-size: 12px; }
 .intro { position: fixed; inset: 0; z-index: 45; background: #0d1424; color: #e9d8bf; display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 40px; align-items: center; padding: 48px min(8vw, 96px); }
 .intro-art { display: block; width: min(100%, 520px); height: auto; margin: 0 auto; border-radius: 18px; }
 .intro-copy { display: grid; gap: 22px; }
-.intro-count { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #d9612f; }
-.intro-text { margin: 0; font-family: var(--font-display), "Zilla Slab", serif; font-size: clamp(26px, 3.2vw, 44px); line-height: 1.22; text-wrap: balance; min-height: 4.8em; }
-.intro-word { opacity: 0; transition: opacity 320ms ease; }
-.intro-word.on { opacity: 1; }
-@keyframes intro-blink { to { visibility: hidden; } }
+.intro-block { margin: 0; font-family: var(--font-display), "Zilla Slab", serif; font-size: clamp(20px, 2.4vw, 30px); line-height: 1.35; text-wrap: balance; }
 .intro-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .intro .btn.primary { background: #d9612f; color: #fff; }
 .intro .btn.ghost { border-color: rgba(233, 216, 191, 0.4); color: #e9d8bf; }
-@media (max-width: 900px) { .intro { grid-template-columns: 1fr; align-content: start; gap: 20px; padding: 24px 20px; overflow-y: auto; } .intro-art { width: min(100%, 260px); } .intro-text { font-size: 24px; min-height: 0; } }
-@media (prefers-reduced-motion: reduce) { .intro-word { transition: none; } }
+@media (max-width: 900px) { .intro { grid-template-columns: 1fr; align-content: start; gap: 20px; padding: 24px 20px; overflow-y: auto; } .intro-art { width: min(100%, 260px); } .intro-block { font-size: 20px; } }
 
 /* the store-facing page (#47) */
 .store .wrap > * { min-width: 0; }

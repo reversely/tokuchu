@@ -2,7 +2,7 @@
 
 This document gives a browser agent, or a terminal agent with a browser tool, the prompt and the steps to run one gift order through Tokuchu and the demo store. It applies to a Tokuchu server in static mode (`TOKUCHU_STATIC=1`), where the server makes no catalog search and opens no store page of its own; every capability is a WebMCP tool on a page, and the agent moves between Tokuchu's pages and the store's product page. `scripts/agent-run.mjs` hands this document to a model with a browser and lets it choose the calls, and `scripts/agent-playbook.mjs` follows the same steps with Playwright in place of a model, so a judge can repeat either path.
 
-The whole run is fourteen arrows between three participants. The order of operations below numbers them the same way, and `README.md`, `docs/guide.md`, and `docs/prd.md` refer to the same numbers. The source is `docs/diagrams/agent-sequence.mmd`; the rendered image under `public/media` predates the fourteenth arrow, `get_order_updates`, and shows the first thirteen.
+The whole run is a series of WebMCP calls between three participants. The order of operations below numbers them the same way, and `README.md`, `docs/guide.md`, and `docs/prd.md` refer to the same numbers. The source is `docs/diagrams/agent-sequence.mmd`; the rendered image under `public/media` predates the fourteenth arrow, `get_order_updates`, and shows the first thirteen.
 
 ```mermaid
 sequenceDiagram
@@ -18,7 +18,7 @@ sequenceDiagram
     A->>T: set_gift_customization { gift_id, fields, variants }
     A->>T: get_requirements { gift_id } then request_from_attendees { gift_id }
     A->>T: list_missing { definition_id } until every row answers
-    A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
+    A->>T: get_fulfillment_manifest { gift_id }
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
     A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
@@ -27,7 +27,7 @@ sequenceDiagram
 
 ## The task
 
-The organizer has published an event and the attendees have replied going. The agent reads the store's customization contract for the crewneck on the store's product page, hands it to Tokuchu, has Tokuchu ask each attendee only for the values the RSVP list lacks, waits until every attendee's row reads ready, approves, takes the cart items Tokuchu prepares back to the store's page, fills the store's cart with one line per attendee, and records the checkout link on the gift. The store's own agent then reads the manifest through a signed link and posts its updates.
+The organizer has published an event and the attendees have replied going. The agent reads the store's customization contract for the crewneck on the store's product page, hands it to Tokuchu, has Tokuchu ask each attendee only for the values the RSVP list lacks, approves for complete attendees (incomplete attendees stay pending), takes the cart items Tokuchu prepares back to the store's page, fills the store's cart with one line per attendee, and records the checkout link on the gift. The store's own agent then reads the manifest through a signed link and posts its updates.
 
 ## The two pages
 
@@ -69,7 +69,7 @@ Each step is one arrow of the diagram, in the diagram's order and wording.
 7. **`set_gift_customization { gift_id, fields, variants }`.** Call it with `{ gift_id, ...payload }`, the payload from step 4. The reply's `personalization.fields` and `variants` are the store's, recorded as the gift's requirement schema.
 8. **`get_requirements { gift_id }` then `request_from_attendees { gift_id }`.** `get_requirements` names each requirement's `source`: `guest` or `event` or `literal` or `definition` for a value Tokuchu already fills, and `question` for one the attendees must give. `request_from_attendees` turns each question into a guest question with the store's limit or choices and records a request to every going attendee who lacks an answer. Read `get_requirements` again and, to confirm the rows, call `set_personalization_mapping` `{ gift_id, mappings }` with one row per non-variant requirement: the requirement's `mapping` when it carries one, else `{ vendor_field_key: <key>, source: { type: "definition", definition_id: <definition_id>, subject_scope: "guest" } }`.
 9. **`list_missing { definition_id }` until every row answers.** For each guest question the event now holds (`scope: "guest"` and `required_rule: "going"` in the event snapshot at `GET /api/events/<id>`), call `list_missing` `{ definition_id, filter: "status:eq:going" }`. Ask only the attendees it names, and only for those questions. An attendee answers on the invite page through `submit_rsvp` with `guest_id` and one property per question key, or through the form. Repeat until the reply lists no one.
-10. **`get_fulfillment_manifest { gift_id }` until every row reads ready.** Read it until every attendee's `status` reads `ready`. The reply's `cart_items` array has one item per ready attendee: `recipient_ref`, `variant_id`, and `values` keyed by the store's field keys.
+10. **`get_fulfillment_manifest { gift_id }`.** Read the manifest. Prepare items for attendees whose `status` reads `ready`; incomplete attendees stay pending. The reply's `cart_items` array has one item per ready attendee: `recipient_ref`, `variant_id`, and `values` keyed by the store's field keys.
 11. **`approve_specs { gift_id }`.** The reply carries `approved_at` and the revision the approval stands at; no cart job runs in static mode, so `cart_fill` and `checkout_url` stay empty. Read `get_fulfillment_manifest` once more and keep its `cart_items`.
 12. **`add_customized_to_cart { items: cart_items, idempotency_key }` on the store's product page.** Call it with the `cart_items` from step 11 and `idempotency_key: "<gift id>:<approved_at>"`. The reply lists the `ready` lines and a `checkout_url` that opens the cart at checkout in any browser. A repeated call with the same key adds nothing.
 13. **`post_update { gift_id, kind: "confirmed", reference: checkout_url }`.** On Tokuchu, call it with `text: "The cart is ready to review"` and the `checkout_url` as `reference`, so the gift's progress log carries the link.
@@ -144,7 +144,7 @@ Follow this order and stop at the first error you cannot resolve by reading it:
 7. Tokuchu: set_gift_customization { gift_id, ...payload from step 4 }.
 8. Tokuchu: get_requirements { gift_id }, then request_from_attendees { gift_id }, then get_requirements again and set_personalization_mapping { gift_id, mappings } with one row per non-variant requirement (its mapping, else a definition source on its definition_id).
 9. Tokuchu: for each guest question the event snapshot at GET /api/events/<id> lists with required_rule going, list_missing { definition_id, filter: "status:eq:going" } until it lists no one. Report who is missing what; the attendees answer on their invite pages through submit_rsvp.
-10. Tokuchu: get_fulfillment_manifest { gift_id } until every attendee reads ready.
+10. Tokuchu: get_fulfillment_manifest { gift_id } — prepare for complete attendees, leave incomplete pending.
 11. Tokuchu: approve_specs { gift_id }, then get_fulfillment_manifest again and keep cart_items.
 12. Store: add_customized_to_cart { items: cart_items, idempotency_key: "<gift id>:<approved_at>" }. Report the checkout_url.
 13. Tokuchu: post_update { gift_id, kind: "confirmed", text: "The cart is ready to review", reference: <checkout_url> }.

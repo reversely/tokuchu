@@ -18,7 +18,6 @@ async function execute(page: Page, name: string, args: Record<string, unknown>) 
 
 test("the home page registers create_event and add_guests and a session-less browser gets a guest event it owns", async ({ page }) => {
   await page.goto("/?webmcp=polyfill");
-  await expect(page.getByTestId("codex-entry")).toBeVisible();
   await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
   const names = await page.evaluate(async () => (await (document.modelContext as unknown as Ctx).getTools()).map((t) => t.name).sort());
   expect(names).toEqual(["add_guests", "create_event"]);

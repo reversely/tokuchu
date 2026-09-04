@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { CODEX_DISCOVERY_CODE, CODEX_ENTRY_META } from "../../../webmcp/codex-entry";
 
 export const metadata: Metadata = {
-  title: "Codex agent entry · Tokuchu",
-  description: "How Codex uses its built-in browser WebMCP capability to create and operate a Tokuchu guest event.",
+  title: "Browser agent entry · Tokuchu",
+  description: "How a browser agent uses WebMCP to create and operate a Tokuchu guest event.",
   other: { "tokuchu-codex-entry": CODEX_ENTRY_META }
 };
 
@@ -11,7 +11,7 @@ export default function CodexEntryPage() {
   return (
     <main className="docs-page">
       <nav className="docs-nav"><a className="brand" href="/">Tokuchu<span>.</span></a><a href="/">Back to overview</a></nav>
-      <header className="docs-hero"><span className="eyebrow">Codex agent entry</span><h1>Discover the homepage tools before following its links.</h1><p>This page is public. No sign-in is needed. These instructions describe Codex&apos;s built-in browser capability and not Tokuchu&apos;s separate Stagehand runtime.</p></header>
+      <header className="docs-hero"><span className="eyebrow">Browser agent entry</span><h1>Discover the homepage tools before following its links.</h1><p>This page is public. No sign-in is needed. These instructions describe how a browser agent with WebMCP support (such as ChatGPT&apos;s browser or Codex) discovers and calls Tokuchu&apos;s page tools.</p></header>
 
       <section className="docs-section agent-guide">
         <h2>1. Use the built-in browser WebMCP capability</h2>

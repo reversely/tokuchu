@@ -16,11 +16,11 @@ When the goal is to create the event, open Tokuchu's home page. It registers `cr
 
 ## Stop when the goal is met
 
-A goal names one outcome. When it is to create the event, stop after reporting the event URL and the guests added. When it is to find and compare products, stop after the comparison and a recommendation. When it is to complete the procurement, run the order below to the checkout. Do not continue past the goal into the next stage.
+A goal names one outcome. When it is to create the event, stop after reporting the event URL and the guests added. When it is to find and compare products, stop after the comparison and a recommendation. When it is to prepare the checkout, run the order below through approval and cart creation for complete attendees, then report who is included, who is pending, and the total. Do not continue past the goal into the next stage.
 
 ## The task
 
-An event's organizer wants a personalized product for every attendee who replied going. The Tokuchu tab holds the event's records: the guests with their answers, the gift, its requirements, the requests to attendees, the fulfilment manifest, and the approval. A store's product page holds the product's customization contract and its cart. Read the contract on the store's page, hand it to Tokuchu, have Tokuchu ask attendees only for the values it lacks, wait until every attendee's row reads ready, approve, take the cart items Tokuchu prepares to the store's page, fill the cart, and record the checkout link on the gift.
+An event's organizer wants a personalized product for every attendee who replied going. The Tokuchu tab holds the event's records: the guests with their answers, the gift, its requirements, the requests to attendees, the fulfilment manifest, and the approval. A store's product page holds the product's customization contract and its cart. Read the contract on the store's page, hand it to Tokuchu, have Tokuchu ask attendees only for the values it lacks, prepare one item per complete attendee, leave incomplete attendees pending, approve, take the cart items Tokuchu prepares to the store's page, fill the cart, and record the checkout link on the gift.
 
 ## The order the tools expect
 
@@ -34,8 +34,8 @@ An event's organizer wants a personalized product for every attendee who replied
 7. Tokuchu: `get_fulfillment_manifest` with `gift_id`. Every attendee whose details you hold should read `ready`; an attendee with no details on file stays `incomplete` until they answer the request Tokuchu emailed them, and that can take days. Do not wait for them. Its `cart_items` array holds one item per ready attendee and is the cart payload.
 8. Tokuchu: `approve_specs` with `gift_id` once every attendee with details reads `ready`. The approval covers the ready rows; the incomplete ones join a later revision when they answer. The reply carries `approved_at`. Read `get_fulfillment_manifest` once more and keep `cart_items`.
 9. Store page: `add_customized_to_cart` with `{ "items": cart_items, "idempotency_key": "<gift id>:<approved_at>" }`. The reply lists ready and blocked lines; the runtime captures its checkout link.
-10. Tokuchu: `record_checkout` with the Tokuchu `tab_id` and the `gift_id`. It posts the captured link onto the gift with kind `confirmed`.
-11. Store page, after the organizer pays: `get_order_updates` reports the order and its fulfilment; the runtime supplies no argument for you here, so this step belongs to a later session that holds the link.
+10. Tokuchu: `record_checkout` with the Tokuchu `tab_id` and the `gift_id`. This is a local-runner control that posts the captured checkout link onto the gift with kind `confirmed`. A ChatGPT browser agent uses the page tool `post_update` with `{ "gift_id", "kind": "confirmed", "reference": checkout_url }` instead.
+11. Checkout preparation ends here with the recorded checkout link and a report of included and pending attendees. After the organizer pays at the store's checkout: `get_order_updates` reports the order and its fulfilment; this step belongs to a later session.
 
 ## What each error means
 
