@@ -91,7 +91,7 @@ export function ProcurementState({ procurement, current, approved }: { procureme
   const status = procurement?.status ?? "draft";
   return (
     <div className="chips" style={{ marginBottom: 14 }} data-testid="procurement-state" data-status={status} data-current={current} data-approved={approved ?? ""}>
-      <span className={`pill${status === "ready" || status === "approved" ? " live" : ""}`} data-testid="procurement-status">{STATUS_WORDS(status)}</span>
+      <span className={`pill${status === "ready" || status === "approved" || status === "checkout_ready" ? " live" : ""}`} data-testid="procurement-status">{STATUS_WORDS(status)}</span>
       <span className="tag quiet" data-testid="procurement-revision">revision {current}</span>
       <span className="tag quiet" data-testid="procurement-approved">{approved === null ? "not approved" : `approved at revision ${approved}`}</span>
     </div>

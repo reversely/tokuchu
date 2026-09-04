@@ -37,6 +37,7 @@ function questionKind(def: Definition): string {
 function requestState(request: Snapshot["requests"][number]): string {
   if (request.delivery === "no_address") return "no email address";
   if (request.delivery === "failed") return "email failed";
+  if (request.delivery === "simulated" || request.delivery === "logged") return "simulated";
   return request.follow_ups > 0 ? `waiting after ${request.follow_ups} follow-up${request.follow_ups === 1 ? "" : "s"}` : "waiting";
 }
 
@@ -363,7 +364,7 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
             ))}
           </div>
         ) : (
-          <p className="hint" style={{ color: "var(--muted)" }}>{gift && !personalized ? "This product has no customization fields" : "No requirements yet"}</p>
+          <p className="hint" style={{ color: "var(--muted)" }}>{gift && !personalized ? "This product has no customization fields" : requests.size > 0 ? "Loading requirements…" : "No requirements yet"}</p>
         )}
         {gift && <ReconcilePanels eventId={snap.event.id} giftId={gift.id} requirements={requirements} seq={snap.seq} onChanged={onChanged} />}
         {gift && (

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { currentCaller } from "../server/ownership";
 import { LandingWebMcp } from "./landing-webmcp";
 import { SessionPill } from "./session-pill";
-import { CODEX_DISCOVERY_CODE, CODEX_ENTRY_META } from "../webmcp/codex-entry";
+import { CODEX_ENTRY_META } from "../webmcp/codex-entry";
 
 export const metadata: Metadata = {
   other: { "tokuchu-codex-entry": CODEX_ENTRY_META }
@@ -93,14 +93,6 @@ export default async function Page() {
       </header>
 
       <main id="top">
-        <section className="codex-entry" data-testid="codex-entry"><div className="wrap">
-          <span className="eyebrow">Codex starts here</span>
-          <h2>Discover the homepage WebMCP tools before following human-facing links.</h2>
-          <p>Use Codex&apos;s built-in browser capability. This is different from the Stagehand runtime documented below.</p>
-          <pre><code>{CODEX_DISCOVERY_CODE}</code></pre>
-          <p>Call <code>create_event</code> here. Open its exact returned URL with the guest token intact. For an explicit demonstration verify the guest list is empty before calling <code>load_sample_attendees</code>.</p>
-          <a href="/docs/codex" data-testid="codex-guide">Read the complete Codex entry guide</a>
-        </div></section>
         <section className="hero"><div className="wrap">
           <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu" data-testid="banner" />
           <h1 className="hero-headline" data-testid="intent">A WebMCP-native event workspace for managing participants, their requirements, and the purchases made on their behalf.</h1>
@@ -138,35 +130,7 @@ export default async function Page() {
 
         <section id="runtime" className="tint"><div className="wrap">
           <div className="sec-head"><span className="eyebrow">Agent architecture</span><h2>The agent discovers live page tools before calling them.</h2><p>Each page registers its tools on <code>document.modelContext</code>. The agent reads the available tools from the current page, calls them with structured input, and moves data between the two sites without hard-coded API knowledge.</p></div>
-          <div className="arch-grid" data-testid="arch-grid">
-            <div className="arch-col arch-tokuchu">
-              <span className="arch-label">Tokuchu tab</span>
-              <div className="arch-box">
-                <strong>Tokuchu records</strong>
-                <span className="arch-desc">Live UI, API, validation, database</span>
-                <div className="arch-tools"><code>list_guests</code><code>set_gift_plan</code><code>set_gift_customization</code><code>get_requirements</code><code>request_from_attendees</code><code>get_fulfillment_manifest</code><code>approve_specs</code><code>post_update</code></div>
-              </div>
-            </div>
-            <div className="arch-col arch-agent">
-              <span className="arch-label">Agent runtime</span>
-              <div className="arch-box accent">
-                <strong>Browser agent</strong>
-                <span className="arch-desc">Codex built-in browser or Stagehand</span>
-                <div className="arch-tools"><code>tab.capabilities.get(&quot;webmcp&quot;)</code><code>fetchTools()</code><code>tools.call(name, input)</code></div>
-              </div>
-              <div className="arch-arrows"><span className="arch-arrow left">WebMCP</span><span className="arch-arrow right">WebMCP</span></div>
-            </div>
-            <div className="arch-col arch-store">
-              <span className="arch-label">Store tab</span>
-              <div className="arch-box">
-                <strong>Shopify + merchant</strong>
-                <span className="arch-desc">Product truth, cart, checkout, order</span>
-                <div className="arch-tools"><code>get_customization</code><code>add_customized_to_cart</code><code>get_order_updates</code></div>
-                <span className="arch-footnote">Tools register on <code>document.modelContext</code></span>
-              </div>
-            </div>
-          </div>
-          <div className="arch-flow-line"><p>product contract → Tokuchu cart_items → store → checkout reference → Tokuchu</p><p>The agent discovers live page tools before calling them. It never invents IDs or bypasses a matching WebMCP tool.</p></div>
+          <img className="arch-diagram" src="/media/agent-mode-architecture.svg" alt="Agent mode architecture: Tokuchu tab, agent runtime, and store tab connected via WebMCP" data-testid="arch-diagram" />
           <div className="mode-strip" data-testid="modes"><div><strong>Managed mode</strong><span>Tokuchu&apos;s server calls Shopify&apos;s UCP endpoints for discovery and opens the store&apos;s page for WebMCP tools.</span></div><span aria-hidden="true">or</span><div><strong>Agent mode</strong><span><code>TOKUCHU_STATIC=1</code> removes server-side store operations; the agent&apos;s browser becomes the bridge.</span></div></div>
           <p className="runline"><a href="/docs/codex" data-testid="codex-link">Codex entry guide</a><span className="runline-sep">·</span><a href={PLAYBOOK_URL} target="_blank" rel="noreferrer" data-testid="playbook-link">Stagehand operating playbook</a></p>
         </div></section>
