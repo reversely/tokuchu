@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export const metadata = {
   title: "Architecture · Tokuchu",
-  description: "How Stagehand browser agents coordinate Tokuchu and Customworks through native WebMCP tools."
+  description: "How managed mode and agent mode coordinate Tokuchu and Customworks through server tools and WebMCP."
 };
 
 function Node({ label, title, children, active = false }: { label: string; title: string; children: ReactNode; active?: boolean }) {
@@ -48,7 +48,23 @@ export default function ArchitecturePage() {
   return (
     <main className="docs-page">
       <nav className="docs-nav"><a className="brand" href="/">Tokuchu<span>.</span></a><a href="/">Back to overview</a></nav>
-      <header className="docs-hero"><span className="eyebrow">Architecture</span><h1>One intent moves through four cooperating layers.</h1><p>Tokuchu remains the source of truth for attendance and procurement. Customworks remains the source of truth for products, carts, and orders. The agent reasons about the goal, Stagehand operates the browser, and WebMCP exposes the business capabilities of each website.</p></header>
+      <header className="docs-hero"><span className="eyebrow">Architecture</span><h1>One record model supports two runtime modes.</h1><p>Tokuchu owns attendance and procurement records. Customworks owns products and commerce. The runtime mode decides whether Tokuchu or a browser agent crosses the store boundary.</p></header>
+
+      <section className="docs-section">
+        <div className="docs-heading"><span className="eyebrow">Runtime configurations</span><h2>The store boundary has one owner at a time.</h2><p>Both configurations use the same Tokuchu records and validation. They differ only in who discovers products and calls the store.</p></div>
+        <div className="runtime-configs">
+          <article>
+            <span className="eyebrow">Default</span><h3>Managed mode</h3><p>The organizer uses the Tokuchu dashboard. The optional OpenAI assistant calls safe server functions. Tokuchu searches Shopify through UCP and opens merchant pages for WebMCP customization and cart tools.</p>
+            <div className="runtime-path" aria-label="Managed mode path"><code>Organizer UI</code><i>→</i><code>Tokuchu server</code><i>→</i><code>Shopify UCP + merchant WebMCP</code></div>
+            <div className="mini-tools"><code>search_catalog</code><code>get_product</code><code>get_customization</code><code>add_customized_to_cart</code></div>
+          </article>
+          <article>
+            <span className="eyebrow">TOKUCHU_STATIC=1</span><h3>Agent mode</h3><p>An OpenAI browser agent operates the Tokuchu and store tabs through Stagehand. Tokuchu acts as the live record database and WebMCP tool surface. It makes no outbound store calls.</p>
+            <div className="runtime-path" aria-label="Agent mode path"><code>Tokuchu WebMCP</code><i>↔</i><code>Browser agent</code><i>↔</i><code>Store WebMCP</code></div>
+            <div className="mini-tools"><code>list_guests</code><code>get_fulfillment_manifest</code><code>get_customization</code><code>add_customized_to_cart</code></div>
+          </article>
+        </div>
+      </section>
 
       <section className="docs-section">
         <div className="docs-heading"><span className="eyebrow">Browser-agent lifecycle</span><h2>The same chain, seen at four moments.</h2><p>Each view highlights the layer responsible for that moment. Stagehand is properly visible as the browser layer, while the user&apos;s intent and the websites&apos; domain tools remain the beginning and end of the process.</p></div>
@@ -85,9 +101,9 @@ export default function ArchitecturePage() {
       </section>
 
       <section className="docs-section">
-        <div className="docs-heading"><span className="eyebrow">Runtime boundaries</span><h2>Agent handoff is explicit and auditable.</h2></div>
+        <div className="docs-heading"><span className="eyebrow">Runtime boundaries</span><h2>Agent mode is explicit and auditable.</h2></div>
         <div className="boundary-grid">
-          <article><h3>Agent handoff mode</h3><p>With <code>TOKUCHU_STATIC=1</code>, Tokuchu omits server-side store operations. Stagehand becomes the explicit bridge, and the model discovers and selects calls dynamically.</p></article>
+          <article><h3>Agent mode</h3><p>With <code>TOKUCHU_STATIC=1</code>, Tokuchu omits server-side store operations. Stagehand becomes the explicit bridge, and the model discovers and selects calls dynamically.</p></article>
           <article><h3>Managed mode</h3><p>Tokuchu performs storefront WebMCP calls behind the organizer interface. The procurement lifecycle is the same; only the boundary-crossing actor changes.</p></article>
           <article><h3>Traceability</h3><p>The runtime records model decisions, browser controls, WebMCP results, and the final outcome in <code>tests/videos/agent-run-*.json</code>.</p></article>
           <article><h3>Deterministic fallback</h3><p><code>npm run agent-playbook</code> uses Playwright and the WebMCP polyfill in a fixed order. It tests the same handoffs without model-driven decisions.</p></article>

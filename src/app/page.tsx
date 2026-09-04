@@ -113,7 +113,7 @@ export default async function Page() {
         </div></section>
 
         <section id="runtime" className="tint"><div className="wrap">
-          <div className="sec-head"><span className="eyebrow">Stagehand browser-agent architecture</span><h2>The agent operates the browser; Stagehand exposes each page&apos;s WebMCP surface.</h2><p>In agent handoff mode, Tokuchu does not make server-side storefront calls. The agent owns the cross-site work and discovers the current tools from the active page at runtime.</p></div>
+          <div className="sec-head"><span className="eyebrow">Stagehand browser-agent architecture</span><h2>The agent operates the browser; Stagehand exposes each page&apos;s WebMCP surface.</h2><p>In agent mode Tokuchu does not make server-side storefront calls. The agent owns the cross-site work and discovers the current tools from the active page at runtime.</p></div>
           <div className="runtime-flow" data-testid="stagehand-runtime">
             <div className="runtime-node"><span>1 · Intent</span><strong>Goal + operating playbook</strong><p>Defines the procurement outcome and safety rules, not a fixed business-call script.</p></div><span className="runtime-arrow" aria-hidden="true">→</span>
             <div className="runtime-node"><span>2 · Reasoning</span><strong>OpenAI Agents SDK</strong><p>Chooses the next tab and tool from schemas, results, and the evolving order state.</p></div><span className="runtime-arrow" aria-hidden="true">→</span>
@@ -125,7 +125,7 @@ export default async function Page() {
             <article><span className="eyebrow">Discovery and invocation</span><p><code>list_webmcp_tools</code> calls Stagehand&apos;s <code>Page.tools()</code> and returns each tool&apos;s name, description, input schema, and frame. <code>call_webmcp_tool</code> resolves that page tool, invokes it with structured input, waits for completion, and normalizes WebMCP content and errors for the model.</p></article>
             <article><span className="eyebrow">Tabs, checkout, and traceability</span><p>Stagehand keeps the Tokuchu and Customworks pages in one browser context. The runtime tracks active tabs, captures the checkout URL without returning it to the model, records it through Tokuchu&apos;s <code>post_update</code>, and writes every call, result, and final outcome to a transcript.</p></article>
           </div>
-          <div className="mode-strip" data-testid="modes"><div><strong>Managed mode</strong><span>Tokuchu&apos;s server calls Shopify&apos;s UCP endpoints for discovery and opens the store&apos;s page for WebMCP tools.</span></div><span aria-hidden="true">or</span><div><strong>Agent handoff mode</strong><span><code>TOKUCHU_STATIC=1</code> removes server-side store operations; Stagehand becomes the browser bridge.</span></div></div>
+          <div className="mode-strip" data-testid="modes"><div><strong>Managed mode</strong><span>Tokuchu&apos;s server calls Shopify&apos;s UCP endpoints for discovery and opens the store&apos;s page for WebMCP tools.</span></div><span aria-hidden="true">or</span><div><strong>Agent mode</strong><span><code>TOKUCHU_STATIC=1</code> removes server-side store operations; Stagehand becomes the browser bridge.</span></div></div>
           <p className="runline"><a href={PLAYBOOK_URL} target="_blank" rel="noreferrer" data-testid="playbook-link">Read the browser-agent operating playbook</a></p>
         </div></section>
 

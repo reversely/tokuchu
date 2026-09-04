@@ -96,7 +96,7 @@ permalinks carry properties on the first line only. The repo's adapter is not in
 Rewritten: docs/prd.md (from scratch), docs/webmcp-routing.md, README.md, the agent guidance file,
 integrations/customily/README.md (to the two-tool contract #11 implements), docs/home.html (tool names
 and step copy). Deleted docs/webmp-integration.md (the earlier task brief). Left untouched:
-docs/architecture.html (untracked, describes the vendor-agent design; superseded). Tickets #10–#16 carry
+The earlier standalone `docs/architecture.html` described the vendor-agent design and was superseded by the live `/docs/architecture` page. Tickets #10–#16 carry
 the code changes; the code still implements the previous tools until they close.
 
 ## 2026-09-02 — Autonomous ticket run

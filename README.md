@@ -29,7 +29,11 @@ Tokuchu discovers products through Shopify's UCP endpoints (MCP over HTTP) and c
 
 ## The flow
 
-[Open the rendered architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture).
+Tokuchu supports two configurations. In managed mode its UI and optional OpenAI assistant drive server operations, and Tokuchu performs the Shopify work. In agent mode a browser agent moves between Tokuchu and Customworks, while Tokuchu acts as the live record database and WebMCP tool surface.
+
+![Managed mode keeps store orchestration inside Tokuchu. Agent mode makes a browser agent the bridge between Tokuchu records and store tools.](docs/diagrams/runtime-architecture.svg)
+
+[Read the architecture guide](docs/architecture.md) for the component boundaries, tools, and transports. The deployed [architecture and Stagehand flow](https://tokuchu.onrender.com/docs/architecture) remains available as an interactive view.
 
 ### From attendee records to configured checkout
 
@@ -74,15 +78,15 @@ The four utilities above are the product. The runtime mode only decides who perf
 | Mode | Experience | Boundary crossing |
 | --- | --- | --- |
 | **Managed mode** (default) | The organizer works in Tokuchu as a conventional application | Tokuchu's server searches Shopify, reads supported product pages, and prepares the store cart after approval |
-| **Agent handoff mode** (`TOKUCHU_STATIC=1`) | An agent works across an event tab and a product tab | The agent carries the product contract, approved cart items, and checkout reference between the two sites |
+| **Agent mode** (`TOKUCHU_STATIC=1`) | An agent works across an event tab and a product tab | The agent carries the product contract, approved cart items, and checkout reference between the two sites |
 
-In both modes, attendees still answer through Tokuchu and the store still collaborates through a scoped Tokuchu grant. “Static” means only that Tokuchu avoids outbound store automation; its records and APIs remain live and mutable.
+In both modes, attendees still answer through Tokuchu and the store still collaborates through a scoped Tokuchu grant. “Static” is the environment flag's historical name. It means only that Tokuchu avoids outbound store automation; its UI, records, APIs, and WebMCP tools remain live and mutable.
 
 ### Managed mode
 
 Tokuchu runs all four utilities behind the organizer interface. During planning it searches Shopify, loads product detail, checks delivery, and reads supported customization contracts. During order preparation it builds the approved recipient batch, opens the merchant page or Shopify UCP cart, and records the resulting checkout. Cart preparation runs asynchronously so the dashboard can show progress and blocked rows.
 
-### Agent handoff mode
+### Agent mode
 
 The same four utilities remain intact, but a browser or terminal agent performs the two store crossings:
 
@@ -164,7 +168,7 @@ npm run typecheck
 npm run test:e2e
 ```
 
-Agent handoff mode:
+Agent mode:
 
 ```sh
 TOKUCHU_STATIC=1 npm run dev -- -p 3114
@@ -180,7 +184,7 @@ LIVE_CUSTOMILY=1 npm run test:flow-demo
 LIVE_CUSTOMILY=1 npx playwright test tests/acceptance.spec.ts
 ```
 
-`LLM_ENABLED=1` enables the optional curation agent and chat panel in managed mode. It remains off in agent handoff mode. Without `DATABASE_URL`, local development stores events in memory and treats an unauthenticated request as the local organizer.
+`LLM_ENABLED=1` enables the optional curation agent and chat panel in managed mode. It remains off in agent mode. Without `DATABASE_URL`, local development stores events in memory and treats an unauthenticated request as the local organizer.
 
 ## Documentation map
 

@@ -1,12 +1,12 @@
 # WebMCP routing
 
-How a personalized order travels from the organizer's sentence to the store's checkout, and which WebMCP tool carries each hop. Every entry names a real endpoint or a registered tool.
+How a personalized order travels from the organizer's sentence to the store's checkout, and which tool carries each hop. Every entry names a real endpoint or a registered tool. Start with the [architecture guide](architecture.md) for the concise view of managed mode and agent mode.
 
 The routing tables below are the arrows of the two sequence diagrams, `docs/diagrams/agent-sequence.mmd` and `docs/diagrams/store-sequence.mmd`, with the route each tool maps to. The agent's fourteen arrows are `getTools` on the Tokuchu tab, `list_guests`, `getTools` on the store's product page, `get_customization`, the agent's own comparison of the fields with the guests, `set_gift_plan`, `set_gift_customization`, `get_requirements` then `request_from_attendees`, `list_missing`, `get_fulfillment_manifest`, `approve_specs`, `add_customized_to_cart`, `post_update`, and `get_order_updates`; the store's six are the signed link, `getTools` on the store-facing page, `get_fulfillment_manifest`, `post_procurement_update`, `get_changes`, and `get_order_updates` on the store's own page. Every tool the diagrams name appears in the tables: `list_guests`, `get_customization`, `set_gift_plan`, `set_gift_customization`, `get_requirements`, `request_from_attendees`, `list_missing`, `get_fulfillment_manifest`, `approve_specs`, `add_customized_to_cart`, `post_update`, and `get_order_updates` in the hops table, and `get_fulfillment_manifest`, `post_procurement_update`, and `get_changes` in the procurement tools table. `getTools` is the WebMCP listing call on `document.modelContext` and maps to no route. The rendered diagram images under `public/media` predate the `get_order_updates` arrows.
 
 ## The two ends
 
-Tokuchu is the organizer's records app. The store is a Shopify storefront that speaks WebMCP. Each end publishes tools on its pages, and one agent bridges them: in normal mode Tokuchu's server plays the agent for the store's side from a headless page, and in static mode (`TOKUCHU_STATIC=1`) a browser agent, or a terminal agent with a browser tool, moves between the two pages itself (`docs/agent-playbook.md`).
+Tokuchu is the organizer's records app and the system of record for the event and procurement. The store is the system of record for products, carts, checkout, and orders. In managed mode Tokuchu's server crosses the store boundary through Shopify UCP and a headless merchant page. In agent mode (`TOKUCHU_STATIC=1`) a browser or terminal agent moves between the Tokuchu and store pages itself. Both modes use the same Tokuchu records and validation rules.
 
 **The store's end** has three surfaces:
 
@@ -56,7 +56,7 @@ The store page registers the grant's tools on `document.modelContext` through `r
 
 The merchant tools and Shopify's page tools exist only on the store's pages. In normal mode Tokuchu's server opens a page of the store in a headless browser (`src/server/store-page.ts`), injects the WebMCP polyfill before the page scripts run so that both Shopify's script and the theme asset register their tools, waits for `getTools()` to list them, and calls them with `executeTool`. The cart the tools build belongs to that browser session. The `checkoutUrl` the cart tool returns, `/cart/c/{token}?key=...`, opens the same cart at Shopify's checkout in any browser, which is how the cart leaves the session and reaches the organizer. In static mode the agent's own browser holds the store's page and its cart, and the same `checkoutUrl` carries the cart out; Tokuchu records the link through `post_update`.
 
-The optional curation run (`POST /api/events/{id}/curate`) wraps hops 1 and 2 in an agent whose tool steps stream to the dashboard.
+The optional in-app assistant (`LLM_ENABLED=1`) uses the OpenAI Agents SDK and deterministic server function tools. Its tool steps stream to the dashboard. It can read and manage event state and curate a gift, but it cannot approve an order, send a cart, or check out. This assistant is separate from the browser agent used in agent mode.
 
 ## The agent trace
 
