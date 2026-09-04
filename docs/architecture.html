@@ -159,7 +159,7 @@
 <p class="subtitle">System context: who and what interacts with Tokuchu, and what each relationship carries.</p>
 
 <figure>
-  <svg viewBox="0 0 820 560" role="img" aria-label="C4 Context diagram. Tokuchu is the central system. Three actors — Organizer, Attendee, Vendor Agent — interact with it. Three external systems — Shopify Global Catalog, per-shop storefronts, and the custom shop — are called by Tokuchu over WebMCP.">
+  <svg viewBox="0 0 820 560" role="img" aria-label="C4 Context diagram. Tokuchu is the central system. Three actors — Organizer, Attendee, Vendor Agent — interact with it. Three external systems — Shopify Global Catalog, per-shop storefronts, and the custom shop — are called by Tokuchu over UCP (JSON-RPC) and WebMCP (page tools).">
     <defs>
       <marker id="a-ext" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
         <polygon points="0 0, 8 3, 0 6" fill="#b06d20"/>
@@ -176,7 +176,7 @@
     <rect x="260" y="185" width="300" height="110" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
     <text x="410" y="225" font-family="'DM Sans', sans-serif" font-size="18" font-weight="700" fill="var(--accent)" text-anchor="middle">Tokuchu</text>
     <text x="410" y="248" font-family="'DM Sans', sans-serif" font-size="10.5" fill="var(--text-secondary)" text-anchor="middle">Collects event attendance and survey data,</text>
-    <text x="410" y="264" font-family="'DM Sans', sans-serif" font-size="10.5" fill="var(--text-secondary)" text-anchor="middle">turns it into orders at Shopify stores via WebMCP</text>
+    <text x="410" y="264" font-family="'DM Sans', sans-serif" font-size="10.5" fill="var(--text-secondary)" text-anchor="middle">turns it into orders at Shopify stores via UCP and WebMCP</text>
     <text x="410" y="284" font-family="'IBM Plex Mono', monospace" font-size="9" fill="var(--text-tertiary)" text-anchor="middle">[Next.js application]</text>
 
     <!-- ============ ACTORS ============ -->
@@ -228,7 +228,7 @@
     <!-- Arrow: Tokuchu → Catalog -->
     <line x1="310" y1="295" x2="190" y2="398" stroke="var(--external)" stroke-width="1.2" marker-end="url(#a-ext)"/>
     <rect x="168" y="328" width="158" height="28" rx="3" fill="var(--diagram-bg)"/>
-    <text x="247" y="340" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">Searches products via WebMCP</text>
+    <text x="247" y="340" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">Searches products via UCP (JSON-RPC)</text>
     <text x="247" y="352" font-family="'IBM Plex Mono', monospace" font-size="8.5" fill="var(--external)" text-anchor="middle">search_catalog, get_product</text>
 
     <!-- Per-Shop Storefront (bottom center) -->
@@ -256,7 +256,7 @@
     <text x="594" y="348" font-family="'DM Sans', sans-serif" font-size="9" fill="var(--external)" text-anchor="middle">places personalized orders via WebMCP</text>
 
     <!-- Protocol note -->
-    <text x="410" y="545" font-family="'DM Sans', sans-serif" font-size="10" fill="var(--text-tertiary)" text-anchor="middle">All external calls use WebMCP (Shopify's Universal Commerce Protocol).</text>
+    <text x="410" y="545" font-family="'DM Sans', sans-serif" font-size="10" fill="var(--text-tertiary)" text-anchor="middle">Discovery and plain-product carts use Shopify's UCP endpoints (JSON-RPC over HTTP). Customization and personalized carts use WebMCP page tools.</text>
     <text x="410" y="558" font-family="'DM Sans', sans-serif" font-size="10" fill="var(--text-tertiary)" text-anchor="middle">Vendor agents call in via Tokuchu's MCP endpoint (JSON-RPC, scoped by caller token).</text>
   </svg>
   <figcaption>
@@ -282,7 +282,7 @@
 
 <div class="section">
   <h3>Shopify side</h3>
-  <p>The procurement half. Searches products across Shopify stores via WebMCP, ranks them, manages carts and checkouts, and serves the MCP endpoint that vendor agents call into. A curation agent (OpenAI Agents SDK) interprets the organizer's search intent; the actual search and ranking are deterministic.</p>
+  <p>The procurement half. Searches products across Shopify stores via UCP endpoints (JSON-RPC), ranks them, manages carts and checkouts, and serves the MCP endpoint that vendor agents call into. A curation agent (OpenAI Agents SDK) interprets the organizer's search intent; the actual search and ranking are deterministic.</p>
 </div>
 
 <div class="section">
@@ -323,9 +323,9 @@
 
 <div class="section">
   <p><strong>1. Create and publish</strong> — the organizer builds the event and publishes it, minting the invite link. RSVP side only.</p>
-  <p><strong>2. Configure merchandise</strong> — the organizer searches Shopify stores via WebMCP, picks a product, and the product's personalization schema becomes the survey. Shopify side only.</p>
+  <p><strong>2. Configure merchandise</strong> — the organizer searches Shopify stores via UCP, picks a product, and the product's personalization schema becomes the survey. Shopify side only.</p>
   <p><strong>3. Collect answers</strong> — attendees open the invite link and fill the survey. Each answer is stored as an attribute value. RSVP side only.</p>
-  <p><strong>4. Send to vendor</strong> — the manifest resolves answers into vendor rows. Tokuchu calls <code>create_cart</code> at the shop via WebMCP. As more RSVPs arrive, quantities stay current. This is where the two halves meet.</p>
-  <p><strong>5. Lock and order</strong> — at the cutoff, values freeze, the manifest grades each unit (ready, incomplete, excluded), and Tokuchu creates a checkout via WebMCP.</p>
+  <p><strong>4. Send to vendor</strong> — the manifest resolves answers into vendor rows. Tokuchu calls <code>create_cart</code> at the shop's UCP endpoint. As more RSVPs arrive, quantities stay current. This is where the two halves meet.</p>
+  <p><strong>5. Lock and order</strong> — at the cutoff, values freeze, the manifest grades each unit (ready, incomplete, excluded), and Tokuchu creates a checkout at the shop's UCP endpoint.</p>
   <p><strong>6. Vendor reporting</strong> — the vendor's agent calls into Tokuchu's MCP endpoint with a scoped token, reads the manifest, and posts status updates.</p>
 </div>

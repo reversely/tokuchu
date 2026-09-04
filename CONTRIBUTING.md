@@ -3,11 +3,11 @@
 Guidance for anyone, person or coding agent, working in this repository. The Next.js version notes that `next dev` writes to `AGENTS.md` apply as well.
 
 Tokuchu is an event procurement system that uses attendee information and WebMCP-enabled Shopify
-storefronts to coordinate personalized purchases for events. It is the agentic orchestration layer
-over WebMCP tools on both ends: Shopify's commerce tools for discovery, the demo store's own
-`get_customization` tool for a product's requirements, and its `add_customized_to_cart` tool, which
-fills the store's cart and returns the checkout link. Tokuchu's records register as WebMCP tools on
-the organizer's page. The project is built against one live demo store and is a submission to The
+storefronts to coordinate personalized purchases for events. Product discovery runs through
+Shopify's UCP endpoints (JSON-RPC over HTTP at the Global Catalog and each store's own endpoint).
+Once a store's page is open, the store's WebMCP page tools take over: `get_customization` reads
+the product's requirements and `add_customized_to_cart` fills the cart and returns the checkout
+link. Tokuchu's own records register as WebMCP tools on the organizer's page. The project is built against one live demo store and is a submission to The
 WebMCP Challenge (webmcp.devpost.com). The specification is `docs/prd.md`; the routing is
 `docs/webmcp-routing.md`.
 

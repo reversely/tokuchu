@@ -140,7 +140,7 @@ The project has two deployed components. Tokuchu is the organizer's app. The dem
 
 WebMCP development happens in both components. In Tokuchu it is the tool registry on the event page, the invite page, and the store-facing page, and the MCP endpoint. In the store it is the theme asset that registers `get_customization` and `add_customized_to_cart` on every page, and the product metafield that holds the shirt's requirements: a name limited to 20 characters, a location, and a time for the star map, with six size variants, and the mug's one requirement, an image. Building those tools in the store is part of the project's scope, and a change to the shirt's requirements is a change to the metafield rather than to Tokuchu; Tokuchu reads the change as a new requirement schema version (Section 11).
 
-The interaction between the two runs over WebMCP in both directions:
+The interaction between the two runs over WebMCP page tools and Shopify's UCP endpoints:
 
 - **A browser agent across both pages.** The agent opens the store's product page and calls `get_customization`, opens Tokuchu's event page and calls `set_gift_plan` and `set_gift_customization` with the payload, and after `approve_specs` returns to the store's page with the manifest's `cart_items` and calls `add_customized_to_cart`. The event page's handoff card names the store URL, the product handle, the gift id, and the next tool on each side (Section 12).
 - **Tokuchu to the store, from the server.** In normal mode discovery calls the store's UCP endpoint as JSON-RPC with a link to Tokuchu's public agent profile, which the endpoint requires on every call, and the cart fill for a plain product calls `create_cart` and `create_checkout` there.

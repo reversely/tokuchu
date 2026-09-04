@@ -25,7 +25,7 @@ When the responses return, Tokuchu validates them and assembles a fulfilment man
 
 The store can also receive scoped access to the procurement. Its agent reads the approved manifest through `get_fulfillment_manifest` without seeing unrelated RSVP information. If a submitted value cannot be fulfilled, it sends a structured clarification through `post_procurement_update`. Tokuchu records the exception, routes it back to the affected attendee, and exposes the corrected value in the next revision through `get_changes`.
 
-Throughout the flow, Tokuchu both consumes WebMCP from the storefront and exposes WebMCP to authorized agents. The result is a shared source of truth: vendor requirements are reconciled against known attendee data, missing values are collected only when necessary, and each party sees only what it needs to move the order forward.
+Tokuchu discovers products through Shopify's UCP endpoints (MCP over HTTP) and consumes the store's WebMCP page tools for customization and cart. It exposes its own records as WebMCP to authorized agents. The result is a shared source of truth: vendor requirements are reconciled against known attendee data, missing values are collected only when necessary, and each party sees only what it needs to move the order forward.
 
 ## The flow
 
