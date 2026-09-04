@@ -5,23 +5,62 @@ export const metadata = {
   description: "How Stagehand browser agents coordinate Tokuchu and Customworks through native WebMCP tools."
 };
 
-function Node({ label, title, children, accent = false }: { label: string; title: string; children: ReactNode; accent?: boolean }) {
-  return <div className={`arch-node${accent ? " accent" : ""}`}><span>{label}</span><strong>{title}</strong><p>{children}</p></div>;
+function Node({ label, title, children, active = false }: { label: string; title: string; children: ReactNode; active?: boolean }) {
+  return <div className={`arch-node${active ? " active" : ""}`}><span>{label}</span><strong>{title}</strong><p>{children}</p></div>;
 }
+
+const LAYERS = [
+  { label: "1 · Intent", title: "Goal + playbook", detail: "The requested procurement outcome and operating constraints." },
+  { label: "2 · Reasoning", title: "OpenAI Agents SDK", detail: "Selects the next action from live schemas, state, and results." },
+  { label: "3 · Browser", title: "Stagehand", detail: "Maintains the browser context, tabs, and Page.tools() access." },
+  { label: "4 · Capabilities", title: "Native WebMCP", detail: "The business tools published by Tokuchu and Customworks." }
+];
+
+const STAGES = [
+  {
+    eyebrow: "Stage 1 · State the intent",
+    heading: "The organizer describes outcomes, not browser mechanics.",
+    body: "The initial commands establish the event, the purchasing goal, and the completion criteria. They drive the agent runtime; Stagehand is not addressed directly.",
+    prompts: [
+      ["Prompt 1 · Create the event", "Create an event in Tokuchu for the Eastern Canada Astronomy Symposium on March 15, 2027, at the Ontario Science Centre."],
+      ["Prompt 2 · Look for items", "Find two suitable custom products: one mug with our logo, and one sweatshirt with a customizable celestial map. Then, help me get the information I need from participants to get these items."],
+      ["Prompt 3 · Prepare the carts", "Add every complete and accepted attendee's customized products to the shopping carts; ping incomplete attendees; tell me who was included, who is pending, and the total quote."]
+    ]
+  },
+  {
+    eyebrow: "Stage 2 · Decide what happens next",
+    heading: "The agent turns each outcome into state-aware decisions.",
+    body: "The OpenAI Agents SDK reads the playbook, the current conversation, and prior tool results. It decides whether to create the event, inspect another tab, compare product requirements, request missing attendee values, or prepare a cart. It does not assume a fixed call sequence: readiness and returned schemas determine the next move."
+  },
+  {
+    eyebrow: "Stage 3 · Operate the browser",
+    heading: "Stagehand supplies browser reach, tab continuity, and tool discovery.",
+    body: "Stagehand wraps one Chrome context containing Tokuchu and Customworks. The runtime opens and switches pages through that context, while Page.tools() discovers the WebMCP registrations available in the relevant page and frame. Stagehand carries out the browser operation chosen by the agent; it does not define the procurement logic."
+  },
+  {
+    eyebrow: "Stage 4 · Execute domain capabilities",
+    heading: "The websites perform the actual event and commerce work.",
+    body: "Tokuchu's page tools create the event, reconcile attendee state, request missing answers, approve a revision, and expose the fulfillment manifest. Customworks' page tools describe customization, accept configured cart lines, and report order status. Their structured results return through Stagehand to inform the agent's next decision."
+  }
+];
 
 export default function ArchitecturePage() {
   return (
     <main className="docs-page">
       <nav className="docs-nav"><a className="brand" href="/">Tokuchu<span>.</span></a><a href="/">Back to overview</a></nav>
-      <header className="docs-hero"><span className="eyebrow">Architecture</span><h1>Stagehand connects the agent to two live WebMCP surfaces.</h1><p>Tokuchu remains the source of truth for attendance and procurement. Customworks remains the source of truth for products, carts, and orders. The browser agent coordinates them without collapsing those responsibilities.</p></header>
+      <header className="docs-hero"><span className="eyebrow">Architecture</span><h1>One intent moves through four cooperating layers.</h1><p>Tokuchu remains the source of truth for attendance and procurement. Customworks remains the source of truth for products, carts, and orders. The agent reasons about the goal, Stagehand operates the browser, and WebMCP exposes the business capabilities of each website.</p></header>
 
       <section className="docs-section">
-        <div className="docs-heading"><span className="eyebrow">Browser-agent runtime</span><h2>Goal → reasoning → browser → page capabilities</h2></div>
-        <div className="arch-flow" role="img" aria-label="A goal and playbook pass to the OpenAI Agents SDK, which controls Stagehand, which discovers WebMCP tools registered by Tokuchu and Customworks.">
-          <Node label="1 · Intent" title="Goal + playbook">Defines the desired procurement outcome and safety constraints.</Node><i aria-hidden="true">→</i>
-          <Node label="2 · Reasoning" title="OpenAI Agents SDK">Chooses the next page and capability from schemas and prior results.</Node><i aria-hidden="true">→</i>
-          <Node label="3 · Browser" title="Stagehand" accent>Wraps one Chrome context, keeps both tabs available, and exposes <code>Page.tools()</code>.</Node><i aria-hidden="true">→</i>
-          <Node label="4 · Capabilities" title="Native WebMCP">Returns tools registered on each page&apos;s <code>document.modelContext</code>.</Node>
+        <div className="docs-heading"><span className="eyebrow">Browser-agent lifecycle</span><h2>The same chain, seen at four moments.</h2><p>Each view highlights the layer responsible for that moment. Stagehand is properly visible as the browser layer, while the user&apos;s intent and the websites&apos; domain tools remain the beginning and end of the process.</p></div>
+        <div className="architecture-stages">
+          {STAGES.map((stage, activeIndex) => <article className="architecture-stage" key={stage.eyebrow}>
+            <div className="arch-flow" role="img" aria-label={`${stage.eyebrow}. ${LAYERS[activeIndex].title} is highlighted in the four-layer browser-agent flow.`}>
+              {LAYERS.map((layer, index) => <div className="arch-flow-part" key={layer.title}><Node label={layer.label} title={layer.title} active={index === activeIndex}>{layer.detail}</Node>{index < LAYERS.length - 1 && <i aria-hidden="true">→</i>}</div>)}
+            </div>
+            <div className="stage-situation"><span className="eyebrow">{stage.eyebrow}</span><h3>{stage.heading}</h3><p>{stage.body}</p>
+              {stage.prompts && <div className="prompt-stack">{stage.prompts.map(([label, prompt]) => <blockquote key={label}><strong>{label}</strong><p>{prompt}</p></blockquote>)}</div>}
+            </div>
+          </article>)}
         </div>
       </section>
 

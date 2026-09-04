@@ -25,7 +25,9 @@ test("the root renders the two-site flow and Stagehand architecture and the prim
 
 test("the public architecture and policy pages render", async ({ page }) => {
   await page.goto("/docs/architecture");
-  await expect(page.getByRole("heading", { name: /Stagehand connects/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /One intent moves through four/ })).toBeVisible();
+  await expect(page.locator(".architecture-stage")).toHaveCount(4);
+  await expect(page.getByText("Prompt 1 · Create the event")).toBeVisible();
   await expect(page.getByText("Page.tools()").first()).toBeVisible();
   await expect(page.getByText("get_customization").first()).toBeVisible();
 
