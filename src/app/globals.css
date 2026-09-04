@@ -314,7 +314,7 @@ table.records .cellwhy { font-size: 12px; }
 .home .wrap { display: block; width: min(1120px, 100% - 48px); max-width: none; margin-inline: auto; padding: 0; }
 .home .eyebrow { font-size: 12.5px; letter-spacing: 0.13em; color: var(--navy); }
 .home .nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--ground) 86%, transparent); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
-.home .nav .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 66px; padding: 0; border: 0; }
+.home .nav .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 66px; padding: 0; border: 0; overflow: hidden; }
 .home .brand { font-family: var(--font-display), "Zilla Slab", serif; font-weight: 600; font-size: 23px; letter-spacing: -0.02em; }
 .home .brand.small { font-size: 18px; }
 .home .brand .dot { color: var(--sky); }
@@ -338,7 +338,7 @@ table.records .cellwhy { font-size: 12px; }
 .home .nav .row:has(.session) .navlinks { gap: 14px; }
 .home .nav .row:has(.session) .session { gap: 8px; }
 @media (max-width: 1279px) { .home .nav .row:has(.session) ul { display: none; } }
-@media (max-width: 760px) { .home .nav ul { display: none; } }
+@media (max-width: 960px) { .home .nav ul { display: none; } }
 .home .btn { gap: 8px; font-weight: 600; font-size: 15px; padding: 11px 20px; border-radius: 999px; border: 1px solid transparent; transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s, box-shadow 0.18s; }
 .home .btn.primary { background: var(--sky-dark); color: #fff; }
 .home .btn.primary:hover { background: var(--sky-dark); transform: translateY(-1px); box-shadow: 0 8px 20px color-mix(in srgb, var(--sky-dark) 40%, transparent); }
