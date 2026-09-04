@@ -53,10 +53,11 @@ async function deliver(event: Event, outgoing: Outgoing): Promise<void> {
     return;
   }
   const labels = outgoing.definition_ids.map((id) => getDefinition(id).label);
-  const send = event.demo ? logMailer() : mailer();
+  const synthetic = to.endsWith("@example.com");
+  const send = event.demo || synthetic ? logMailer() : mailer();
   try {
     const delivery = await send.send({ to, ...requestEmail(event, guest, labels, attendeeLink(event, guest), outgoing.kind, outgoing.message ?? null) });
-    setRequestDelivery(guest.id, gift_id, delivery);
+    setRequestDelivery(guest.id, gift_id, synthetic ? "simulated" : delivery);
   } catch (e) {
     setRequestDelivery(guest.id, gift_id, "failed", (e as Error).message);
   }

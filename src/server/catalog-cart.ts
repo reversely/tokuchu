@@ -50,7 +50,7 @@ function report(eventId: string, giftId: string, kind: "in_production" | "issue"
   return withPersistedEvent(eventId, () => {
     postUpdate(eventId, giftId, "tokuchu", { kind, text, reference });
     updateGift(giftId, patch);
-    if (patch.checkout_url) moveProcurement(giftId, "ordered", "tokuchu", { patch: { checkout_url: patch.checkout_url }, summary: "The store's checkout is ready" });
+    if (patch.checkout_url) moveProcurement(giftId, "checkout_ready", "tokuchu", { patch: { checkout_url: patch.checkout_url }, summary: "The store's checkout is ready" });
   });
 }
 

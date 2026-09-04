@@ -3,6 +3,9 @@
  * `runWithState`, and writes the document back when it changed. A handler that throws writes nothing.
  * Without `DATABASE_URL` outside production the handler runs against the in-memory global State, so
  * the dev server and the browser suites need no database.
+ *
+ * Concurrent writes use optimistic locking: the upsert checks `updated_at` against the value read
+ * at load time. A stale write re-loads the row, re-runs the handler, and tries again.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { deserializeState, freshState, runWithState, serializeState, state, type State } from "../domain/store";
@@ -32,7 +35,7 @@ function usesDatabase(): boolean {
 }
 
 async function loadRow(db: Database, column: "id" | "invite_code", value: string): Promise<Row | undefined> {
-  const [row] = await db.query(`select id, data from events where ${column} = $1`, [value]);
+  const [row] = await db.query(`select id, data, updated_at from events where ${column} = $1`, [value]);
   return row;
 }
 
@@ -40,32 +43,70 @@ function stateOf(row: Row): State {
   return deserializeState(typeof row.data === "string" ? JSON.parse(row.data) : row.data);
 }
 
-async function upsert(db: Database, s: State, eventId: string, document: string): Promise<void> {
+function loadedAt(row: Row): string {
+  const ts = row.updated_at;
+  return ts instanceof Date ? ts.toISOString() : String(ts);
+}
+
+async function upsert(db: Database, s: State, eventId: string, document: string, expectedUpdatedAt: string | null): Promise<boolean> {
   const event = s.events.get(eventId);
+  if (expectedUpdatedAt) {
+    const [updated] = await db.query(
+      `update events set owner_id = $2, invite_code = $3, data = $4::jsonb, updated_at = now()
+       where id = $1 and updated_at = $5
+       returning id`,
+      [eventId, event?.owner_id ?? null, event?.invite_code ?? null, document, expectedUpdatedAt]
+    );
+    return !!updated;
+  }
   await db.query(
     `insert into events (id, owner_id, invite_code, data, updated_at) values ($1, $2, $3, $4::jsonb, now())
      on conflict (id) do update set owner_id = excluded.owner_id, invite_code = excluded.invite_code, data = excluded.data, updated_at = now()`,
     [eventId, event?.owner_id ?? null, event?.invite_code ?? null, document]
   );
+  return true;
 }
+
+const MAX_RETRIES = 3;
 
 /**
  * Runs the handler under the State and then persists it. The event id comes from a callback because
  * a create handler mints it during the run. An unchanged document skips the write, so a poll never
  * touches the row.
  */
-async function persisted<T>(db: Database, s: State, handler: Handler<T>, eventIdOf: () => string): Promise<T> {
+async function persisted<T>(db: Database, s: State, handler: Handler<T>, eventIdOf: () => string, expectedUpdatedAt: string | null = null): Promise<T> {
   const before = JSON.stringify(serializeState(s));
   let settle!: () => void;
   const committed = new Promise<void>((resolve) => (settle = resolve));
   try {
     const result = await commits.run(committed, () => runWithState(s, handler));
     const after = JSON.stringify(serializeState(s));
-    if (after !== before) await upsert(db, s, eventIdOf(), after);
+    if (after !== before) {
+      const written = await upsert(db, s, eventIdOf(), after, expectedUpdatedAt);
+      if (!written) throw new StaleWriteError(eventIdOf());
+    }
     return result;
   } finally {
     settle();
   }
+}
+
+class StaleWriteError extends Error {
+  constructor(public eventId: string) { super(`Concurrent write to event ${eventId}`); }
+}
+
+async function persistedWithRetry<T>(db: Database, loadColumn: "id" | "invite_code", loadValue: string, handler: Handler<T>, eventIdOf: (row: Row) => string): Promise<T> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const row = await loadRow(db, loadColumn, loadValue);
+    if (!row) throw new NotFoundError(`No event with ${loadColumn} ${loadValue}.`);
+    try {
+      return await persisted(db, stateOf(row), handler, () => eventIdOf(row), loadedAt(row));
+    } catch (e) {
+      if (e instanceof StaleWriteError && attempt < MAX_RETRIES) continue;
+      throw e;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 /**
@@ -77,9 +118,7 @@ async function persisted<T>(db: Database, s: State, handler: Handler<T>, eventId
 export async function withPersistedEvent<T>(eventId: string, handler: Handler<T>): Promise<T> {
   if (!usesDatabase()) return handler();
   const db = await getDatabase();
-  const row = await loadRow(db, "id", eventId);
-  if (!row) throw new NotFoundError(`No event ${eventId}.`);
-  return persisted(db, stateOf(row), handler, () => eventId);
+  return persistedWithRetry(db, "id", eventId, handler, () => eventId);
 }
 
 /**
@@ -91,9 +130,7 @@ export async function withPersistedEvent<T>(eventId: string, handler: Handler<T>
 export async function withPersistedEventByInviteCode<T>(code: string, handler: Handler<T>): Promise<T> {
   if (!usesDatabase()) return handler();
   const db = await getDatabase();
-  const row = await loadRow(db, "invite_code", code.toUpperCase());
-  if (!row) throw new NotFoundError(`No published event with code ${code}.`);
-  return persisted(db, stateOf(row), handler, () => row.id as string);
+  return persistedWithRetry(db, "invite_code", code.toUpperCase(), handler, (row) => row.id as string);
 }
 
 /**
@@ -110,7 +147,7 @@ export async function createPersistedEvent<T>(handler: Handler<T>): Promise<T> {
     const [event] = s.events.values();
     if (!event) throw new Error("The create handler stored no event.");
     return event.id;
-  });
+  }, null);
 }
 
 /** One row of an organizer's event list. */

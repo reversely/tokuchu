@@ -113,7 +113,7 @@ export async function runCartFill(eventId: string, giftId: string, deps: CartJob
     if (record.checkout_url) {
       postUpdate(eventId, giftId, "tokuchu", { kind: "in_production", text: `The cart at ${plan.shop} is ready to review`, reference: record.checkout_url });
       updateGift(giftId, { cart_fill: { status: "done", started_at: started, reason: null }, cart_lines: record.cart_lines, cart_blocked: blocked, checkout_url: record.checkout_url } as Partial<GiftInput>);
-      moveProcurement(giftId, "ordered", "tokuchu", { patch: { checkout_url: record.checkout_url }, summary: `The cart at ${plan.shop} returned a checkout` });
+      moveProcurement(giftId, "checkout_ready", "tokuchu", { patch: { checkout_url: record.checkout_url }, summary: `The cart at ${plan.shop} returned a checkout` });
     } else {
       const reason = record.cart_lines.length ? "The store returned no checkout link" : blocked.length ? `The store refused every item: ${blocked.map((b) => b.issues.join("; ")).join("; ")}` : "The store added no line";
       postUpdate(eventId, giftId, "tokuchu", { kind: "issue", text: reason });

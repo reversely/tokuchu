@@ -41,7 +41,7 @@ const GIFT: GiftInput = {
   order_id: null
 };
 
-const STATUSES: ProcurementStatus[] = ["draft", "collecting", "ready", "approved", "ordered", "in_production", "fulfilled", "cancelled"];
+const STATUSES: ProcurementStatus[] = ["draft", "collecting", "ready", "approved", "checkout_ready", "ordered", "in_production", "fulfilled", "cancelled"];
 
 describe("the procurement status machine", () => {
   it("allows the forward moves and the return of an approval to collecting or ready", () => {
@@ -52,6 +52,9 @@ describe("the procurement status machine", () => {
     expect(canMove("approved", "ordered")).toBe(true);
     expect(canMove("approved", "collecting")).toBe(true);
     expect(canMove("approved", "ready")).toBe(true);
+    expect(canMove("approved", "checkout_ready")).toBe(true);
+    expect(canMove("checkout_ready", "ordered")).toBe(true);
+    expect(canMove("checkout_ready", "approved")).toBe(true);
     expect(canMove("ordered", "approved")).toBe(true);
     expect(canMove("ordered", "in_production")).toBe(true);
     expect(canMove("in_production", "fulfilled")).toBe(true);
@@ -76,8 +79,9 @@ describe("the procurement status machine", () => {
     expect(derivedStatus(base)).toBe("draft");
     expect(derivedStatus({ ...base, requested_at: "2030-01-01T00:00:00Z" })).toBe("collecting");
     expect(derivedStatus({ ...base, requested_at: "2030-01-01T00:00:00Z", approved_at: "2030-01-02T00:00:00Z" })).toBe("approved");
-    expect(derivedStatus({ ...base, approved_at: "2030-01-02T00:00:00Z", checkout_url: "https://shop/checkout" })).toBe("ordered");
+    expect(derivedStatus({ ...base, approved_at: "2030-01-02T00:00:00Z", checkout_url: "https://shop/checkout" })).toBe("checkout_ready");
     expect(derivedStatus({ ...base, order_id: "ord_1" })).toBe("ordered");
+    expect(derivedStatus({ ...base, locked_at: "2030-01-03T00:00:00Z" })).toBe("ordered");
     expect(derivedStatus({ ...base, procurement_status: "accepted" })).toBe("ordered");
     expect(derivedStatus({ ...base, procurement_status: "in_production" })).toBe("in_production");
     expect(derivedStatus({ ...base, procurement_status: "fulfilled" })).toBe("fulfilled");
@@ -131,7 +135,7 @@ describe("the procurement record", () => {
     expect(doc.procurements).toHaveLength(1);
     const { procurements: _dropped, ...older } = doc;
     const restored = deserializeState(older);
-    expect(restored.procurements.get(gift.id)).toMatchObject({ gift_id: gift.id, status: "ordered", approved_revision: 4, checkout_url: "https://shop/checkout", external_cart_id: "cart_9" });
+    expect(restored.procurements.get(gift.id)).toMatchObject({ gift_id: gift.id, status: "checkout_ready", approved_revision: 4, checkout_url: "https://shop/checkout", external_cart_id: "cart_9" });
     expect(deserializeState(doc).procurements.get(gift.id)?.status).toBe("draft");
     removeGift(gift.id);
     expect(procurementsCount(event.id)).toBe(1);

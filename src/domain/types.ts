@@ -413,7 +413,7 @@ export type Batch = z.infer<typeof Batch>;
 /* ---- Procurement ---- */
 
 /** Where a procurement stands, from the gift's creation to the store's fulfilment; procurement-status.ts states the allowed moves. */
-export const ProcurementStatus = z.enum(["draft", "collecting", "ready", "approved", "ordered", "in_production", "fulfilled", "cancelled"]);
+export const ProcurementStatus = z.enum(["draft", "collecting", "ready", "approved", "checkout_ready", "ordered", "in_production", "fulfilled", "cancelled"]);
 export type ProcurementStatus = z.infer<typeof ProcurementStatus>;
 
 /**
@@ -588,7 +588,7 @@ export type Schedule = z.infer<typeof Schedule>;
 /* ---- Requests ---- */
 
 /** How the latest email for a request left: through the provider, into the dev log, skipped for want of an address, or rejected. */
-export const RequestDelivery = z.enum(["sent", "logged", "no_address", "failed"]);
+export const RequestDelivery = z.enum(["sent", "logged", "simulated", "no_address", "failed"]);
 export type RequestDelivery = z.infer<typeof RequestDelivery>;
 
 /** The questions sent to one attendee for one gift: when they went out, each follow-up since, and how the latest email left. Delivery is absent until the send settles. */

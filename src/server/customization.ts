@@ -16,7 +16,7 @@ import { tracedStorePage, type TraceDraft } from "./trace";
 
 export type StoreCustomization = { title: string; fields: PersonalizationField[]; variants: Variant[]; selected_variant_id: string | null; schema: VendorRequirementSchema };
 
-type ToolVariant = { id: string; title: string; price_cents: number; available: boolean; options: { name: string; label: string }[] };
+type ToolVariant = { id: string; title: string; price_cents: number; price?: string | number; available: boolean; options: { name: string; label: string }[] };
 type ToolPayload = { title?: string; fields?: unknown[]; variants?: ToolVariant[]; selected_variant_id?: string | null; schema_id?: string; schema_version?: string; version?: string; product_id?: string };
 
 /** Where the payload came from, for the schema's identity when the store states none. */
@@ -46,7 +46,10 @@ export function parseCustomization(payload: Record<string, unknown>, currency: s
     const parsed = PersonalizationField.safeParse(entry);
     if (parsed.success) fields.push(parsed.data);
   }
-  const variants: Variant[] = (raw.variants ?? []).map((v) => ({ id: String(v.id), title: v.title, price_cents: v.price_cents, currency, available: v.available, options: v.options }));
+  const variants: Variant[] = (raw.variants ?? []).map((v) => {
+    const cents = v.price_cents || (v.price != null ? Math.round(Number(v.price) * 100) : 0);
+    return { id: String(v.id), title: v.title, price_cents: cents, currency, available: v.available, options: v.options };
+  });
   return { title: raw.title ?? "", fields, variants, selected_variant_id: raw.selected_variant_id ?? variants[0]?.id ?? null, schema: normalizeSchema(raw, fields, origin) };
 }
 
@@ -112,7 +115,7 @@ function readThroughStorePage(pageUrl: string, productId: string, currency: stri
 
 /* ---- The agent's hand-off of the store's payload (#56) ---- */
 
-const ToolVariantBody = z.object({ id: z.union([z.string(), z.number()]).transform(String), title: z.string().default(""), price_cents: z.number().int().default(0), available: z.boolean().default(true), options: z.array(z.object({ name: z.string(), label: z.string() })).default([]) });
+const ToolVariantBody = z.object({ id: z.union([z.string(), z.number()]).transform(String), title: z.string().default(""), price_cents: z.number().int().default(0), price: z.union([z.string(), z.number()]).optional(), available: z.boolean().default(true), options: z.array(z.object({ name: z.string(), label: z.string() })).default([]) });
 
 /** The payload `get_customization` returns on the store's page, as set_gift_customization takes it; `currency` is the agent's addition when the store's page states one. */
 export const CustomizationBody = z.object({

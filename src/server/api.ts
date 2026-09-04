@@ -217,7 +217,7 @@ export const GiftBody = z.object({
   personalization: PersonalizationSchema.nullable().optional(),
   /** The product's own page at the store, where the merchant tools run. */
   product_url: z.string().nullable().default(null),
-  missing_value_fallback: MissingValueFallback.default("default"),
+  missing_value_fallback: MissingValueFallback.default("hold"),
   post_lock_cancellation: PostLockCancellation.default("keep"),
   cutoff: z.string().nullable().default(null),
   cart_id: z.string().nullable().default(null),
@@ -245,10 +245,12 @@ export function requireGift(eventId: string, giftId: string): Batch {
   return gift;
 }
 
-/** Stores a plan (set_gift_plan); the default plan carries one rule that sends the product to every going guest. */
+/** Stores a plan (set_gift_plan); the default plan carries one rule that sends the product to every going guest. A retry with the same product returns the existing gift. */
 export function createGiftFromBody(eventId: string, body: unknown) {
   requireEvent(eventId);
   const data = parseBody(GiftBody, body);
+  const existing = giftsFor(eventId).find((g) => g.product_id === data.product_id);
+  if (existing) return giftView(eventId, existing.id);
   const input: GiftInput = { ...data, rules: data.rules ?? [{ filter: GOING, product_id: data.product_id }] };
   return giftView(eventId, createGift(eventId, input).id);
 }
@@ -259,10 +261,9 @@ export function updateGiftFromBody(eventId: string, giftId: string, body: unknow
   // zod fills defaults under partial(), so only the keys the body sent reach the gift; the rest stay as they are.
   const sent = new Set(Object.keys((body ?? {}) as Record<string, unknown>));
   const { personalization, ...patch } = Object.fromEntries(Object.entries(parsed).filter(([key]) => sent.has(key))) as typeof parsed;
-  updateGift(giftId, patch as Partial<GiftInput>);
-  // A re-read schema goes through the diff, so a changed requirement never continues silently against the old one.
+  // Apply the schema diff before writing the gift so a schema error leaves the gift unchanged.
   if (personalization) applyRequirementSchema(giftId, { schema_id: personalization.schema_id ?? deriveSchemaId(gift.shop_domain, gift.product_id), version: personalization.schema_version ?? deriveSchemaVersion(personalization.fields), product_id: gift.product_id, requirements: personalization.fields }, "organizer");
-  // A replaced schema changes what the store asks for, so it leaves an approval stale like a plan edit (#44).
+  updateGift(giftId, patch as Partial<GiftInput>);
   if (personalization) recordProcurementChange(giftId, "plan_changed", "organizer", "The product's customization schema changed");
   else if (patch.rules || patch.mapping || patch.default_variant_id !== undefined) recordProcurementChange(giftId, "plan_changed", "organizer", "The organizer changed the gift's plan");
   return giftView(eventId, giftId);

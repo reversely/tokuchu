@@ -32,7 +32,7 @@ function checkoutOf(gift: Batch): string | null {
 function syncable(gift: Batch): boolean {
   const checkout = checkoutOf(gift);
   const status = procurementFor(gift.id).status;
-  return Boolean(checkout && cartTokenIn(checkout)) && (status === "approved" || status === "ordered" || status === "in_production");
+  return Boolean(checkout && cartTokenIn(checkout)) && (status === "approved" || status === "checkout_ready" || status === "ordered" || status === "in_production");
 }
 
 /** The event's gifts whose order is due a check: syncable, and not asked within the interval. Empty with no Admin credentials. */
@@ -45,7 +45,7 @@ export function ordersDue(eventId: string, now: Date = new Date()): Batch[] {
 export function movesFor(state: OrderState, status: string): ("production_started" | "fulfilled")[] {
   if (state.status !== "ordered") return [];
   const moves: ("production_started" | "fulfilled")[] = [];
-  if (status === "approved" || status === "ordered") moves.push("production_started");
+  if (status === "approved" || status === "checkout_ready" || status === "ordered") moves.push("production_started");
   if (state.fulfillment_status === "fulfilled" && status !== "fulfilled") moves.push("fulfilled");
   return moves;
 }
