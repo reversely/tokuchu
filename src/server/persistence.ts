@@ -35,7 +35,7 @@ function usesDatabase(): boolean {
 }
 
 async function loadRow(db: Database, column: "id" | "invite_code", value: string): Promise<Row | undefined> {
-  const [row] = await db.query(`select id, data, updated_at from events where ${column} = $1`, [value]);
+  const [row] = await db.query(`select id, data, updated_at::text as updated_at from events where ${column} = $1`, [value]);
   return row;
 }
 
@@ -44,8 +44,7 @@ function stateOf(row: Row): State {
 }
 
 function loadedAt(row: Row): string {
-  const ts = row.updated_at;
-  return ts instanceof Date ? ts.toISOString() : String(ts);
+  return String(row.updated_at);
 }
 
 async function upsert(db: Database, s: State, eventId: string, document: string, expectedUpdatedAt: string | null): Promise<boolean> {
