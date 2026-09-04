@@ -90,7 +90,7 @@ export default async function Page() {
         <section className="hero"><div className="wrap">
           <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu" data-testid="banner" />
           <h1 className="hero-headline" data-testid="intent">A WebMCP-native event workspace for managing participants, their requirements, and the purchases made on their behalf.</h1>
-          <div className="sub"><p>Create an event, collect attendee information, and let browser agents use that structured state when they work across WebMCP-enabled websites. Instead of copying guest lists between forms, spreadsheets, vendors, and storefronts, Tokuchu gives agents one source of truth for who is attending and what each person needs.</p></div>
+          <div className="sub"><p>Create an event, collect attendee information, and let browser agents use that structured state when they work across WebMCP-enabled websites.</p><p>Instead of copying guest lists between forms, spreadsheets, vendors, and storefronts, Tokuchu gives agents one source of truth for who is attending and what each person needs.</p></div>
           <div className="cta"><a className="btn primary big" href="/demo" data-testid="demo">Try with an agent</a><a className="btn ghost big" href={start} data-testid="start-hero">Sign in</a></div>
         </div></section>
 
