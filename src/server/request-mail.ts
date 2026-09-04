@@ -6,7 +6,7 @@
  */
 import { getDefinition, getEvent, setRequestDelivery, state } from "../domain/store";
 import type { Event, Guest } from "../domain/types";
-import { mailer } from "./mail";
+import { logMailer, mailer } from "./mail";
 import { afterCommit, withPersistedEvent } from "./persistence";
 
 /** One email to make: the attendee, the gift's request, the questions it still asks, and for a correction the store's message. */
@@ -53,8 +53,9 @@ async function deliver(event: Event, outgoing: Outgoing): Promise<void> {
     return;
   }
   const labels = outgoing.definition_ids.map((id) => getDefinition(id).label);
+  const send = event.demo ? logMailer() : mailer();
   try {
-    const delivery = await mailer().send({ to, ...requestEmail(event, guest, labels, attendeeLink(event, guest), outgoing.kind, outgoing.message ?? null) });
+    const delivery = await send.send({ to, ...requestEmail(event, guest, labels, attendeeLink(event, guest), outgoing.kind, outgoing.message ?? null) });
     setRequestDelivery(guest.id, gift_id, delivery);
   } catch (e) {
     setRequestDelivery(guest.id, gift_id, "failed", (e as Error).message);

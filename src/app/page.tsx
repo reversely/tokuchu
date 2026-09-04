@@ -88,9 +88,19 @@ export default async function Page() {
 
       <main id="top">
         <section className="hero"><div className="wrap">
-          <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu. Personalize gifts for your attendee list using WebMCP agents" data-testid="banner" />
-          <div className="sub" data-testid="intent"><p>Customized procurement is a coordination problem: a vendor defines what each item requires while an organizer holds changing information about who will receive it. Tokuchu and Customworks let browser agents work across that boundary through WebMCP, using one evolving procurement state.</p></div>
-          <div className="cta"><a className="btn primary big" href={start} data-testid="start-hero">Create an event</a><a className="btn ghost big" href="/demo" data-testid="demo">Try the demo</a></div>
+          <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu" data-testid="banner" />
+          <h1 className="hero-headline" data-testid="intent">A WebMCP-native event workspace for managing participants, their requirements, and the purchases made on their behalf.</h1>
+          <div className="sub"><p>Create an event, collect attendee information, and let browser agents use that structured state when they work across WebMCP-enabled websites. Instead of copying guest lists between forms, spreadsheets, vendors, and storefronts, Tokuchu gives agents one source of truth for who is attending and what each person needs.</p></div>
+          <div className="cta"><a className="btn primary big" href="/demo" data-testid="demo">Try with an agent</a><a className="btn ghost big" href={start} data-testid="start-hero">Sign in</a></div>
+        </div></section>
+
+        <section className="agent-prompt"><div className="wrap">
+          <div className="prompt-panel" data-testid="agent-prompt">
+            <h2>Point your agent at Tokuchu</h2>
+            <p>Open this site in a WebMCP-capable browser agent and give it the prompt below. The agent creates a guest event, loads ten sample attendees, and runs the procurement flow using WebMCP tools registered on each page.</p>
+            <div className="prompt-box"><pre>{`Navigate to ${process.env.APP_URL || process.env.AUTH_URL || "https://tokuchu.app"}. Call create_event to make an event for a team dinner, then call load_sample_attendees. Browse the Customworks store at springbuilt.myshopify.com to find a personalized product, read its customization contract with get_customization, and bring the fields back to Tokuchu with set_gift_plan and set_gift_customization. Map the store's requirements to attendee data with get_requirements, request the missing answers with request_from_attendees, and once every row reads ready, approve the manifest with approve_specs. The store's add_customized_to_cart builds the checkout.`}</pre></div>
+            <p className="prompt-note">No account needed. Guest events expire after 24 hours. Emails are logged, not sent.</p>
+          </div>
         </div></section>
 
         <section id="sites" className="tint"><div className="wrap">
