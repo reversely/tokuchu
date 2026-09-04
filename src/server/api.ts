@@ -709,7 +709,9 @@ export function errorResponse(e: unknown): NextResponse {
   if (e instanceof BadRequestError) return NextResponse.json({ error: e.message }, { status: 400 });
   if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: 401 });
   if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
-  throw e;
+  const message = e instanceof Error ? e.message : String(e);
+  console.error("Unhandled route error:", message);
+  return NextResponse.json({ error: message }, { status: 500 });
 }
 
 export type Definition = AttributeDefinition;
