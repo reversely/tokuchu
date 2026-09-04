@@ -48,7 +48,7 @@ The order uses WebMCP in four connected parts of the same workflow.
 3. **Tokuchu's records as tools.** Tokuchu's event page registers the RSVP list and the order's records as tools. The agent hands the store's payload to `set_gift_customization`, reads the source of each requirement through `get_requirements`, runs `request_from_attendees`, reads `get_fulfillment_manifest`, and approves through `approve_specs`. The invite page registers `submit_rsvp` for an attendee's agent, and the store-facing page registers the grant's tools for the store's agent (Sections 8 and 11).
 4. **Customized cart creation.** After the required customization data has been collected, the store's `add_customized_to_cart` tool creates the configured cart items through Shopify's cart endpoint. The agent calls it on the store's page with the `cart_items` the manifest returns; in normal mode Tokuchu's server calls it from a headless page (Section 10). The merchant tool wraps Shopify's cart endpoint because Shopify's own cart tools carry a variant and a quantity per line and no text (Section 5).
 
-**The sequence.** The order runs as thirteen arrows between a browser agent, a Tokuchu tab, and a Customworks tab; each arrow is one WebMCP call, and `README.md`, `docs/agent-playbook.md`, and `docs/guide.md` number them the same way. The source is `docs/diagrams/agent-sequence.mmd`.
+**The sequence.** The order runs as fourteen arrows between a browser agent, a Tokuchu tab, and a Customworks tab; each arrow is one WebMCP call, and `README.md`, `docs/agent-playbook.md`, and `docs/guide.md` number them the same way. The source is `docs/diagrams/agent-sequence.mmd`.
 
 1. The agent calls `getTools` on the Tokuchu tab and receives the event page's tool list.
 2. The agent calls `list_guests` with `{ filter: "status:eq:going" }` and receives every attendee who replied going with the answers the RSVP list holds.
@@ -62,7 +62,7 @@ The order uses WebMCP in four connected parts of the same workflow.
 10. The agent calls `get_fulfillment_manifest` with `{ gift_id }` until every row reads ready; the reply carries one graded row per attendee and the `cart_items` for the store (Section 10).
 11. The agent calls `approve_specs` with `{ gift_id }`, and the approval records the change-log revision it stands at (Section 11).
 12. The agent calls `add_customized_to_cart` on the Customworks tab with `{ items: cart_items, idempotency_key }`, and the store adds one cart line per attendee and returns the `checkout_url`.
-13. The agent calls `post_update` with `{ gift_id, kind: "in_production", reference: checkout_url }`, and the gift's progress log carries the checkout link for the organizer to review and pay.
+13. The agent calls `post_update` with `{ gift_id, kind: "confirmed", reference: checkout_url }`, and the gift's progress log carries the checkout link for the organizer to review and pay.
 
 ```mermaid
 sequenceDiagram
@@ -81,10 +81,10 @@ sequenceDiagram
     A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
-    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+    A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
 ```
 
-**The store's sequence.** After the thirteenth arrow the store's own side runs as a second sequence (`docs/diagrams/store-sequence.mmd`, Section 11). The organizer sends the store a signed link. The store's agent opens the link, which lands on the store-facing page, and calls `getTools` for the tools the grant allows. The store's agent calls `get_fulfillment_manifest` with `{ procurement_id }` and receives one row per attendee at the approved revision. The store's agent calls `post_procurement_update` with `{ procurement_id, type, attendee_ref, requirement_id, message }` to move the order on or to open an exception on a value it cannot use, and an exception routes a correction request to the attendee. The store's agent calls `get_changes` with `{ procurement_id, after_revision }` and reads the correction and every other change since the revision it last read.
+**The store's sequence.** After the fourteenth arrow the store's own side runs as a second sequence (`docs/diagrams/store-sequence.mmd`, Section 11). The organizer sends the store a signed link. The store's agent opens the link, which lands on the store-facing page, and calls `getTools` for the tools the grant allows. The store's agent calls `get_fulfillment_manifest` with `{ procurement_id }` and receives one row per attendee at the approved revision. The store's agent calls `post_procurement_update` with `{ procurement_id, type, attendee_ref, requirement_id, message }` to move the order on or to open an exception on a value it cannot use, and an exception routes a correction request to the attendee. The store's agent calls `get_changes` with `{ procurement_id, after_revision }` and reads the correction and every other change since the revision it last read.
 
 ```mermaid
 sequenceDiagram
@@ -136,7 +136,7 @@ The loop the organizer runs:
 
 ## 6. The demo store and the interaction between the two components
 
-The project has two deployed components. Tokuchu is the organizer's app. The demo store is a live Shopify store, `springbuilt.myshopify.com`, trading as Customworks, which sells a customizable celestial-map shirt and a ceramic mug with a photo through the Customily app. The store was selected and configured so that the shirt surfaces when the catalog search runs for customizable products: a search for a personalized star map crewneck ranks it within the first page of results from the Global Catalog and the store's own UCP endpoint. The flow is developed, tested, and recorded against this store. Any other WebMCP-enabled store answers discovery and Shopify's own tools; personalization on another store needs that store to publish the two merchant tools.
+The project has two deployed components. Tokuchu is the organizer's app. The demo store is a live Shopify store, `springbuilt.myshopify.com`, trading as Customworks, which sells a customizable celestial-map shirt and a ceramic mug with a photo through the Customily app. The store was selected and configured so that the shirt surfaces when the catalog search runs for customizable products: a search for a personalized star map crewneck ranks it within the first page of results from the Global Catalog and the store's own UCP endpoint. The flow is developed, tested, and recorded against this store. Any other WebMCP-enabled store answers discovery and Shopify's own tools; personalization on another store needs that store to publish the three merchant tools.
 
 WebMCP development happens in both components. In Tokuchu it is the tool registry on the event page, the invite page, and the store-facing page, and the MCP endpoint. In the store it is the theme asset that registers `get_customization` and `add_customized_to_cart` on every page, and the product metafield that holds the shirt's requirements: a name limited to 20 characters, a location, and a time for the star map, with six size variants, and the mug's one requirement, an image. Building those tools in the store is part of the project's scope, and a change to the shirt's requirements is a change to the metafield rather than to Tokuchu; Tokuchu reads the change as a new requirement schema version (Section 11).
 
@@ -150,7 +150,7 @@ The interaction between the two runs over WebMCP page tools and Shopify's UCP en
 
 ## 7. Screens
 
-**Landing.** The root route `/` shows who exposes what on the three sides, the problem, the merchant's contract, the nine-step walkthrough with a capture per step through the store's exception and the correction, how an agent runs the app from the playbook, and the Why WebMCP cards. Its button opens `/events/new` for a signed-in organizer and the sign-in page for a visitor without an account and for a guest.
+**Landing.** The root route `/` shows the two sister websites, the four procurement utilities with the WebMCP tools each side exposes, the Stagehand browser-agent runtime architecture, and the result. The managed-mode strip notes that discovery uses Shopify's UCP endpoints and the store's page tools carry the customization and cart work. Its button opens `/events/new` for a signed-in organizer and the sign-in page for a visitor without an account and for a guest.
 
 **Sign-in.** The organizer enters an email address and receives a magic link; the page says that a first sign-in creates the account and offers the demo. Following the link opens the page the organizer came from, or `/events`, the list of the events the account owns. An attendee's invite link opens without a session.
 
@@ -338,7 +338,7 @@ The static-mode run (`tests/static-agent.spec.ts`) plays the agent across Tokuch
 Tokuchu is a submission to The WebMCP Challenge (webmcp.devpost.com), due 2026-09-03 at 1:00 pm PDT. The submission requirements and how the project meets each:
 
 - **A working live URL** that judges open in ChatGPT's in-app browser or in Google Chrome with WebMCP enabled. The Render deployment (Section 14) serves the dashboard, where the event's records register as tools on the page's model context, and the demo store serves the merchant tools. A judge with a browser or terminal agent runs the order from the playbook (Section 12).
-- **Actual tool registration** with functional schemas and execute functions. Tokuchu's tools are defined as data with JSON Schema inputs (`src/webmcp/tools.ts`) and registered with `registerTool` on the event page, the invite page, and the store-facing page; the store's two merchant tools register the same way in the theme.
+- **Actual tool registration** with functional schemas and execute functions. Tokuchu's tools are defined as data with JSON Schema inputs (`src/webmcp/tools.ts`) and registered with `registerTool` on the event page, the invite page, and the store-facing page; the store's three merchant tools register the same way in the theme.
 - **A text description** of why WebMCP fits the use case, how it improves the experience, what people and agents accomplish together, and the implementation. Sections 1, 3, and 6 of this document carry that content.
 - **A public video under three minutes** with audio, showing the build and the WebMCP use. Section 15 gives the recording order.
 - **A public repository** with the source, the assets, the instructions, and an open-source license file.

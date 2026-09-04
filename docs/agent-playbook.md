@@ -21,7 +21,7 @@ sequenceDiagram
     A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
-    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+    A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
     A->>C: get_order_updates { checkout_url }
 ```
 
@@ -72,7 +72,7 @@ Each step is one arrow of the diagram, in the diagram's order and wording.
 10. **`get_fulfillment_manifest { gift_id }` until every row reads ready.** Read it until every attendee's `status` reads `ready`. The reply's `cart_items` array has one item per ready attendee: `recipient_ref`, `variant_id`, and `values` keyed by the store's field keys.
 11. **`approve_specs { gift_id }`.** The reply carries `approved_at` and the revision the approval stands at; no cart job runs in static mode, so `cart_fill` and `checkout_url` stay empty. Read `get_fulfillment_manifest` once more and keep its `cart_items`.
 12. **`add_customized_to_cart { items: cart_items, idempotency_key }` on the store's product page.** Call it with the `cart_items` from step 11 and `idempotency_key: "<gift id>:<approved_at>"`. The reply lists the `ready` lines and a `checkout_url` that opens the cart at checkout in any browser. A repeated call with the same key adds nothing.
-13. **`post_update { gift_id, kind: "in_production", reference: checkout_url }`.** On Tokuchu, call it with `text: "The cart is ready to review"` and the `checkout_url` as `reference`, so the gift's progress log carries the link.
+13. **`post_update { gift_id, kind: "confirmed", reference: checkout_url }`.** On Tokuchu, call it with `text: "The cart is ready to review"` and the `checkout_url` as `reference`, so the gift's progress log carries the link.
 14. **`get_order_updates { checkout_url }` on the store's product page.** Call it with the `checkout_url` from step 12 once the organizer has paid. The reply carries `order_name`, `order_id`, `created_at`, `updated_at`, `financial_status`, `fulfillment_status`, `line_items` with each line's `recipient_ref` and its personalization `values` keyed by the store's property labels, and `fulfillments` with `tracking` (`company`, `number`, `url`). Before payment the reply is `{ status: "not_ordered" }`. The tool calls the order route Tokuchu serves for the store (`/api/store/orders`), and Tokuchu's tick reads the same route to move the Procurement to `in_production` and `fulfilled`, so no `post_procurement_update` is needed for those two states.
 
 ## The store's side
@@ -147,7 +147,7 @@ Follow this order and stop at the first error you cannot resolve by reading it:
 10. Tokuchu: get_fulfillment_manifest { gift_id } until every attendee reads ready.
 11. Tokuchu: approve_specs { gift_id }, then get_fulfillment_manifest again and keep cart_items.
 12. Store: add_customized_to_cart { items: cart_items, idempotency_key: "<gift id>:<approved_at>" }. Report the checkout_url.
-13. Tokuchu: post_update { gift_id, kind: "in_production", text: "The cart is ready to review", reference: <checkout_url> }.
+13. Tokuchu: post_update { gift_id, kind: "confirmed", text: "The cart is ready to review", reference: <checkout_url> }.
 14. Store: get_order_updates { checkout_url: <checkout_url> }. Report the status; { status: "not_ordered" } is the answer until the organizer pays.
 
 Report each tool call you make and a one-line summary of its result, then the checkout link.

@@ -4,7 +4,7 @@ This guide walks an organizer through Tokuchu from sign-in to a filled store car
 
 The app runs in two ways. In normal mode, the mode this guide shows, the organizer clicks through the screens and the server does the store work itself: it searches the catalog and opens the store's product page in a headless browser to call `get_customization` and `add_customized_to_cart`. In static mode (`TOKUCHU_STATIC=1`) the server makes no search and opens no store page; every capability is a WebMCP tool on a page, and an agent in the browser or in a terminal with a browser tool moves between Tokuchu's pages and the store's page itself. `docs/agent-playbook.md` is the prompt and the order of operations for that agent, and `scripts/agent-playbook.mjs` plays it without a model.
 
-Both modes run the same thirteen arrows between the agent, the Tokuchu tab, and the Customworks tab; in normal mode the server and the organizer's buttons stand in for the agent. Each section below that corresponds to an arrow names it by number, and the store's side (sections 12 to 15) follows the second sequence in `docs/diagrams/store-sequence.mmd`. The source is `docs/diagrams/agent-sequence.mmd`.
+Both modes run the same fourteen arrows between the agent, the Tokuchu tab, and the Customworks tab; in normal mode the server and the organizer's buttons stand in for the agent. Each section below that corresponds to an arrow names it by number, and the store's side (sections 12 to 15) follows the second sequence in `docs/diagrams/store-sequence.mmd`. The source is `docs/diagrams/agent-sequence.mmd`.
 
 ```mermaid
 sequenceDiagram
@@ -23,7 +23,7 @@ sequenceDiagram
     A->>T: get_fulfillment_manifest { gift_id } until every row reads ready
     A->>T: approve_specs { gift_id }
     A->>C: add_customized_to_cart { items: cart_items, idempotency_key }
-    A->>T: post_update { gift_id, kind: "in_production", reference: checkout_url }
+    A->>T: post_update { gift_id, kind: "confirmed", reference: checkout_url }
 ```
 
 | Who exposes it | Tool | What Tokuchu does with it |
