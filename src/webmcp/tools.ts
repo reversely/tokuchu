@@ -108,6 +108,21 @@ export const TOOLS: ToolDefinition[] = [
     route: { method: "GET", path: "/api/events/:eventId/missing", query: (a) => ({ definition: str(a.definition_id), filter: str(a.filter) }) }
   },
   {
+    name: "set_guest_reply",
+    description: "Sets one or more answers on a guest's record as the organizer, without the invite form. Use it to fill in a value the organizer knows, correct an answer, or enter a response on behalf of an attendee who cannot use the form.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        guest_id: { type: "string", description: "The guest's id" },
+        answers: { type: "object", description: "A map of definition_id to the value to set" }
+      },
+      required: ["guest_id", "answers"],
+      additionalProperties: false
+    },
+    scopes: ["organizer"],
+    route: { method: "PATCH", path: "/api/events/:eventId/rsvp/{guest_id}", body: (a) => ({ answers: a.answers, source: "organizer" }) }
+  },
+  {
     name: "get_summary",
     description: "Returns the status counts and count_by for several questions in one call. Use it first when a question needs the whole picture of the replies.",
     inputSchema: { type: "object", properties: { filter: FILTER, definition_ids: FIELDS }, additionalProperties: false },

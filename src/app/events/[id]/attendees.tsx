@@ -251,6 +251,8 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
   const [busy, setBusy] = useState<null | "request" | "follow_up" | "approve">(null);
   const [error, setError] = useState<string | null>(null);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [literalKey, setLiteralKey] = useState<string | null>(null);
+  const [literalValue, setLiteralValue] = useState("");
 
   const loadRequirements = useCallback(async () => {
     if (!gift) return setRequirements([]);
@@ -286,6 +288,23 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
     setSelectedId(id);
     setError(null);
     setApproveError(null);
+  }
+
+  async function setLiteral(key: string) {
+    if (!gift) return;
+    setBusy("request");
+    setError(null);
+    const existing = gift.personalization_mappings ?? [];
+    const updated = [...existing.filter((m: { vendor_field_key: string }) => m.vendor_field_key !== key), { vendor_field_key: key, source: { type: "literal" as const, value: literalValue } }];
+    const tool = TOOLS.find((t) => t.name === "set_personalization_mapping");
+    if (!tool) return;
+    const result = await executeThroughApi(tool, snap.event.id, { gift_id: gift.id, mappings: updated }, fetch);
+    if (result.isError) {
+      try { setError((JSON.parse(result.content[0].text) as { error?: string }).error ?? "Failed to set value"); } catch { setError("Failed to set value"); }
+    } else { onChanged(); }
+    setLiteralKey(null);
+    setLiteralValue("");
+    setBusy(null);
   }
 
   async function run(name: "request_from_attendees" | "follow_up", which: "request" | "follow_up") {
@@ -325,7 +344,22 @@ export function Attendees({ snap, onChanged }: { snap: Snapshot; onChanged: () =
         {requirements.length > 0 ? (
           <div className="chips">
             {requirements.map((r) => (
-              <span className="chip" key={r.key} data-testid="requested-field" data-source={r.source}><strong>{r.label}</strong> <span className="quiet">{sourceLabel(r, defsById)}</span></span>
+              <span className="chip" key={r.key} data-testid="requested-field" data-source={r.source}>
+                <strong>{r.label}</strong> <span className="quiet">{sourceLabel(r, defsById)}</span>
+                {r.source === "literal" && r.mapping?.source.type === "literal" && <span className="quiet" style={{ marginLeft: 4 }}>= {String(r.mapping.source.value)}</span>}
+                {(r.source === "question" || r.source === "literal") && !approved && literalKey !== r.key && (
+                  <button type="button" className="btn ghost small" style={{ marginLeft: 6, padding: "2px 6px", fontSize: 11 }} onClick={() => { setLiteralKey(r.key); setLiteralValue(r.source === "literal" && r.mapping?.source.type === "literal" ? String(r.mapping.source.value) : ""); }} data-testid="set-literal">
+                    {r.source === "literal" ? "Edit" : "Set fixed value"}
+                  </button>
+                )}
+                {literalKey === r.key && (
+                  <span style={{ display: "inline-flex", gap: 4, marginLeft: 6, alignItems: "center" }}>
+                    <input type="text" value={literalValue} onChange={(e) => setLiteralValue(e.target.value)} placeholder={r.kind === "image" ? "Image URL" : "Value for all attendees"} style={{ fontSize: 12, padding: "2px 6px", width: r.kind === "image" ? 220 : 140 }} data-testid="literal-input" autoFocus />
+                    <button type="button" className="btn primary small" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => setLiteral(r.key)} disabled={!literalValue || busy !== null} data-testid="literal-save">Set</button>
+                    <button type="button" className="btn ghost small" style={{ padding: "2px 6px", fontSize: 11 }} onClick={() => { setLiteralKey(null); setLiteralValue(""); }}>Cancel</button>
+                  </span>
+                )}
+              </span>
             ))}
           </div>
         ) : (

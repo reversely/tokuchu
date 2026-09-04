@@ -9,7 +9,7 @@
 import { startCartFill } from "./cart-job";
 import { z } from "zod";
 import { readLatestSeq } from "./seq";
-import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs, importGuests } from "./api";
+import { changeReader, changes, counts, createGiftFromBody, followUp, giftRequirements, guestList, guestView, manifestView, missing, patchRsvp, postUpdate, requestFromAttendees, setPersonalizationMappings, summary, updateGiftFromBody, updatesFor, readFilter, requireEvent, BadRequestError, NotFoundError, approveSpecs, importGuests } from "./api";
 import { setGiftCustomization, withStoreCustomization } from "./customization";
 import { loadSampleAttendees } from "./sample-attendees";
 import { newId, state } from "../domain/store";
@@ -137,6 +137,9 @@ async function dispatch(eventId: string, token: CallerToken, grant: AccessGrant 
     }
     case "list_missing":
       return missing(eventId, String(args.definition_id), readFilter(strArg("filter")));
+    case "set_guest_reply":
+      if (!organizer) throw new BadRequestError("Only the organizer can set a guest's reply.");
+      return patchRsvp(eventId, String(args.guest_id), { answers: args.answers, source: "organizer" });
     case "get_summary": {
       const ids = Array.isArray(args.definition_ids) ? (args.definition_ids as string[]) : [];
       return summary(eventId, organizer ? ids : readable(token, ids), readFilter(strArg("filter")));
