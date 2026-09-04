@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Snapshot } from "./dashboard";
 import { withDemoHeaders } from "../../../demo/token";
 import type { GuestStatus } from "../../../domain/types";
-import { dateOnly, dateTime } from "../../../lib/format";
+import { dateOnly, eventDateTime } from "../../../lib/format";
 import { deliveryTarget } from "../../../lib/delivery";
 
 const STATUS_LABEL: Record<GuestStatus, string> = { going: "Going", maybe: "Maybe", cant_go: "Can't go", no_reply: "No reply" };
@@ -41,7 +41,7 @@ export function Overview({ snap, invite, onChanged, onOpenExperience }: { snap: 
     <div className="wrap">
       <div>
         <h1 className="title" data-testid="event-title">{event.title}</h1>
-        <p className="lead">{[dateTime(event.starts_at), event.venue.name, event.venue.city].filter(Boolean).join(" / ")}</p>
+        <p className="lead">{[eventDateTime(event.starts_at), event.venue.name, event.venue.city].filter(Boolean).join(" / ")}</p>
 
         <section className="block" aria-labelledby="attendance">
           <div className="labelrow"><h2 id="attendance">Attendance</h2><span className="eyebrow">{going} going{event.spots ? ` of ${event.spots} spots` : ""}</span></div>
@@ -126,7 +126,7 @@ export function Overview({ snap, invite, onChanged, onOpenExperience }: { snap: 
           {editing ? <SetupForm snap={snap} onDone={() => { setEditing(false); onChanged(); }} /> : (
             <div className="list">
               <div className="row" style={{ gridTemplateColumns: "1fr auto" }}><span>{event.title}{event.host ? ` hosted by ${event.host}` : ""}</span><button type="button" className="btn ghost small" onClick={() => setEditing(true)} data-testid="edit-setup">Edit</button></div>
-              <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[dateTime(event.starts_at), event.venue.name, event.venue.line1, event.venue.city, event.venue.region, event.venue.postal_code, event.venue.country].filter(Boolean).join(" / ")}</span></div>
+              <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[eventDateTime(event.starts_at), event.venue.name, event.venue.line1, event.venue.city, event.venue.region, event.venue.postal_code, event.venue.country].filter(Boolean).join(" / ")}</span></div>
               <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type">{[event.spots ? `${event.spots} spots` : "no spot limit", event.rsvp_deadline ? `replies by ${dateOnly(event.rsvp_deadline)}` : "no RSVP deadline"].join(" / ")}</span></div>
               <div className="row" style={{ gridTemplateColumns: "1fr" }}><span className="type" data-testid="setup-delivery">Gifts to {deliveryTarget(event).label}{deliveryTarget(event).needed_by ? ` by ${dateOnly(deliveryTarget(event).needed_by)}` : " with no date yet"}</span></div>
             </div>

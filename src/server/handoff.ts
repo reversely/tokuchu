@@ -21,7 +21,8 @@ export async function isConsumedGuest(guestId: string): Promise<boolean> {
 
 /**
  * Moves the guest's events under the user and consumes the guest id; a second call for the same
- * guest changes nothing. The seeded event keeps `demo: true`, so the tour still mounts for the account.
+ * guest changes nothing. Only an event created through the explicit `/demo` walkthrough keeps
+ * `demo: true`, so ordinary agent-created guest events never mount the tour.
  */
 export async function handOffGuest(guestId: string, userId: string): Promise<void> {
   if (await isConsumedGuest(guestId)) return;

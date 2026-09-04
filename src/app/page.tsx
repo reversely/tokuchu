@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { currentCaller } from "../server/ownership";
 import { LandingWebMcp } from "./landing-webmcp";
 import { SessionPill } from "./session-pill";
+import { CODEX_DISCOVERY_CODE, CODEX_ENTRY_META } from "../webmcp/codex-entry";
+
+export const metadata: Metadata = {
+  other: { "tokuchu-codex-entry": CODEX_ENTRY_META }
+};
 
 type Utility = {
   heading: string;
@@ -87,6 +93,14 @@ export default async function Page() {
       </header>
 
       <main id="top">
+        <section className="codex-entry" data-testid="codex-entry"><div className="wrap">
+          <span className="eyebrow">Codex starts here</span>
+          <h2>Discover the homepage WebMCP tools before following human-facing links.</h2>
+          <p>Use Codex&apos;s built-in browser capability. This is different from the Stagehand runtime documented below.</p>
+          <pre><code>{CODEX_DISCOVERY_CODE}</code></pre>
+          <p>Call <code>create_event</code> here. Open its exact returned URL with the guest token intact. For an explicit demonstration verify the guest list is empty before calling <code>load_sample_attendees</code>.</p>
+          <a href="/docs/codex" data-testid="codex-guide">Read the complete Codex entry guide</a>
+        </div></section>
         <section className="hero"><div className="wrap">
           <img className="banner hero-banner" src="/media/tokuchu-banner.webp" alt="Tokuchu" data-testid="banner" />
           <h1 className="hero-headline" data-testid="intent">A WebMCP-native event workspace for managing participants, their requirements, and the purchases made on their behalf.</h1>
@@ -97,7 +111,7 @@ export default async function Page() {
         <section className="agent-prompt"><div className="wrap">
           <div className="prompt-panel" data-testid="agent-prompt">
             <h2>Point your agent at Tokuchu</h2>
-            <p>Open this site in a WebMCP-capable browser agent and give it the prompt below. The agent creates a guest event, loads ten sample attendees, and runs the procurement flow using WebMCP tools registered on each page.</p>
+            <p>Open this site in a WebMCP-capable browser agent and give it the prompt below. The agent creates a guest event and verifies its guest list before loading ten sample attendees. It starts procurement only when the requested outcome includes it.</p>
             <div className="prompt-box"><pre>{`Navigate to ${process.env.APP_URL || process.env.AUTH_URL || "https://tokuchu.app"}. Call create_event to make an event for a team dinner, then call load_sample_attendees. Browse the Customworks store at springbuilt.myshopify.com to find a personalized product, read its customization contract with get_customization, and bring the fields back to Tokuchu with set_gift_plan and set_gift_customization. Map the store's requirements to attendee data with get_requirements, request the missing answers with request_from_attendees, and once every row reads ready, approve the manifest with approve_specs. The store's add_customized_to_cart builds the checkout.`}</pre></div>
             <p className="prompt-note">No account needed. Guest events expire after 24 hours. Emails are logged, not sent.</p>
           </div>
@@ -123,20 +137,38 @@ export default async function Page() {
         </div></section>
 
         <section id="runtime" className="tint"><div className="wrap">
-          <div className="sec-head"><span className="eyebrow">Stagehand browser-agent architecture</span><h2>The agent operates the browser; Stagehand exposes each page&apos;s WebMCP surface.</h2><p>In agent mode Tokuchu does not make server-side storefront calls. The agent owns the cross-site work and discovers the current tools from the active page at runtime.</p></div>
-          <div className="runtime-flow" data-testid="stagehand-runtime">
-            <div className="runtime-node"><span>1 · Intent</span><strong>Goal + operating playbook</strong><p>Defines the procurement outcome and safety rules, not a fixed business-call script.</p></div><span className="runtime-arrow" aria-hidden="true">→</span>
-            <div className="runtime-node"><span>2 · Reasoning</span><strong>OpenAI Agents SDK</strong><p>Chooses the next tab and tool from schemas, results, and the evolving order state.</p></div><span className="runtime-arrow" aria-hidden="true">→</span>
-            <div className="runtime-node accent"><span>3 · Browser</span><strong>Stagehand</strong><p>Wraps the Chrome context, preserves both tabs, and gives the runtime access to <code>Page.tools()</code>.</p></div><span className="runtime-arrow" aria-hidden="true">→</span>
-            <div className="runtime-node"><span>4 · Page capabilities</span><strong>Native WebMCP</strong><p>Tokuchu and Customworks register tools on <code>document.modelContext</code>; Stagehand returns their schemas and frame IDs.</p></div>
+          <div className="sec-head"><span className="eyebrow">Agent architecture</span><h2>The agent discovers live page tools before calling them.</h2><p>Each page registers its tools on <code>document.modelContext</code>. The agent reads the available tools from the current page, calls them with structured input, and moves data between the two sites without hard-coded API knowledge.</p></div>
+          <div className="arch-grid" data-testid="arch-grid">
+            <div className="arch-col arch-tokuchu">
+              <span className="arch-label">Tokuchu tab</span>
+              <div className="arch-box">
+                <strong>Tokuchu records</strong>
+                <span className="arch-desc">Live UI, API, validation, database</span>
+                <div className="arch-tools"><code>list_guests</code><code>set_gift_plan</code><code>set_gift_customization</code><code>get_requirements</code><code>request_from_attendees</code><code>get_fulfillment_manifest</code><code>approve_specs</code><code>post_update</code></div>
+              </div>
+            </div>
+            <div className="arch-col arch-agent">
+              <span className="arch-label">Agent runtime</span>
+              <div className="arch-box accent">
+                <strong>Browser agent</strong>
+                <span className="arch-desc">Codex built-in browser or Stagehand</span>
+                <div className="arch-tools"><code>tab.capabilities.get(&quot;webmcp&quot;)</code><code>fetchTools()</code><code>tools.call(name, input)</code></div>
+              </div>
+              <div className="arch-arrows"><span className="arch-arrow left">WebMCP</span><span className="arch-arrow right">WebMCP</span></div>
+            </div>
+            <div className="arch-col arch-store">
+              <span className="arch-label">Store tab</span>
+              <div className="arch-box">
+                <strong>Shopify + merchant</strong>
+                <span className="arch-desc">Product truth, cart, checkout, order</span>
+                <div className="arch-tools"><code>get_customization</code><code>add_customized_to_cart</code><code>get_order_updates</code></div>
+                <span className="arch-footnote">Tools register on <code>document.modelContext</code></span>
+              </div>
+            </div>
           </div>
-          <div className="runtime-detail">
-            <article><span className="eyebrow">Five generic browser controls</span><p>The model receives only <code>open_page</code>, <code>list_webmcp_tools</code>, <code>call_webmcp_tool</code>, <code>switch_tab</code>, and <code>record_checkout</code>. Product-specific operations are discovered from the two websites rather than hard-coded into the agent runtime.</p></article>
-            <article><span className="eyebrow">Discovery and invocation</span><p><code>list_webmcp_tools</code> calls Stagehand&apos;s <code>Page.tools()</code> and returns each tool&apos;s name, description, input schema, and frame. <code>call_webmcp_tool</code> resolves that page tool, invokes it with structured input, waits for completion, and normalizes WebMCP content and errors for the model.</p></article>
-            <article><span className="eyebrow">Tabs, checkout, and traceability</span><p>Stagehand keeps the Tokuchu and Customworks pages in one browser context. The runtime tracks active tabs, captures the checkout URL without returning it to the model, records it through Tokuchu&apos;s <code>post_update</code>, and writes every call, result, and final outcome to a transcript.</p></article>
-          </div>
-          <div className="mode-strip" data-testid="modes"><div><strong>Managed mode</strong><span>Tokuchu&apos;s server calls Shopify&apos;s UCP endpoints for discovery and opens the store&apos;s page for WebMCP tools.</span></div><span aria-hidden="true">or</span><div><strong>Agent mode</strong><span><code>TOKUCHU_STATIC=1</code> removes server-side store operations; Stagehand becomes the browser bridge.</span></div></div>
-          <p className="runline"><a href={PLAYBOOK_URL} target="_blank" rel="noreferrer" data-testid="playbook-link">Read the browser-agent operating playbook</a></p>
+          <div className="arch-flow-line"><p>product contract → Tokuchu cart_items → store → checkout reference → Tokuchu</p><p>The agent discovers live page tools before calling them. It never invents IDs or bypasses a matching WebMCP tool.</p></div>
+          <div className="mode-strip" data-testid="modes"><div><strong>Managed mode</strong><span>Tokuchu&apos;s server calls Shopify&apos;s UCP endpoints for discovery and opens the store&apos;s page for WebMCP tools.</span></div><span aria-hidden="true">or</span><div><strong>Agent mode</strong><span><code>TOKUCHU_STATIC=1</code> removes server-side store operations; the agent&apos;s browser becomes the bridge.</span></div></div>
+          <p className="runline"><a href="/docs/codex" data-testid="codex-link">Codex entry guide</a><span className="runline-sep">·</span><a href={PLAYBOOK_URL} target="_blank" rel="noreferrer" data-testid="playbook-link">Stagehand operating playbook</a></p>
         </div></section>
 
         <section id="result"><div className="wrap"><div className="result-panel"><span className="eyebrow">The result</span><h2>One procurement state, useful to both sides.</h2><p>Vendor requirements are reconciled against information the organizer already has. Missing data is collected only when necessary. Organizers approve an exact revision, vendors receive only the fulfillment fields they need, and browser agents can move the purchase forward using the live WebMCP capabilities of each site.</p></div></div></section>

@@ -25,6 +25,17 @@ export function dateTime(iso: string | null | undefined): string {
   return noCommas(new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).format(d));
 }
 
+/** An event's wall clock with the offset the creator supplied made explicit to the viewer. */
+export function eventDateTime(iso: string | null | undefined): string {
+  const formatted = dateTime(iso);
+  if (!formatted || !iso) return formatted;
+  const suffix = iso.match(/(Z|[+-]\d{2}:?\d{2})$/)?.[1];
+  if (!suffix) return `${formatted} local time`;
+  if (suffix === "Z") return `${formatted} UTC`;
+  const normalized = suffix.includes(":") ? suffix : `${suffix.slice(0, 3)}:${suffix.slice(3)}`;
+  return `${formatted} UTC${normalized.replace("-", "−")}`;
+}
+
 export function dateOnly(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = fixedDate(iso.length === 10 ? `${iso}T12:00:00` : iso);

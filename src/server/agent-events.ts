@@ -1,9 +1,10 @@
 /**
  * The landing page's create_event tool (the first prompt of the demo): a browser agent with no
  * session opens Tokuchu, creates a published event with its guest list, and gets the event's URL
- * back. An account owns the event when a session exists; otherwise the event belongs to a demo
- * guest, as `/demo` does, and the reply carries the guest's signed token so the event page opens
- * as that guest. Demo events sweep after DEMO_TTL_HOURS.
+ * back. An account owns the event when a session exists; otherwise the event belongs to a temporary
+ * guest and the reply carries the guest's signed token so the event page opens as that guest.
+ * Guest ownership does not turn on the scripted `/demo` walkthrough. Guest events sweep after
+ * DEMO_TTL_HOURS.
  */
 import { z } from "zod";
 import { DEMO_TOKEN_PARAM } from "../demo/token";
@@ -37,14 +38,16 @@ export function createEventForAgent(body: unknown, ownerId: string, isAccount: b
       title: input.title,
       host: input.host ?? "",
       description: input.description ?? "",
-      starts_at: new Date(input.starts_at).toISOString(),
+      // Keep the supplied offset and wall clock. Normalizing to UTC here made 09:00-04:00 appear
+      // as 13:00 on the dashboard because event dates deliberately render as stored wall time.
+      starts_at: input.starts_at,
       venue: input.venue,
       spots: input.spots ?? null,
       rsvp_deadline: input.rsvp_deadline ?? null,
       delivery: { destination: "venue", address: null, needed_by: input.needed_by ?? null }
     },
     ownerId,
-    !isAccount
+    false
   );
   const event = publishEvent(draft.id);
   const added = input.guests.length ? importGuests(event.id, { lines: input.guests }).added : 0;

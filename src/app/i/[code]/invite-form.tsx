@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { inviteView } from "../../../server/api";
 import type { AttributeDefinition, GuestStatus } from "../../../domain/types";
 import { controlFor } from "../../../domain/values";
-import { dateTime } from "../../../lib/format";
+import { eventDateTime } from "../../../lib/format";
 import { AgentNotes } from "../../agent-notes";
 import { InviteWebMcp } from "./invite-webmcp";
 import { sendRsvp } from "./send-rsvp";
@@ -142,7 +142,7 @@ export function InviteForm({ invite, guestId, agentNotes = false }: { invite: In
               <div className="in">
                 <h2 data-testid="invite-title">{event.title}</h2>
                 <div className="when">
-                  <div>{dateTime(event.starts_at)}</div>
+                  <div>{eventDateTime(event.starts_at)}</div>
                   {venue.length > 0 && <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{venue.map((part) => <span key={part}>{part}</span>)}</div>}
                   {event.rsvp_deadline && <div>Reply by {event.rsvp_deadline}</div>}
                 </div>

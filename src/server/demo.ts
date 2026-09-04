@@ -1,9 +1,10 @@
 /**
  * The seeded walkthrough event: `/demo` creates one for its caller the first time and reuses it after
  * that; the caller is the session user when signed in and a guest id otherwise. The sweep deletes a
- * guest's demo events after `DEMO_TTL_HOURS`: the script runs it against the database, and the
+ * guest's temporary events after `DEMO_TTL_HOURS`: the script runs it against the database, and the
  * in-memory store runs it inside the `/demo` handler. An event an account took over is no longer a
- * guest's and stays.
+ * guest's and stays. The `demo` field identifies the explicit scripted walkthrough; it does not
+ * identify every event owned by a guest.
  */
 import { DEMO_EVENT } from "../demo/seed";
 import { DEMO_TOKEN_PARAM } from "../demo/token";
@@ -30,10 +31,10 @@ export function signInPath(next: string): string {
   return `/sign-in?next=${encodeURIComponent(next)}`;
 }
 
-/** Deletes a guest's demo events last written more than `olderThanHours` ago and returns how many went. */
+/** Deletes a guest's temporary events last written more than `olderThanHours` ago and returns how many went. */
 export async function sweepDemoEvents(db: Database, olderThanHours = DEMO_TTL_HOURS): Promise<number> {
   const rows = await db.query(
-    "delete from events where owner_id like $1 and data #>> '{events,0,1,demo}' = 'true' and updated_at < now() - make_interval(hours => $2::int) returning id",
+    "delete from events where owner_id like $1 and updated_at < now() - make_interval(hours => $2::int) returning id",
     [`${DEMO_ID_PREFIX}%`, olderThanHours]
   );
   return rows.length;
@@ -52,11 +53,11 @@ function removeEvent(s: State, eventId: string): void {
   s.events.delete(eventId);
 }
 
-/** The in-memory counterpart: drops a guest's demo events created more than `olderThanHours` ago and every row that names them. */
+/** The in-memory counterpart: drops a guest's temporary events created more than `olderThanHours` ago and every row that names them. */
 export function sweepDemoState(olderThanHours = DEMO_TTL_HOURS, now = new Date()): number {
   const s = state();
   const cutoff = now.getTime() - olderThanHours * 60 * 60 * 1000;
-  const expired = [...s.events.values()].filter((event) => event.demo && isDemoId(event.owner_id) && Date.parse(event.created_at) < cutoff);
+  const expired = [...s.events.values()].filter((event) => isDemoId(event.owner_id) && Date.parse(event.created_at) < cutoff);
   for (const event of expired) removeEvent(s, event.id);
   return expired.length;
 }

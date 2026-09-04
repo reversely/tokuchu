@@ -1,6 +1,6 @@
 /**
  * The landing tools (the demo's first prompt): the home page registers create_event and add_guests
- * over WebMCP, a browser with no session creates a published event as a demo guest and lands on it
+ * over WebMCP, a browser with no session creates a published temporary event and lands on it
  * through the URL the reply names, and the event page then registers the organizer tools.
  */
 import { expect, test, type Page } from "@playwright/test";
@@ -18,11 +18,12 @@ async function execute(page: Page, name: string, args: Record<string, unknown>) 
 
 test("the home page registers create_event and add_guests and a session-less browser gets a guest event it owns", async ({ page }) => {
   await page.goto("/?webmcp=polyfill");
+  await expect(page.getByTestId("codex-entry")).toBeVisible();
   await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
   const names = await page.evaluate(async () => (await (document.modelContext as unknown as Ctx).getTools()).map((t) => t.name).sort());
   expect(names).toEqual(["add_guests", "create_event"]);
 
-  const created = await execute(page, "create_event", { title: "Eastern Canada Astronomy Symposium", starts_at: "2027-03-15T19:00:00-04:00", venue: { name: "Ontario Science Centre", city: "Toronto", region: "ON", country: "CA" }, guests: ["Avery Chen <avery@example.com>", "Blake Rivera"] });
+  const created = await execute(page, "create_event", { title: "Eastern Canada Astronomy Symposium", starts_at: "2027-03-15T09:00:00-04:00", venue: { name: "Ontario Science Centre", city: "Toronto", region: "ON", country: "CA" }, guests: ["Avery Chen <avery@example.com>", "Blake Rivera"] });
   expect(created.isError).toBe(false);
   const reply = JSON.parse(created.text) as { event_id: string; url: string; invite_url: string; guests_added: number };
   expect(reply).toMatchObject({ guests_added: 2 });
@@ -33,9 +34,34 @@ test("the home page registers create_event and add_guests and a session-less bro
   expect(JSON.parse(more.text)).toMatchObject({ added: 1 });
 
   await page.goto(`${reply.url}${reply.url.includes("?") ? "&" : "?"}webmcp=polyfill`);
+  await expect(page).toHaveURL(new RegExp(`/events/${reply.event_id}`));
+  await expect(page.getByText(/Mon Mar 15 2027 9:00.*UTC−04:00/).first()).toBeVisible();
+  await expect(page.getByTestId("tour-step")).toHaveCount(0);
   await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
   const eventTools = await page.evaluate(async () => (await (document.modelContext as unknown as Ctx).getTools()).map((t) => t.name));
   expect(eventTools).toEqual(expect.arrayContaining(["list_guests", "import_guests", "set_gift_plan"]));
   const going = await execute(page, "list_guests", { filter: "status:eq:no_reply" });
   expect((JSON.parse(going.text) as { guests: unknown[] }).guests).toHaveLength(3);
+});
+
+test("an explicit demo verifies an empty list, loads ten samples, and shows the dashboard without a tour", async ({ page }) => {
+  await page.goto("/?webmcp=polyfill");
+  await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
+  const created = await execute(page, "create_event", { title: "Codex WebMCP Demonstration", starts_at: "2027-03-15T09:00:00-04:00", venue: { name: "Ontario Science Centre", city: "Toronto", region: "ON", country: "CA" }, guests: [] });
+  const reply = JSON.parse(created.text) as { event_id: string; url: string };
+
+  await page.goto(`${reply.url}${reply.url.includes("?") ? "&" : "?"}webmcp=polyfill`);
+  await expect(page.getByTestId("webmcp-status")).toHaveAttribute("data-status", "ready", { timeout: 20_000 });
+  const empty = JSON.parse((await execute(page, "list_guests", {})).text) as { guests: unknown[] };
+  expect(empty.guests).toHaveLength(0);
+
+  const loaded = JSON.parse((await execute(page, "load_sample_attendees", {})).text) as { added: number; attendees: { location: string | null }[] };
+  expect(loaded.added).toBe(10);
+  expect(loaded.attendees).toHaveLength(10);
+  expect(loaded.attendees.filter((attendee) => attendee.location === null)).toHaveLength(3);
+  expect((JSON.parse((await execute(page, "list_guests", {})).text) as { guests: unknown[] }).guests).toHaveLength(10);
+
+  await expect(page.getByTestId("stat-going")).toContainText("10");
+  await expect(page.getByTestId("guest-row")).toHaveCount(10);
+  await expect(page.getByTestId("tour-step")).toHaveCount(0);
 });

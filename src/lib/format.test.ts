@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateOnly, dateTime, money } from "./format";
+import { dateOnly, dateTime, eventDateTime, money } from "./format";
 
 /** Local-time ISO strings keep the expected text stable across the machine's timezone. */
 const DATETIME = "2026-09-03T18:05:00";
@@ -38,6 +38,16 @@ describe("dateTime", () => {
   it("pins a zoned instant to its UTC wall clock regardless of the runtime zone", () => {
     expect(dateTime("2030-01-10T19:00:00Z")).toMatch(/^Thu Jan 10 2030 7:00/);
     expect(dateTime("2030-01-10T19:00:00Z")).toBe(dateTime("2030-01-10T19:00:00"));
+  });
+});
+
+describe("eventDateTime", () => {
+  it("keeps the submitted wall-clock time and makes its UTC offset visible", () => {
+    expect(eventDateTime("2027-03-15T09:00:00-04:00")).toMatch(/^Mon Mar 15 2027 9:00.* UTC−04:00$/);
+  });
+
+  it("labels a time without an offset as local time", () => {
+    expect(eventDateTime("2027-03-15T09:00:00")).toMatch(/local time$/);
   });
 });
 

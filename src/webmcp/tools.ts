@@ -222,7 +222,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "create_event",
-    description: "Creates and publishes an event with its guest list and returns the event page URL and the invite URL. A signed-in organizer owns it; a browser with no session gets a guest event whose URL carries the guest's token, so open that URL next. Guests are one per line as a name or Name <email> or a bare email.",
+    description: "Creates and publishes an event with its guest list and returns the event page URL and the invite URL. A signed-in organizer owns it; a browser with no session gets a temporary guest event whose exact URL carries the guest-session token, so open that returned URL next without rebuilding it. If only a date was supplied, ask for a start time before calling; when the user permits a provisional value, use noon at the venue with an explicit UTC offset. Guests are one per line as a name or Name <email> or a bare email.",
     inputSchema: {
       type: "object",
       properties: {

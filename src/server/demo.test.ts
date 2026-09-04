@@ -57,16 +57,18 @@ describe("in memory", () => {
     expect((await listOwnedEvents("user_a")).map((e) => [e.id, e.demo])).toEqual([[eventId, true], [owned.id, false]]);
   });
 
-  it("sweeps a guest's expired demo event with its rows and leaves a fresh one and an account's demo", async () => {
+  it("sweeps every expired temporary guest event and leaves a fresh one and an account's walkthrough", async () => {
     const expired = createEventFromBody(DEMO_EVENT, newDemoId(), true);
     importGuests(expired.id, { lines: ["Ana", "Ben"] });
+    const expiredWithoutTour = createEventFromBody(DEMO_EVENT, newDemoId(), false);
     const fresh = createEventFromBody(DEMO_EVENT, newDemoId(), true);
     const kept = createEventFromBody(DEMO_EVENT, "user_a", true);
     const s = state();
     const dayAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
     s.events.set(expired.id, { ...expired, created_at: dayAgo });
+    s.events.set(expiredWithoutTour.id, { ...expiredWithoutTour, created_at: dayAgo });
     s.events.set(kept.id, { ...kept, created_at: dayAgo });
-    expect(sweepDemoState(24)).toBe(1);
+    expect(sweepDemoState(24)).toBe(2);
     expect([...s.events.keys()].sort()).toEqual([fresh.id, kept.id].sort());
     expect([...s.guests.values()].some((g) => g.event_id === expired.id)).toBe(false);
     expect([...s.definitions.values()].some((d) => d.event_id === expired.id)).toBe(false);
@@ -96,15 +98,17 @@ describe("in the database", () => {
     expect((await withPersistedEvent(eventId, () => snapshot(eventId))).event.status).toBe("published");
   });
 
-  it("sweeps a guest's demo rows older than the window and leaves the rest", async () => {
+  it("sweeps all temporary guest rows older than the window and leaves the rest", async () => {
     const expired = await demoEventFor(newDemoId());
+    const expiredWithoutTour = await createPersistedEvent(() => createEventFromBody(DEMO_EVENT, newDemoId(), false));
     const fresh = await demoEventFor(newDemoId());
     const owned = await createPersistedEvent(() => createEventFromBody(DEMO_EVENT, "user_a"));
     const kept = await demoEventFor("user_a");
-    await db.query("update events set updated_at = now() - interval '25 hours' where id in ($1, $2, $3)", [expired, owned.id, kept]);
-    expect(await sweepDemoEvents(db, 24)).toBe(1);
+    await db.query("update events set updated_at = now() - interval '25 hours' where id in ($1, $2, $3, $4)", [expired, expiredWithoutTour.id, owned.id, kept]);
+    expect(await sweepDemoEvents(db, 24)).toBe(2);
     const ids = (await db.query("select id from events order by id")).map((r) => r.id);
     expect(ids).not.toContain(expired);
+    expect(ids).not.toContain(expiredWithoutTour.id);
     expect(ids).toEqual(expect.arrayContaining([fresh, owned.id, kept]));
   });
 
