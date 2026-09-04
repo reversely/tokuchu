@@ -600,7 +600,7 @@ function calloutPosition(rect: Rect | null, height: number, viewport: Viewport, 
   const maxLeft = viewport.width - width - margin;
   if (beside && viewport.width > 900) return { top: 76, left: margin };
   if (!rect) return { top: Math.max(margin, (viewport.height - height) / 2), left: Math.max(margin, (viewport.width - width) / 2) };
-  const below = rect.top + rect.height + 14;
-  const top = below + height + margin <= viewport.height ? below : Math.max(margin, rect.top - 14 - height);
+  const below = rect.top + rect.height - 4;
+  const top = below + height + margin <= viewport.height ? below : Math.max(margin, rect.top - 10 - height);
   return { top, left: Math.min(Math.max(margin, rect.left), maxLeft) };
 }
